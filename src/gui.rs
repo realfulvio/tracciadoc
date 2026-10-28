@@ -5,7 +5,8 @@ use crate::{
 };
 use eframe::egui::{self, Color32, RichText};
 use std::{
-    path::PathBuf,
+    collections::HashMap,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -33,6 +34,34 @@ fn texture(ctx: &egui::Context, name: &str, bytes: &[u8]) -> egui::TextureHandle
         egui::TextureOptions::LINEAR,
     )
 }
+type Preview = Option<(egui::TextureHandle, egui::TextureHandle)>;
+/// Miniatura locale in memoria (nitida e sfocata). Solo immagini raster, mai su disco.
+fn make_preview(ctx: &egui::Context, path: &Path, format: &str) -> Preview {
+    if !["png", "jpeg", "bmp", "webp", "gif", "tiff"].contains(&format.to_ascii_lowercase().as_str())
+        || std::fs::metadata(path).ok()?.len() > 32 * 1024 * 1024
+    {
+        return None;
+    }
+    let mut reader = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(7000);
+    limits.max_image_height = Some(7000);
+    limits.max_alloc = Some(128 * 1024 * 1024);
+    reader.limits(limits);
+    let small = reader.decode().ok()?.thumbnail(176, 120).to_rgba8();
+    let blurred = image::imageops::blur(&small, 6.0);
+    let tex = |name: &str, img: &image::RgbaImage| {
+        ctx.load_texture(
+            name,
+            egui::ColorImage::from_rgba_unmultiplied(
+                [img.width() as usize, img.height() as usize],
+                img.as_raw(),
+            ),
+            egui::TextureOptions::LINEAR,
+        )
+    };
+    Some((tex("anteprima-sfocata", &blurred), tex("anteprima", &small)))
+}
 pub struct App {
     roots: Vec<PathBuf>,
     path: String,
@@ -52,6 +81,7 @@ pub struct App {
     signature: egui::TextureHandle,
     zoom: f32,
     confirm: bool,
+    previews: HashMap<PathBuf, Preview>,
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -126,10 +156,11 @@ impl App {
             signature: texture(
                 &cc.egui_ctx,
                 "realhcok-original",
-                include_bytes!("../assets/ui/realhcok-dark-540.png"),
+                include_bytes!("../assets/ui/realhcok-kit-white-720.png"),
             ),
             zoom: 1.,
             confirm: false,
+            previews: HashMap::new(),
             ocr_present: parser::runtime().join("ocr/libtesseract-5.5.dll").exists()
                 && parser::runtime()
                     .join("ocr/tessdata/ita.traineddata")
@@ -163,6 +194,7 @@ impl App {
         ));
         self.shared.lock().unwrap().run.as_mut().unwrap().previous = previous;
         self.confirm = false;
+        self.previews.clear();
         let shared = self.shared.clone();
         let stop = self.stop.clone();
         self.started = Some(Instant::now());
@@ -213,7 +245,7 @@ impl eframe::App for App {
                         egui::Image::from_texture(&self.signature)
                             .fit_to_exact_size(egui::vec2(168., 168. * ratio)),
                     )
-                    .on_hover_text("Firma originale realhcok");
+                    .on_hover_text("powered by realhcok");
                     ui.separator();
                     ui.label(
                         RichText::new("Locale  /  Solo lettura  /  Nessuna telemetria")
@@ -239,6 +271,27 @@ impl eframe::App for App {
                     if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start(None);}
                     if running && ui.button("Interrompi").clicked(){self.stop.store(true,Ordering::Relaxed);self.notice="Interruzione richiesta: chiusura parser e conservazione degli esiti raccolti.".into();}
                 });
+            });
+        let phase_state = self.shared.lock().unwrap().run.as_ref().map(|r| (r.finished, r.previous.is_some()));
+        let active = match (running, phase_state) {
+            (true, _) => 2,
+            (false, Some((true, true))) => 4,
+            (false, Some((true, false))) => 3,
+            _ => 1,
+        };
+        egui::Panel::left("steps")
+            .exact_size(220.)
+            .frame(egui::Frame::new().fill(Color32::from_rgb(19, 31, 47)).inner_margin(16))
+            .show(root, |ui| {
+                ui.horizontal(|ui| {
+                    ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(36., 36.)));
+                    ui.label(RichText::new("TracciaDoc").font(semibold(22.)));
+                });
+                ui.add_space(14.);
+                for (n, label) in [(1, "Aree da controllare"), (2, "Scansione"), (3, "Revisione e pulizia"), (4, "Verifica finale")] {
+                    let (mark, color) = if n < active { ("✓", Color32::from_rgb(103, 214, 191)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(171, 193, 210)) };
+                    ui.label(RichText::new(format!("{mark}  {label}")).font(semibold(16.)).color(color));
+                }
             });
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(24)).show(root,|ui| {
             egui::ScrollArea::vertical().show(ui,|ui| {
@@ -349,19 +402,32 @@ impl eframe::App for App {
                         }
                         egui::CollapsingHeader::new(format!("File segnalati ({}) - percorso e verifica manuale",run.findings.len())).id_salt("finding-files").default_open(true).show(ui,|ui|{
                             for (i,f) in run.findings.iter_mut().enumerate().take(5000) {
+                                let side=164.;
+                                if !self.previews.contains_key(&f.path)&&!f.deleted(){let pv=make_preview(&ctx,&f.path,&f.format);self.previews.insert(f.path.clone(),pv);}
+                                ui.horizontal_top(|ui| {
+                                    ui.allocate_ui(egui::vec2((ui.available_width()-side-12.).max(260.),0.),|ui| { ui.vertical(|ui| {
                                 ui.label(RichText::new(format!("{}. {}",i+1,f.path.display())).font(semibold(16.)));
-                                ui.label(format!("Formato rilevato: {}",f.format));
-                                for reason in &f.reasons{ui.label(reason);}
-                                if f.deleted(){ui.label(RichText::new(format!("ELIMINATO definitivamente: {}",f.deleted_at)).color(ACCENT));}
-                                else if !f.delete_error.is_empty(){ui.label(RichText::new(&f.delete_error).color(Color32::from_rgb(247,199,110)));}
-                                ui.add_enabled_ui(!running&&!f.deleted(),|ui| {ui.horizontal_wrapped(|ui| {
-                                    if ui.button("Apri file").clicked()&& let Err(e)=crate::open::document(f){self.notice=e;}
-                                    if ui.button("Mostra nella cartella").clicked()&& let Err(e)=crate::open::folder(&f.path){self.notice=e;}
-                                    ui.checkbox(&mut f.selected,"Da eliminare");
-                                    egui::ComboBox::from_id_salt(("review",i)).selected_text(f.review.label()).show_ui(ui,|ui| {
-                                        for value in [Review::Pending,Review::Confirmed,Review::Discarded] {ui.selectable_value(&mut f.review,value,value.label());}
-                                    });
-                                });});
+                                    ui.label(format!("Formato rilevato: {}",f.format));
+                                    for reason in &f.reasons{ui.label(reason);}
+                                    if f.deleted(){ui.label(RichText::new(format!("ELIMINATO definitivamente: {}",f.deleted_at)).color(ACCENT));}
+                                    else if !f.delete_error.is_empty(){ui.label(RichText::new(&f.delete_error).color(Color32::from_rgb(247,199,110)));}
+                                    ui.add_enabled_ui(!running&&!f.deleted(),|ui| {ui.horizontal_wrapped(|ui| {
+                                        if ui.button("Apri file").clicked()&& let Err(e)=crate::open::document(f){self.notice=e;}
+                                        if ui.button("Mostra nella cartella").clicked()&& let Err(e)=crate::open::folder(&f.path){self.notice=e;}
+                                        ui.checkbox(&mut f.selected,"Da eliminare");
+                                        egui::ComboBox::from_id_salt(("review",i)).selected_text(f.review.label()).show_ui(ui,|ui| {
+                                            for value in [Review::Pending,Review::Confirmed,Review::Discarded] {ui.selectable_value(&mut f.review,value,value.label());}
+                                        });
+                                    });});
+
+                                    });});
+                                    let (rect,resp)=ui.allocate_exact_size(egui::vec2(side,112.),egui::Sense::hover());
+                                    ui.painter().rect_filled(rect,8.,Color32::from_rgb(27,43,64));
+                                    match self.previews.get(&f.path) {
+                                        Some(Some((blur,sharp)))=>{let tex=if resp.hovered(){sharp}else{blur};egui::Image::from_texture(tex).fit_to_exact_size(rect.size()).paint_at(ui,rect);ui.painter().text(rect.center_bottom()-egui::vec2(0.,8.),egui::Align2::CENTER_BOTTOM,if resp.hovered(){""}else{"passa sopra"},egui::FontId::proportional(12.),Color32::WHITE);}
+                                        _=>{ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,f.format.to_uppercase(),semibold(15.),Color32::from_rgb(171,193,210));}
+                                    }
+                                });
                                 ui.separator();
                             }
                         });

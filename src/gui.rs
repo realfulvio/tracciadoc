@@ -85,7 +85,8 @@ pub struct App {
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        cc.egui_ctx.set_visuals(egui::Visuals::dark());
+        // Tema scuro fisso: con il tema chiaro di Windows i colori del testo restavano quelli di default su sfondo scuro.
+        cc.egui_ctx.set_theme(egui::Theme::Dark);
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "Titillium Regular".into(),
@@ -104,6 +105,12 @@ impl App {
             .get_mut(&egui::FontFamily::Proportional)
             .unwrap()
             .insert(0, "Titillium Regular".into());
+        // Titillium e Ubuntu-Light non hanno ◉ ● ○ dei passi: fallback su Hack.
+        fonts
+            .families
+            .get_mut(&egui::FontFamily::Proportional)
+            .unwrap()
+            .push("Hack".into());
         let mut bold = vec!["Titillium SemiBold".into()];
         bold.extend(fonts.families[&egui::FontFamily::Proportional].clone());
         fonts
@@ -289,7 +296,7 @@ impl eframe::App for App {
                 });
                 ui.add_space(14.);
                 for (n, label) in [(1, "Aree da controllare"), (2, "Scansione"), (3, "Revisione e pulizia"), (4, "Verifica finale")] {
-                    let (mark, color) = if n < active { ("✓", Color32::from_rgb(103, 214, 191)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(171, 193, 210)) };
+                    let (mark, color) = if n < active { ("◉", Color32::from_rgb(103, 214, 191)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(171, 193, 210)) };
                     ui.label(RichText::new(format!("{mark}  {label}")).font(semibold(16.)).color(color));
                 }
             });

@@ -44,13 +44,14 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         add("VERIFICA INIZIALE E ELIMINAZIONI".into(), 12.);
         add(
             format!(
-                "Verifica iniziale ID {} ({} - {}): file segnalati {}, eliminati dall'operatore {}, non eliminati {}{}.",
+                "Verifica iniziale ID {} ({} - {}): file segnalati {}, eliminati dall'operatore {}, non eliminati {}{}{}.",
                 p.id,
                 p.start,
                 p.end,
                 p.findings,
                 p.deleted,
                 p.findings.saturating_sub(p.deleted),
+                if p.failed > 0 { format!(" (di cui {} per eliminazione non riuscita)", p.failed) } else { String::new() },
                 if p.incomplete { ", copertura incompleta" } else { "" }
             ),
             10.,

@@ -1,6 +1,6 @@
 use crate::{
     engine::{self, Shared},
-    model::Settings,
+    model::{Previous, Review, Settings},
     parser, report,
 };
 use eframe::egui::{self, Color32, RichText};
@@ -51,6 +51,7 @@ pub struct App {
     mark: egui::TextureHandle,
     signature: egui::TextureHandle,
     zoom: f32,
+    confirm: bool,
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -128,6 +129,7 @@ impl App {
                 include_bytes!("../assets/ui/realhcok-dark-540.png"),
             ),
             zoom: 1.,
+            confirm: false,
             ocr_present: parser::runtime().join("ocr/libtesseract-5.5.dll").exists()
                 && parser::runtime()
                     .join("ocr/tessdata/ita.traineddata")
@@ -150,7 +152,7 @@ impl App {
             self.roots.push(path);
         }
     }
-    fn start(&mut self) {
+    fn start(&mut self, previous: Option<Previous>) {
         self.settings.deep = true;
         self.stop.store(false, Ordering::Relaxed);
         self.shared.lock().unwrap().run = Some(engine::new_run(
@@ -159,6 +161,8 @@ impl App {
             self.operator.clone(),
             self.reference.clone(),
         ));
+        self.shared.lock().unwrap().run.as_mut().unwrap().previous = previous;
+        self.confirm = false;
         let shared = self.shared.clone();
         let stop = self.stop.clone();
         self.started = Some(Instant::now());
@@ -232,7 +236,7 @@ impl eframe::App for App {
                                 }
                             }
                         });
-                    if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start();}
+                    if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start(None);}
                     if running && ui.button("Interrompi").clicked(){self.stop.store(true,Ordering::Relaxed);self.notice="Interruzione richiesta: chiusura parser e conservazione degli esiti raccolti.".into();}
                 });
             });
@@ -297,6 +301,7 @@ impl eframe::App for App {
                 ui.add_space(10.);
                 if !running && self.operator.trim().is_empty(){ui.label("Compila il nome dell'operatore per avviare la verifica.");}
                 if !self.notice.is_empty(){ui.label(RichText::new(&self.notice).color(Color32::from_rgb(247,199,110)));}
+                let mut rescan: Option<Previous> = None;
                 let (run,current,phase)={let p=self.shared.lock().unwrap();(p.run.clone(),p.current.clone(),p.phase.clone())};
                 if let Some(mut run)=run {
                     ui.add_space(8.);
@@ -317,16 +322,44 @@ impl eframe::App for App {
                                     match report::write(&run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",path.display());let _=engine::audit(&run,"pdf-export");},Err(e)=>self.notice=e}
                                 }
                         }
+                        if !running && run.finished && !run.findings.is_empty() {
+                            let selected=run.findings.iter().filter(|f|f.selected&&!f.deleted()).count();
+                            let open=run.findings.iter().filter(|f|!f.deleted()).count();
+                            ui.horizontal_wrapped(|ui|{
+                                let mut all=open>0&&selected==open;
+                                if ui.add_enabled(open>0,egui::Checkbox::new(&mut all,"Seleziona tutti")).changed(){for f in run.findings.iter_mut().filter(|f|!f.deleted()){f.selected=all;}}
+                                if ui.add_enabled(selected>0,egui::Button::new(format!("Elimina definitivamente i {selected} selezionati"))).clicked(){self.confirm=true;}
+                                if run.deleted_count()>0 && ui.add(egui::Button::new(RichText::new("Ri-scansiona per la verifica finale").color(Color32::WHITE)).fill(PRIMARY)).clicked(){rescan=Some(run.summary());}
+                            });
+                        }
+                        if !running && self.confirm {
+                            let n=run.findings.iter().filter(|f|f.selected&&!f.deleted()).count();
+                            ui.label(RichText::new(format!("ATTENZIONE: {n} file saranno eliminati in modo definitivo (non vanno nel cestino) e non potranno essere recuperati da TracciaDoc.")).color(Color32::from_rgb(247,199,110)));
+                            ui.horizontal(|ui|{
+                                if ui.button("Conferma eliminazione definitiva").clicked() {
+                                    for f in run.findings.iter_mut().filter(|f|f.selected&&!f.deleted()) {
+                                        match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;},Err(e)=>f.delete_error=e}
+                                    }
+                                    let _=engine::audit(&run,"delete");
+                                    self.notice=format!("Eliminati {} file; residui {}. Eseguire la ri-scansione di verifica.",run.deleted_count(),run.remaining());
+                                    self.confirm=false;
+                                }
+                                if ui.button("Annulla").clicked(){self.confirm=false;}
+                            });
+                        }
                         egui::CollapsingHeader::new(format!("File segnalati ({}) - percorso e verifica manuale",run.findings.len())).id_salt("finding-files").default_open(true).show(ui,|ui|{
                             for (i,f) in run.findings.iter_mut().enumerate().take(5000) {
                                 ui.label(RichText::new(format!("{}. {}",i+1,f.path.display())).font(semibold(16.)));
                                 ui.label(format!("Formato rilevato: {}",f.format));
                                 for reason in &f.reasons{ui.label(reason);}
-                                ui.add_enabled_ui(!running,|ui| {ui.horizontal_wrapped(|ui| {
+                                if f.deleted(){ui.label(RichText::new(format!("ELIMINATO definitivamente: {}",f.deleted_at)).color(ACCENT));}
+                                else if !f.delete_error.is_empty(){ui.label(RichText::new(&f.delete_error).color(Color32::from_rgb(247,199,110)));}
+                                ui.add_enabled_ui(!running&&!f.deleted(),|ui| {ui.horizontal_wrapped(|ui| {
                                     if ui.button("Apri file").clicked()&& let Err(e)=crate::open::document(f){self.notice=e;}
                                     if ui.button("Mostra nella cartella").clicked()&& let Err(e)=crate::open::folder(&f.path){self.notice=e;}
+                                    ui.checkbox(&mut f.selected,"Da eliminare");
                                     egui::ComboBox::from_id_salt(("review",i)).selected_text(f.review.label()).show_ui(ui,|ui| {
-                                        for value in [crate::model::Review::Pending,crate::model::Review::Confirmed,crate::model::Review::Discarded] {ui.selectable_value(&mut f.review,value,value.label());}
+                                        for value in [Review::Pending,Review::Confirmed,Review::Discarded] {ui.selectable_value(&mut f.review,value,value.label());}
                                     });
                                 });});
                                 ui.separator();
@@ -334,7 +367,8 @@ impl eframe::App for App {
                         });
                         ui.collapsing(format!("Errori e limiti ({} categorie)",run.issues.len()),|ui|{for (s,n) in &run.issues {ui.label(format!("{n} - {s}"));}});
                     });
-                    if self.handle.is_none(){self.shared.lock().unwrap().run=Some(run);}
+                    if self.handle.is_none(){self.shared.lock().unwrap().run=Some(run.clone());}
+                    if let Some(p)=rescan {self.roots=run.roots.clone();self.start(Some(p));}
                 }
                 ui.add_space(10.);
                 ui.label(RichText::new("Il controllo non certifica l'assenza assoluta di documenti. Le segnalazioni richiedono verifica manuale. Nessuna approvazione Lepida.").small().weak());

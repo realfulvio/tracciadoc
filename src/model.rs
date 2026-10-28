@@ -41,13 +41,38 @@ pub struct Analysis {
     pub ocr_init_ms: f64,
     pub backend: String,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Finding {
     pub path: PathBuf,
     pub format: String,
     pub reasons: Vec<String>,
     #[serde(default)]
     pub review: Review,
+    /// Selezionato dall'operatore per l'eliminazione.
+    #[serde(default)]
+    pub selected: bool,
+    /// Eliminazione definitiva eseguita dall'operatore (data ISO 8601), vuoto se non eliminato.
+    #[serde(default)]
+    pub deleted_at: String,
+    /// Ultimo errore di eliminazione, vuoto se nessuno.
+    #[serde(default)]
+    pub delete_error: String,
+}
+impl Finding {
+    pub fn deleted(&self) -> bool {
+        !self.deleted_at.is_empty()
+    }
+}
+/// Riepilogo della verifica iniziale, riportato nel verbale della ri-scansione finale.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Previous {
+    pub id: String,
+    pub start: String,
+    pub end: String,
+    pub findings: u64,
+    pub deleted: u64,
+    pub failed: u64,
+    pub incomplete: bool,
 }
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Review {
@@ -90,8 +115,31 @@ pub struct Run {
     pub backend: String,
     pub peak_worker_bytes: u64,
     pub audit_error: bool,
+    #[serde(default)]
+    pub previous: Option<Previous>,
 }
 impl Run {
+    pub fn remaining(&self) -> usize {
+        self.findings.iter().filter(|f| !f.deleted()).count()
+    }
+    pub fn deleted_count(&self) -> usize {
+        self.findings.iter().filter(|f| f.deleted()).count()
+    }
+    pub fn summary(&self) -> Previous {
+        Previous {
+            id: self.id.clone(),
+            start: self.start.clone(),
+            end: self.end.clone(),
+            findings: self.findings.len() as u64,
+            deleted: self.deleted_count() as u64,
+            failed: self
+                .findings
+                .iter()
+                .filter(|f| !f.deleted() && !f.delete_error.is_empty())
+                .count() as u64,
+            incomplete: self.incomplete(),
+        }
+    }
     pub fn incomplete(&self) -> bool {
         !self.finished || self.interrupted || !self.issues.is_empty()
     }
@@ -99,9 +147,13 @@ impl Run {
         let result = if self.findings.is_empty() {
             if self.incomplete() {
                 "Nessuna segnalazione; copertura incompleta"
+            } else if self.previous.is_some() {
+                "Verifica finale: nessun documento rilevato nell'ambito esaminato dopo l'eliminazione"
             } else {
                 "Nessun documento rilevato nell'ambito esaminato"
             }
+        } else if self.remaining() == 0 {
+            "Segnalazioni eliminate dall'operatore: ESEGUIRE LA RI-SCANSIONE DI VERIFICA, esito non ancora accertato"
         } else {
             "TROVATE possibili copie di documenti d'identita, da verificare"
         };
@@ -168,6 +220,11 @@ impl Run {
                     .join(" | ")
             ));
             out.push("Conteggi per tipo: file con indizi, non numero di documenti fisici. Un file puo contenere piu tipi.".into());
+            out.push(format!(
+                "Eliminazioni eseguite dall'operatore: {} | segnalazioni residue: {}",
+                self.deleted_count(),
+                self.remaining()
+            ));
             out.push(format!(
                 "Verifica manuale: {} confermati | {} scartati | {} ancora da verificare",
                 self.findings

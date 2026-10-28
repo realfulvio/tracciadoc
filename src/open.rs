@@ -79,7 +79,7 @@ mod tests {
             path: "documento.exe".into(),
             format: "PDF".into(),
             reasons: vec![],
-            review: Default::default(),
+            ..Default::default()
         };
         assert!(!safe_extension(&f));
         assert!(safe_extension(&Finding {

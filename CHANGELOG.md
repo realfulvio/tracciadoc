@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - non rilasciata
+
+- Selezione dei file segnalati (casella singola e "Seleziona tutti") ed eliminazione definitiva con conferma esplicita. Solo file regolari locali; nessun cestino.
+- Ri-scansione di verifica sugli stessi percorsi e verbale finale con riepilogo della verifica iniziale e delle eliminazioni.
+- L'esito "nessun documento rilevato dopo l'eliminazione" appare solo con copertura completa. Dopo l'eliminazione, la verifica originale richiede la ri-scansione.
+- Verificato solo type-check/Clippy per Windows x64; collaudo interattivo su Windows da eseguire.
+
 ## 0.1.0 - 2026-10-28
 
 Primo MVP Windows x64 portatile di TracciaDoc.

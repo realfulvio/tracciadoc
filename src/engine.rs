@@ -64,6 +64,7 @@ pub fn new_run(
         backend: "CPU; nessuna cache; nessun provider GPU".into(),
         peak_worker_bytes: 0,
         audit_error: false,
+        previous: None,
     }
 }
 struct Worker {
@@ -385,6 +386,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                             format: result.format,
                             reasons: result.reasons,
                             review: Review::Pending,
+                            ..Default::default()
                         });
                     }
                 }

@@ -42,7 +42,12 @@ images=OUT/'images';images.mkdir();shutil.copy2(PKG/'prove-sintetiche'/'appunti.
 shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',images/'z.txt')
 result=scan('timeout',images,['--timeout-secs','1'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
-result=scan('memory',images,['--memory-mb','64'])
+# Deterministic memory pressure: a 5600x5600 RGB raster decodes to ~94 MB, within the 128 MiB decoder
+# limit but above a 64 MiB worker Job limit, whatever the OCR footprint of the machine.
+from PIL import Image
+heavy=OUT/'memory';heavy.mkdir();Image.new('RGB',(5600,5600),'white').save(heavy/'a.png')
+shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',heavy/'z.txt')
+result=scan('memory',heavy,['--memory-mb','64'])
 assert result['incomplete'] and len(result['findings'])==1,'Memory failure must recover and continue'
 assert scan('missing',OUT/'absent')['incomplete']
 

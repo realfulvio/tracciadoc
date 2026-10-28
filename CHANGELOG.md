@@ -8,7 +8,8 @@
 - GUI su DirectX 12 tramite wgpu, con WARP sui PC senza driver video e riavvio automatico su OpenGL come ripiego.
 - GUI: tema scuro fisso (con il tema chiaro di Windows il testo era illeggibile), simboli dei passi visibili, ridisegno ogni 1000 ms durante la scansione quando il rendering e su WARP.
 - Collaudo su Windows 11 Enterprise LTSC 2024 x64 (VM senza driver video, DX12 su WARP, senza Mesa): `cargo test`, Clippy `-D warnings`, `validate.py` sul corpus sintetico; GUI a schermo con prove sintetiche, eliminazione con conferma, file modificato dopo l'analisi non eliminato, ri-scansione e verbale PDF finale con riepilogo e eliminazioni non riuscite.
-- Non verificati: GPU/iGPU reali, ripiego OpenGL con finestra aperta, finestra non massimizzata. `edge_tests.py` si ferma sul caso `memory` (identico sulla 0.1.0).
+- `edge_tests.py`: il caso `memory` usa un raster 5600x5600 (~94 MB decodificati) invece dell'OCR di una piccola immagine, il cui consumo dipendeva dalla macchina e restava sotto 64 MiB. Tutti i casi passano sulla VM Windows.
+- Non verificati: GPU/iGPU reali, ripiego OpenGL con finestra aperta, finestra non massimizzata.
 
 ## 0.1.0 - 2026-10-28
 

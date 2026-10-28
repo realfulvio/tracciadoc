@@ -47,7 +47,7 @@ il riconoscimento in ogni condizione (es. inclinazione, ritagli, grafia).
 Automatico usa AVX2/SSE solo se disponibili al processo; Solo CPU usa il
 prodotto scalare generico come base di confronto. Entrambi cercano con
 le stesse regole. GPU, NPU e AVX-512 non sono implementate/selezionate.
-La GUI richiede Windows x64 con driver OpenGL 3.3; non installa driver.
+La GUI usa DirectX 12 e, senza driver video del produttore, l'adattatore software WARP di Windows; ripiego automatico su OpenGL 3.3. Non installa driver.
 Non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract.
 
 Nessuna modifica, cancellazione, quarantena o invio dei documenti.

@@ -65,6 +65,8 @@ pub fn new_run(
         peak_worker_bytes: 0,
         audit_error: false,
         previous: None,
+        timing: Default::default(),
+        timing_by_format: Default::default(),
     }
 }
 struct Worker {
@@ -328,6 +330,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 path: path.to_path_buf(),
                 settings: state.settings.clone(),
             };
+            let roundtrip = Instant::now();
             let mut result =
                 worker
                     .as_mut()
@@ -358,7 +361,14 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 };
             }
             match result {
-                Ok(result) => {
+                Ok(mut result) => {
+                    result.timing.roundtrip_ms = roundtrip.elapsed().as_secs_f64() * 1000.;
+                    state.timing.add(&result.timing);
+                    state
+                        .timing_by_format
+                        .entry(result.format.clone())
+                        .or_default()
+                        .add(&result.timing);
                     state.ocr_seconds += result.ocr_seconds;
                     state.ocr_init_ms += result.ocr_init_ms;
                     if result.pages_ocr > 0 && !state.backend.contains(&result.backend) {

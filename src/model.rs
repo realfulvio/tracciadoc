@@ -30,6 +30,39 @@ pub struct Request {
     pub path: PathBuf,
     pub settings: Settings,
 }
+/// Tempi per fase (ms) per il benchmark; nessun contenuto o percorso.
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct Timing {
+    pub files: u64,
+    /// Round-trip coordinatore-worker per file (include tutto il lavoro del worker).
+    pub roundtrip_ms: f64,
+    /// Lavoro nel worker dalla richiesta alla risposta.
+    pub worker_ms: f64,
+    pub read_ms: f64,
+    pub decode_ms: f64,
+    pub render_ms: f64,
+    pub ocr_ms: f64,
+    pub ocr_calls: u64,
+    pub ocr_images: u64,
+    /// Immagini/pagine in cui nessuna rotazione ha prodotto testo alfanumerico utile.
+    pub ocr_blank_images: u64,
+    pub ocr_blank_ms: f64,
+}
+impl Timing {
+    pub fn add(&mut self, o: &Timing) {
+        self.files += o.files;
+        self.roundtrip_ms += o.roundtrip_ms;
+        self.worker_ms += o.worker_ms;
+        self.read_ms += o.read_ms;
+        self.decode_ms += o.decode_ms;
+        self.render_ms += o.render_ms;
+        self.ocr_ms += o.ocr_ms;
+        self.ocr_calls += o.ocr_calls;
+        self.ocr_images += o.ocr_images;
+        self.ocr_blank_images += o.ocr_blank_images;
+        self.ocr_blank_ms += o.ocr_blank_ms;
+    }
+}
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Analysis {
     pub supported: bool,
@@ -40,6 +73,8 @@ pub struct Analysis {
     pub ocr_seconds: f64,
     pub ocr_init_ms: f64,
     pub backend: String,
+    #[serde(default)]
+    pub timing: Timing,
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Finding {
@@ -122,6 +157,10 @@ pub struct Run {
     pub audit_error: bool,
     #[serde(default)]
     pub previous: Option<Previous>,
+    #[serde(default)]
+    pub timing: Timing,
+    #[serde(default)]
+    pub timing_by_format: BTreeMap<String, Timing>,
 }
 impl Run {
     pub fn remaining(&self) -> usize {

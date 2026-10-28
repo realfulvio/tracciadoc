@@ -10,7 +10,15 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     if demo {
         add("DIMOSTRATIVO - SOLO DOCUMENTI SINTETICI".into(), 12.);
     }
-    add("Verbale di verifica dei documenti".into(), 19.);
+    add(
+        if run.previous.is_some() {
+            "Verbale di verifica finale dei documenti"
+        } else {
+            "Verbale di verifica dei documenti"
+        }
+        .into(),
+        19.,
+    );
     add("presenti sulla postazione".into(), 19.);
     add(
         format!(
@@ -31,6 +39,27 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add(run.outcome(), 12.);
     for line in run.finding_summary() {
         add(line, 10.);
+    }
+    if let Some(p) = &run.previous {
+        add("VERIFICA INIZIALE E ELIMINAZIONI".into(), 12.);
+        add(
+            format!(
+                "Verifica iniziale ID {} ({} - {}): file segnalati {}, eliminati dall'operatore {}, non eliminati {}{}{}.",
+                p.id,
+                p.start,
+                p.end,
+                p.findings,
+                p.deleted,
+                p.findings.saturating_sub(p.deleted),
+                if p.failed > 0 { format!(" (di cui {} per eliminazione non riuscita)", p.failed) } else { String::new() },
+                if p.incomplete { ", copertura incompleta" } else { "" }
+            ),
+            10.,
+        );
+        add("La presente verifica e stata rieseguita dopo le eliminazioni sugli stessi percorsi selezionati.".into(), 9.);
+    }
+    if run.deleted_count() > 0 {
+        add("Eliminazioni eseguite dopo questa verifica: il verbale NON documenta la situazione finale; rieseguire la verifica.".into(), 10.);
     }
     add(
         format!("Postazione: {} | Operatore: {}", run.computer, run.operator),
@@ -132,6 +161,11 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
                 9.,
             );
             add(format!("Controllo manuale: {}", f.review.label()), 9.);
+            if f.deleted() {
+                add(format!("Eliminato definitivamente dall'operatore: {}", f.deleted_at), 9.);
+            } else if !f.delete_error.is_empty() {
+                add(format!("Eliminazione non riuscita: {}", f.delete_error), 9.);
+            }
             if paths {
                 add(f.path.to_string_lossy().into_owned(), 9.);
             }
@@ -282,7 +316,7 @@ mod tests {
             path: "sentinella-personale".into(),
             format: "test".into(),
             reasons: vec!["Motivo generico".into()],
-            review: Default::default(),
+            ..Default::default()
         });
         assert!(r.outcome().contains("TROVATE"));
         assert!(r.outcome().contains("INCOMPLETA"));

@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod delete;
 mod engine;
 mod gui;
 mod model;
@@ -121,6 +122,41 @@ fn main() {
         }
         return;
     }
+    // DirectX 12 via wgpu: funziona anche senza driver del produttore grazie a WARP
+    // (adattatore software di Windows). OpenGL resta solo come ripiego.
+    // winit non permette un secondo event loop nello stesso processo: il ripiego riavvia l'EXE.
+    if args.get(1).is_some_and(|s| s == "--gui-opengl") {
+        if let Err(e) = gui_run(eframe::Renderer::Glow) {
+            eprintln!("GUI OpenGL: {e}");
+        }
+    } else if let Err(e) = gui_run(eframe::Renderer::Wgpu) {
+        eprintln!("GUI DirectX 12: {e}; ripiego OpenGL");
+        if let Ok(exe) = std::env::current_exe() {
+            let _ = std::process::Command::new(exe).arg("--gui-opengl").spawn();
+        }
+    }
+}
+fn gui_run(renderer: eframe::Renderer) -> eframe::Result {
+    use eframe::{egui_wgpu, wgpu};
+    let mut setup = egui_wgpu::WgpuSetupCreateNew::without_display_handle();
+    setup.instance_descriptor.backends = wgpu::Backends::DX12;
+    // Preferisce una GPU reale compatibile con la finestra, altrimenti WARP (Cpu).
+    setup.native_adapter_selector = Some(Arc::new(|adapters, surface| {
+        let usable = |a: &&wgpu::Adapter| surface.is_none_or(|s| a.is_surface_supported(s));
+        let rank = |a: &wgpu::Adapter| match a.get_info().device_type {
+            wgpu::DeviceType::DiscreteGpu => 0,
+            wgpu::DeviceType::IntegratedGpu => 1,
+            wgpu::DeviceType::VirtualGpu => 2,
+            wgpu::DeviceType::Other => 3,
+            wgpu::DeviceType::Cpu => 4,
+        };
+        adapters
+            .iter()
+            .filter(usable)
+            .min_by_key(|a| rank(a))
+            .cloned()
+            .ok_or_else(|| "Nessun adattatore DirectX 12 disponibile".to_string())
+    }));
     let native = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([1180., 820.])
@@ -136,14 +172,16 @@ fn main() {
                     rgba: img.into_raw(),
                 }
             }),
-        renderer: eframe::Renderer::Glow,
+        renderer,
+        wgpu_options: egui_wgpu::WgpuConfiguration {
+            wgpu_setup: egui_wgpu::WgpuSetup::CreateNew(setup),
+            ..Default::default()
+        },
         ..Default::default()
     };
-    if let Err(e) = eframe::run_native(
+    eframe::run_native(
         "TracciaDoc - verifica documenti",
         native,
         Box::new(|cc| Ok(Box::new(gui::App::new(cc)))),
-    ) {
-        eprintln!("GUI: {e}");
-    }
+    )
 }

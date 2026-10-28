@@ -163,9 +163,12 @@ impl Parser {
         a.backend = ocr.backend.clone();
         let start = std::time::Instant::now();
         let mut current = img;
+        let mut useful = false;
         for turn in 0..4 {
+            a.timing.ocr_calls += 1;
             match ocr.recognize(&current) {
                 Ok(s) => {
+                    useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
                     let reasons = rules::detect(&s);
                     let found = !reasons.is_empty();
                     a.reasons.extend(reasons);
@@ -183,7 +186,14 @@ impl Parser {
             }
         }
         a.pages_ocr += 1;
-        a.ocr_seconds += start.elapsed().as_secs_f64();
+        let spent = start.elapsed().as_secs_f64();
+        a.ocr_seconds += spent;
+        a.timing.ocr_ms += spent * 1000.;
+        a.timing.ocr_images += 1;
+        if !useful {
+            a.timing.ocr_blank_images += 1;
+            a.timing.ocr_blank_ms += spent * 1000.;
+        }
     }
     fn image_bytes(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) {
         let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
@@ -194,7 +204,10 @@ impl Parser {
         limits.max_image_width = Some(7000);
         limits.max_image_height = Some(7000);
         reader.limits(limits);
-        match reader.decode() {
+        let start = std::time::Instant::now();
+        let decoded = reader.decode();
+        a.timing.decode_ms += start.elapsed().as_secs_f64() * 1000.;
+        match decoded {
             Ok(img) => self.ocr(img, a, req),
             Err(_) => a
                 .issues
@@ -229,8 +242,11 @@ impl Parser {
                         .set_target_width(1700)
                         .set_maximum_height(2400)
                         .render_form_data(true);
-                    match page.render_with_config(&config) {
-                        Ok(bitmap) => self.ocr(bitmap.as_image(), a, req),
+                    let start = std::time::Instant::now();
+                    let rendered = page.render_with_config(&config).map(|b| b.as_image());
+                    a.timing.render_ms += start.elapsed().as_secs_f64() * 1000.;
+                    match rendered {
+                        Ok(image) => self.ocr(image, a, req),
                         Err(_) => a.issues.push("PDF: rasterizzazione fallita".into()),
                     }
                 } else {
@@ -362,7 +378,9 @@ impl Parser {
             backend: "CPU / estrazione testuale".into(),
             ..Default::default()
         };
+        let total = std::time::Instant::now();
         let result = (|| {
+            let read = std::time::Instant::now();
             let mut f = OpenOptions::new()
                 .read(true)
                 .custom_flags(0x00200000)
@@ -406,6 +424,7 @@ impl Parser {
             if bytes.len() as u64 > cap {
                 return Err("Limite contenuto durante lettura".into());
             }
+            a.timing.read_ms += read.elapsed().as_secs_f64() * 1000.;
             if is_pdf {
                 a.supported = true;
                 a.format = "PDF".into();
@@ -453,6 +472,8 @@ impl Parser {
         if let Err(e) = result {
             a.issues.push(e);
         }
+        a.timing.files = 1;
+        a.timing.worker_ms = total.elapsed().as_secs_f64() * 1000.;
         a.reasons.sort();
         a.reasons.dedup();
         a.issues.sort();

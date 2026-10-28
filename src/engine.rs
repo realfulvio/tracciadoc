@@ -381,7 +381,10 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                         state.issue(issue);
                     }
                     if !result.reasons.is_empty() {
+                        let meta = std::fs::metadata(path).ok();
                         state.findings.push(Finding {
+                            size: meta.as_ref().map_or(0, |m| m.len()),
+                            modified: meta.and_then(|m| m.modified().ok()),
                             path: path.to_path_buf(),
                             format: result.format,
                             reasons: result.reasons,

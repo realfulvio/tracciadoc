@@ -12,6 +12,9 @@ pub fn remove(f: &Finding) -> Result<(), String> {
     if !meta.file_type().is_file() {
         return Err("Non e un file regolare (collegamento o cartella): non eliminato".into());
     }
+    if meta.len() != f.size || meta.modified().ok() != f.modified {
+        return Err("File modificato dopo l'analisi: non eliminato, ripetere la verifica".into());
+    }
     let mut perms = meta.permissions();
     if perms.readonly() {
         perms.set_readonly(false);
@@ -27,10 +30,19 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file = dir.path().join("prova.txt");
         fs::write(&file, b"sintetico").unwrap();
+        let meta = fs::metadata(&file).unwrap();
         let mut f = Finding {
             path: file.clone(),
+            size: meta.len(),
+            modified: meta.modified().ok(),
             ..Default::default()
         };
+        let changed = Finding {
+            size: meta.len() + 1,
+            ..f.clone()
+        };
+        assert!(remove(&changed).is_err());
+        assert!(file.exists());
         assert!(remove(&f).is_ok());
         assert!(!file.exists());
         assert!(remove(&f).is_err());

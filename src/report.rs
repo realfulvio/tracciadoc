@@ -56,7 +56,8 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
             10.,
         );
         add("La presente verifica e stata rieseguita dopo le eliminazioni sugli stessi percorsi selezionati.".into(), 9.);
-    } else if run.deleted_count() > 0 {
+    }
+    if run.deleted_count() > 0 {
         add("Eliminazioni eseguite dopo questa verifica: il verbale NON documenta la situazione finale; rieseguire la verifica.".into(), 10.);
     }
     add(

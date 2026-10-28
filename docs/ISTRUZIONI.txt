@@ -1,0 +1,62 @@
+TRACCIADOC 0.1.0 - WINDOWS X64 - PORTATILE
+
+1. Apri TracciaDoc.exe. Non parte alcuna scansione automatica.
+2. Seleziona cartelle, dischi locali o volumi da verificare.
+   Rete e supporti rimovibili non sono selezionati automaticamente.
+   Per i profili degli altri utenti possono servire privilegi amministrativi.
+3. Inserisci operatore e riferimento; premi Avvia verifica nel footer.
+   La ricerca usa sempre testo e OCR locale entro le capacita dichiarate.
+4. Leggi l'esito: file trovati, tipo di documento, formato e limiti incontrati.
+   Ogni segnalazione mostra il percorso completo.
+   Apri file apre il visualizzatore associato; Mostra nella cartella seleziona
+   il file in Esplora file. Con estensioni ambigue usa la cartella e scegli
+   manualmente il visualizzatore. L'app non esegue file con estensione ambigua.
+5. Dopo il controllo manuale puoi segnare Documento confermato oppure
+   Segnalazione scartata. Questo giudizio e distinto dall'analisi automatica.
+6. Genera verbale PDF. I percorsi sono inclusi per impostazione iniziale:
+   possono contenere dati personali; puoi ometterli con la casella dedicata.
+   Il verbale riporta anche lo stato delle verifiche manuali.
+
+Interrompi termina il lavoro e mantiene gli esiti raccolti; il PDF resta
+marcato come incompleto/interrotto. La chiusura dell'app termina il parser.
+
+Per provare: Carica prove sintetiche. I documenti inclusi sono FACSIMILI,
+non validi. Il corpus contiene anche file cifrati/corrotti e non supportati:
+l'esito incompleto e previsto. Esempio-verbale.pdf e solo dimostrativo.
+
+I dati di riconoscimento restano in memoria: nessun testo OCR, numero di
+documento o codice fiscale viene salvato nei risultati o nell'audit.
+Percorsi e verifiche manuali della sessione restano nel PDF se esportati.
+Alla chiusura non sono conservati come archivio delle segnalazioni.
+Storico essenziale: %LOCALAPPDATA%\TracciaDoc\audit.jsonl (eventi e conteggi).
+Permessi ereditati dal profilo Windows, nessuna protezione da amministratori.
+Limite storico 5 MiB: raggiunto il limite compare un errore nel verbale.
+Per rimuovere lo storico, chiudi l'app e rimuovi quella cartella.
+Nessuna cache persistente e nessun temporaneo OCR su disco.
+I PDF esportati restano nelle cartelle scelte dall'operatore.
+
+Formati: PDF, PNG/JPEG/BMP/WebP, GIF/TIFF (solo prima immagine),
+DOCX/XLSX/PPTX, ODT/ODS/ODP, testo UTF-8 TXT/CSV/TSV/LOG/MD.
+RTF: solo testo grezzo. Office: XML e immagini raster incorporate.
+Legacy DOC/XLS/PPT, archivi generici, OLE, macro, file cifrati/non locali
+e parti non supportate non vengono ignorati: generano limiti visibili.
+Le firme dei formati sono controllate anche con estensione errata/assente.
+Le immagini a basso contrasto e ruotate sono euristiche: non e garantito
+il riconoscimento in ogni condizione (es. inclinazione, ritagli, grafia).
+
+Automatico usa AVX2/SSE solo se disponibili al processo; Solo CPU usa il
+prodotto scalare generico come base di confronto. Entrambi cercano con
+le stesse regole. GPU, NPU e AVX-512 non sono implementate/selezionate.
+La GUI richiede Windows x64 con driver OpenGL 3.3; non installa driver.
+Non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract.
+
+Nessuna modifica, cancellazione, quarantena o invio dei documenti.
+Il processo separato con limiti Windows Job non e una sandbox di sicurezza.
+L'app non garantisce coerenza temporale dell'intero disco durante la ricerca.
+I duplicati sono rianalizzati; tutti i percorsi incontrati restano disponibili.
+Collegamenti e junction non sono seguiti; i volumi montati nelle cartelle
+vanno selezionati esplicitamente. AppData/cestino/temporanei non sono esclusi.
+
+L'esito non certifica l'assenza assoluta di documenti. Una segnalazione
+richiede controllo umano. Nessuna approvazione del Comune o di Lepida;
+l'accettazione del verbale va concordata con chi lo richiede.

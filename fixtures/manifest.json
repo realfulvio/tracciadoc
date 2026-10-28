@@ -1,0 +1,261 @@
+[
+  {
+    "file": "carta.pdf",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PDF",
+    "limited": false
+  },
+  {
+    "file": "carta.txt",
+    "positive": true,
+    "document_class": "carta",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "carta.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "passaporto.pdf",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "PDF",
+    "limited": false
+  },
+  {
+    "file": "passaporto.txt",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "passaporto.png",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "patente.pdf",
+    "positive": true,
+    "document_class": "patente",
+    "format": "PDF",
+    "limited": false
+  },
+  {
+    "file": "patente.txt",
+    "positive": true,
+    "document_class": "patente",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "patente.png",
+    "positive": true,
+    "document_class": "patente",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "sanitaria.pdf",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "PDF",
+    "limited": false
+  },
+  {
+    "file": "sanitaria.txt",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "sanitaria.png",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "documento.docx",
+    "positive": true,
+    "document_class": "carta",
+    "format": "DOCX",
+    "limited": false
+  },
+  {
+    "file": "documento.xlsx",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "XLSX",
+    "limited": false
+  },
+  {
+    "file": "documento.pptx",
+    "positive": true,
+    "document_class": "patente",
+    "format": "PPTX",
+    "limited": false
+  },
+  {
+    "file": "documento.odt",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "ODT",
+    "limited": false
+  },
+  {
+    "file": "documento.ods",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "ODS",
+    "limited": false
+  },
+  {
+    "file": "documento.odp",
+    "positive": true,
+    "document_class": "carta",
+    "format": "ODP",
+    "limited": false
+  },
+  {
+    "file": "generico-ruotato-90.jpg",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "JPEG",
+    "limited": false
+  },
+  {
+    "file": "generico-ruotato-180.jpg",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "JPEG",
+    "limited": false
+  },
+  {
+    "file": "generico-ruotato-270.jpg",
+    "positive": true,
+    "document_class": "passaporto",
+    "format": "JPEG",
+    "limited": false
+  },
+  {
+    "file": "poco-contrasto.bmp",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "BMP",
+    "limited": false
+  },
+  {
+    "file": "misto.pdf",
+    "positive": true,
+    "document_class": "patente",
+    "format": "PDF misto",
+    "limited": false
+  },
+  {
+    "file": "raster.pdf",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PDF raster",
+    "limited": false
+  },
+  {
+    "file": "immagine.docx",
+    "positive": true,
+    "document_class": "carta",
+    "format": "DOCX immagine",
+    "limited": false
+  },
+  {
+    "file": "nome-errato.bin",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PDF firma",
+    "limited": false
+  },
+  {
+    "file": "senza-estensione",
+    "positive": true,
+    "document_class": "patente",
+    "format": "PNG firma",
+    "limited": false
+  },
+  {
+    "file": "email.txt",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "codice-fiscale.txt",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "richiesta.txt",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "appunti.txt",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "TXT",
+    "limited": false
+  },
+  {
+    "file": "appunti.png",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "ordinario.pdf",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "PDF",
+    "limited": false
+  },
+  {
+    "file": "corrotto.pdf",
+    "positive": false,
+    "document_class": "problema",
+    "format": "PDF corrotto",
+    "limited": true
+  },
+  {
+    "file": "cifrato.pdf",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PDF cifrato",
+    "limited": true
+  },
+  {
+    "file": "legacy.doc",
+    "positive": false,
+    "document_class": "problema",
+    "format": "DOC non supportato",
+    "limited": true
+  },
+  {
+    "file": "archivio.zip",
+    "positive": false,
+    "document_class": "problema",
+    "format": "ZIP non aperto",
+    "limited": true
+  }
+]

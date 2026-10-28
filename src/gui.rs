@@ -367,7 +367,8 @@ impl eframe::App for App {
                     ui.add_space(8.);
                     card(ui,|ui| {
                         ui.label(RichText::new("3   Avanzamento e risultati").font(semibold(21.)));
-                        if running {ui.horizontal(|ui|{ui.spinner();ui.label(&phase);});ui.label(current);}
+                        // Niente ui.spinner(): chiede un ridisegno a ogni frame e con WARP toglie CPU all'OCR. Basta il ridisegno ogni 150 ms.
+                        if running {let tick=self.started.map(|s|s.elapsed().as_millis()/150).unwrap_or(0) as usize;ui.horizontal(|ui|{ui.label(RichText::new(["◐","◓","◑","◒"][tick%4]).color(ACCENT));ui.label(&phase);});ui.label(current);}
                         let elapsed=if running {self.started.map(|s|s.elapsed().as_secs_f64()).unwrap_or(0.)}else{run.elapsed_secs};
                         ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.findings.len(),elapsed));
                         if !running {

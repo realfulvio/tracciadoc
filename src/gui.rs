@@ -82,6 +82,8 @@ pub struct App {
     zoom: f32,
     confirm: bool,
     previews: HashMap<PathBuf, Preview>,
+    /// Intervallo di ridisegno durante la scansione: piu lungo sul rendering software (WARP).
+    repaint: Duration,
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -168,6 +170,14 @@ impl App {
             zoom: 1.,
             confirm: false,
             previews: HashMap::new(),
+            // Su WARP ogni frame costa CPU sottratta all'OCR: a 150 ms la scansione sintetica passava da ~12 s a ~90 s.
+            repaint: if cc.wgpu_render_state.as_ref().is_some_and(|rs| {
+                rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu
+            }) {
+                Duration::from_millis(1000)
+            } else {
+                Duration::from_millis(150)
+            },
             ocr_present: parser::runtime().join("ocr/libtesseract-5.5.dll").exists()
                 && parser::runtime()
                     .join("ocr/tessdata/ita.traineddata")
@@ -237,7 +247,7 @@ impl eframe::App for App {
         }
         let running = self.handle.is_some();
         if running {
-            ctx.request_repaint_after(Duration::from_millis(150));
+            ctx.request_repaint_after(self.repaint);
         }
         egui::Panel::bottom("brand_footer")
             .frame(
@@ -367,8 +377,8 @@ impl eframe::App for App {
                     ui.add_space(8.);
                     card(ui,|ui| {
                         ui.label(RichText::new("3   Avanzamento e risultati").font(semibold(21.)));
-                        // Niente ui.spinner(): chiede un ridisegno a ogni frame e con WARP toglie CPU all'OCR. Basta il ridisegno ogni 150 ms.
-                        if running {let tick=self.started.map(|s|s.elapsed().as_millis()/150).unwrap_or(0) as usize;ui.horizontal(|ui|{ui.label(RichText::new(["◐","◓","◑","◒"][tick%4]).color(ACCENT));ui.label(&phase);});ui.label(current);}
+                        // Niente ui.spinner(): chiede un ridisegno a ogni frame; l'indicatore avanza col ridisegno periodico.
+                        if running {let tick=self.started.map(|s|s.elapsed().as_millis()/self.repaint.as_millis()).unwrap_or(0) as usize;ui.horizontal(|ui|{ui.label(RichText::new(["◐","◓","◑","◒"][tick%4]).color(ACCENT));ui.label(&phase);});ui.label(current);}
                         let elapsed=if running {self.started.map(|s|s.elapsed().as_secs_f64()).unwrap_or(0.)}else{run.elapsed_secs};
                         ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.findings.len(),elapsed));
                         if !running {

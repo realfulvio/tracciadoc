@@ -57,6 +57,11 @@ pub struct Finding {
     /// Ultimo errore di eliminazione, vuoto se nessuno.
     #[serde(default)]
     pub delete_error: String,
+    /// Dimensione e data di modifica al momento dell'analisi: l'eliminazione le riverifica.
+    #[serde(default)]
+    pub size: u64,
+    #[serde(default)]
+    pub modified: Option<std::time::SystemTime>,
 }
 impl Finding {
     pub fn deleted(&self) -> bool {

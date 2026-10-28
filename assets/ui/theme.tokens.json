@@ -1,0 +1,48 @@
+{
+  "brand": {
+    "navy": "#001A4D",
+    "petrol": "#005E8E",
+    "cursor_realhcok": "#F2C230"
+  },
+  "dark": {
+    "background": "#111B2A",
+    "surface": "#1B2B40",
+    "sidebar": "#131F2F",
+    "border": "#314A60",
+    "text": "#F3F6FA",
+    "text_secondary": "#ABC1D2",
+    "primary": "#006EA6",
+    "primary_hover": "#007DB8",
+    "focus": "#79CDF2",
+    "selected": "#123E59",
+    "warning": "#F7C76E",
+    "error": "#FF9494",
+    "success": "#67D6BF"
+  },
+  "layout": {
+    "initial_window_points": [
+      1180,
+      820
+    ],
+    "minimum_window_points": [
+      900,
+      640
+    ],
+    "sidebar_width_points": 220,
+    "content_padding_points": 28,
+    "gap_points": 16,
+    "card_radius_points": 10,
+    "button_height_points": 48,
+    "footer_signature_width_points": 168,
+    "signature_minimum_height_points": 14
+  },
+  "typography": {
+    "family": "Titillium Web",
+    "body_points": 16,
+    "caption_points": 13,
+    "section_points": 21,
+    "title_points": 30
+  },
+  "scan_mode": "single_complete_scan",
+  "reference_note": "L anteprima AI mostra l intenzione visiva. SVG e PNG di questo kit sono asset nativi puliti, non ritagli della tavola."
+}

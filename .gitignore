@@ -22,3 +22,7 @@
 !.env.example
 .DS_Store
 Thumbs.db
+
+/runtime/
+__pycache__/
+*.pyc

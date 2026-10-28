@@ -1,0 +1,3 @@
+* text=auto
+/fixtures/corpus/** binary
+/assets/ui/fonts/OFL.txt -whitespace

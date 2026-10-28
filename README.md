@@ -17,7 +17,7 @@ MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei 
 
 Per provare il funzionamento usa **Carica prove sintetiche**. I facsimili inclusi contengono anche file volutamente problematici: un esito incompleto su quel corpus è previsto.
 
-La macchina destinataria non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract. La GUI richiede Windows x64 con driver OpenGL 3.3; il collaudo documentato riguarda Windows 11. L'EXE non è firmato Authenticode.
+La macchina destinataria non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract. La GUI usa DirectX 12 (Windows 10/11), anche senza driver video del produttore tramite l'adattatore software WARP; OpenGL 3.3 resta come ripiego automatico; il collaudo documentato riguarda Windows 11. L'EXE non è firmato Authenticode.
 
 ## Funzioni principali
 

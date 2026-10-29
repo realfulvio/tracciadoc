@@ -7,13 +7,6 @@
     "limited": false
   },
   {
-    "file": "carta.txt",
-    "positive": true,
-    "document_class": "carta",
-    "format": "TXT",
-    "limited": false
-  },
-  {
     "file": "carta.png",
     "positive": true,
     "document_class": "carta",
@@ -25,13 +18,6 @@
     "positive": true,
     "document_class": "passaporto",
     "format": "PDF",
-    "limited": false
-  },
-  {
-    "file": "passaporto.txt",
-    "positive": true,
-    "document_class": "passaporto",
-    "format": "TXT",
     "limited": false
   },
   {
@@ -49,13 +35,6 @@
     "limited": false
   },
   {
-    "file": "patente.txt",
-    "positive": true,
-    "document_class": "patente",
-    "format": "TXT",
-    "limited": false
-  },
-  {
     "file": "patente.png",
     "positive": true,
     "document_class": "patente",
@@ -67,13 +46,6 @@
     "positive": true,
     "document_class": "sanitaria",
     "format": "PDF",
-    "limited": false
-  },
-  {
-    "file": "sanitaria.txt",
-    "positive": true,
-    "document_class": "sanitaria",
-    "format": "TXT",
     "limited": false
   },
   {
@@ -186,34 +158,6 @@
     "positive": true,
     "document_class": "patente",
     "format": "PNG firma",
-    "limited": false
-  },
-  {
-    "file": "email.txt",
-    "positive": false,
-    "document_class": "negativo",
-    "format": "TXT",
-    "limited": false
-  },
-  {
-    "file": "codice-fiscale.txt",
-    "positive": false,
-    "document_class": "negativo",
-    "format": "TXT",
-    "limited": false
-  },
-  {
-    "file": "richiesta.txt",
-    "positive": false,
-    "document_class": "negativo",
-    "format": "TXT",
-    "limited": false
-  },
-  {
-    "file": "appunti.txt",
-    "positive": false,
-    "document_class": "negativo",
-    "format": "TXT",
     "limited": false
   },
   {

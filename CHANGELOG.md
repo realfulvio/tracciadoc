@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 - 2026-10-29
+
+- Indicatore di avanzamento nella barra laterale: cerchio che si riempie con la percentuale, file esaminati/totale, file al secondo e tempo residuo. Il totale viene da un conteggio preliminare in parallelo (solo nomi e dimensioni, niente lettura dei file): finché non è finito la percentuale è indicata con "~", il totale con "+" e il tempo residuo resta "-". Non arriva al 100% finché la scansione non è conclusa.
+- La finestra si apre massimizzata (con barra del titolo, ridimensionabile).
+- I file di solo testo (txt, csv, tsv, log, md) non vengono più letti: non possono contenere copie di documenti e producevano solo avvisi e falsi positivi. Restano analizzati rtf, PDF, immagini e documenti Office/OpenDocument. Il corpus sintetico non include più file di testo.
+
 ## 0.2.4 - 2026-10-29
 
 - Prima di aprire un file si guarda nome e dimensione: si aprono solo immagini (jpg, png, bmp, tif, gif, webp, heic), pdf, documenti Office/OpenDocument, rtf e testo. exe, dll, svg e il resto non vengono aperti e finiscono nel contatore "ignorati per tipo". Solo file senza estensione o con estensione tipo .dat/.tmp/.bak (20 KB fino al limite) vengono riconosciuti dalla firma.

@@ -173,6 +173,9 @@ pub struct Run {
     pub analyzed: u64,
     pub partial_files: u64,
     pub skipped: u64,
+    /// File ignorati per tipo (estensione o firma non di interesse): solo conteggiati, mai nel log.
+    #[serde(default)]
+    pub ignored_type: u64,
     pub pages_ocr: u64,
     pub ocr_seconds: f64,
     pub ocr_init_ms: f64,

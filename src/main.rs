@@ -120,7 +120,7 @@ fn main() {
             }
             report::write(&run, &output, !args.contains(&"--omit-paths".into()), demo)?;
             // Structured CLI summary deliberately omits selected roots and finding paths.
-            let summary = serde_json::json!({"seconds":run.elapsed_secs,"encountered":run.encountered,"analyzed":run.analyzed,"partial":run.partial_files,"skipped":run.skipped,"findings":run.findings.iter().map(|f|serde_json::json!({"format":f.format,"reasons":f.reasons})).collect::<Vec<_>>(),"issues":run.issues,"incomplete":run.incomplete(),"interrupted":run.interrupted,"pages_ocr":run.pages_ocr,"ocr_seconds":run.ocr_seconds,"ocr_init_ms":run.ocr_init_ms,"peak_worker_bytes":run.peak_worker_bytes,"backend":run.backend,"timing":run.timing,"timing_by_format":run.timing_by_format});
+            let summary = serde_json::json!({"seconds":run.elapsed_secs,"encountered":run.encountered,"analyzed":run.analyzed,"partial":run.partial_files,"skipped":run.skipped,"ignored_type":run.ignored_type,"findings":run.findings.iter().map(|f|serde_json::json!({"format":f.format,"reasons":f.reasons})).collect::<Vec<_>>(),"issues":run.issues,"incomplete":run.incomplete(),"interrupted":run.interrupted,"pages_ocr":run.pages_ocr,"ocr_seconds":run.ocr_seconds,"ocr_init_ms":run.ocr_init_ms,"peak_worker_bytes":run.peak_worker_bytes,"backend":run.backend,"timing":run.timing,"timing_by_format":run.timing_by_format});
             std::fs::write(
                 output.with_extension("json"),
                 serde_json::to_vec_pretty(&summary).unwrap(),

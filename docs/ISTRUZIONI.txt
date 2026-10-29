@@ -36,8 +36,9 @@ Nessuna cache persistente e nessun temporaneo OCR su disco.
 I PDF esportati restano nelle cartelle scelte dall'operatore.
 
 Formati: PDF, PNG/JPEG/BMP/WebP, GIF/TIFF (solo prima immagine),
-DOCX/XLSX/PPTX, ODT/ODS/ODP, testo UTF-8 TXT/CSV/TSV/LOG/MD.
-RTF: solo testo grezzo. Office: XML e immagini raster incorporate.
+DOCX/XLSX/PPTX, ODT/ODS/ODP, RTF (solo testo grezzo).
+I file di solo testo (TXT, CSV, TSV, LOG, MD) non vengono analizzati.
+Office: XML e immagini raster incorporate.
 Legacy DOC/XLS/PPT, archivi generici, OLE, macro, file cifrati/non locali
 e parti non supportate non vengono ignorati: generano limiti visibili.
 Le firme dei formati sono controllate anche con estensione errata/assente.

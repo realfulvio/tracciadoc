@@ -10,9 +10,9 @@ def scan(name,source,flags=()):
  print(name,result['encountered'],result['analyzed'],result['partial'],result['skipped'],result['incomplete'],flush=True)
  return result
 
-source=OUT/'one';source.mkdir();shutil.copy2(PKG/'prove-sintetiche'/'appunti.txt',source/'nota.txt')
+source=OUT/'one';source.mkdir();shutil.copy2(PKG/'prove-sintetiche'/'appunti.png',source/'nota.png')
 assert not scan('negative',source)['incomplete']
-shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',source/'documento.txt')
+shutil.copy2(PKG/'prove-sintetiche'/'carta.png',source/'documento.png')
 assert len(scan('positive',source)['findings'])==1
 assert scan('max-files',source,['--max-files','1'])['incomplete']
 
@@ -20,7 +20,7 @@ assert scan('max-files',source,['--max-files','1'])['incomplete']
 kernel=ctypes.WinDLL('kernel32',use_last_error=True)
 kernel.CreateFileW.restype=ctypes.c_void_p
 kernel.CreateFileW.argtypes=[ctypes.c_wchar_p,ctypes.c_uint32,ctypes.c_uint32,ctypes.c_void_p,ctypes.c_uint32,ctypes.c_uint32,ctypes.c_void_p]
-handle=kernel.CreateFileW(str(source/'documento.txt'),0x80000000,0,None,3,0,None)
+handle=kernel.CreateFileW(str(source/'documento.png'),0x80000000,0,None,3,0,None)
 assert handle not in [None,ctypes.c_void_p(-1).value]
 try:
  result=scan('locked',source)
@@ -29,27 +29,27 @@ finally:
  kernel.CloseHandle.argtypes=[ctypes.c_void_p];kernel.CloseHandle(handle)
 
 # Read denied only on a synthetic file, and reverted in finally.
-denied=OUT/'denied';denied.mkdir();p=denied/'synthetic.txt';p.write_text('synthetic only')
+denied=OUT/'denied';denied.mkdir();p=denied/'synthetic.png';p.write_text('synthetic only')
 subprocess.run(['icacls',str(p),'/deny','*S-1-1-0:(R)'],check=True,capture_output=True)
 try:
  result=scan('denied',denied);assert result['incomplete'] and result['skipped']==1
 finally:
  subprocess.run(['icacls',str(p),'/remove:d','*S-1-1-0'],check=True,capture_output=True)
 
-large=OUT/'large';large.mkdir();(large/'large.txt').write_bytes(b'x'*1_100_000)
+large=OUT/'large';large.mkdir();(large/'large.pdf').write_bytes(b'x'*1_100_000)
 assert scan('size',large,['--max-mb','1'])['incomplete']
 # A 3x3 mosaic of a text image: OCR well above one second even with a single confident pass.
 from PIL import Image
 note=Image.open(PKG/'prove-sintetiche'/'appunti.png');mosaic=Image.new('RGB',(note.width*3,note.height*3),'white')
 for i in range(9):mosaic.paste(note,((i%3)*note.width,(i//3)*note.height))
 images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
-shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',images/'z.txt')
+shutil.copy2(PKG/'prove-sintetiche'/'carta.png',images/'z.png')
 result=scan('timeout',images,['--timeout-secs','1'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
 # Deterministic memory pressure: a 5600x5600 RGB raster decodes to ~94 MB, within the 128 MiB decoder
 # limit but above a 64 MiB worker Job limit, whatever the OCR footprint of the machine.
 heavy=OUT/'memory';heavy.mkdir();Image.new('RGB',(5600,5600),'white').save(heavy/'a.png')
-shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',heavy/'z.txt')
+shutil.copy2(PKG/'prove-sintetiche'/'carta.png',heavy/'z.png')
 result=scan('memory',heavy,['--memory-mb','64'])
 assert result['incomplete'] and len(result['findings'])==1,'Memory failure must recover and continue'
 assert scan('missing',OUT/'absent')['incomplete']

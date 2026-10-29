@@ -141,6 +141,17 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         10.,
     );
     add("Un file parziale o fallito non e contato come analizzato integralmente. Gli errori di enumerazione possono impedire di conoscere quanti file non siano stati raggiunti.".into(),9.);
+    add(
+        if run.settings.prefilter {
+            format!(
+                "Prefiltro immagini attivo: immagini o pagine scartate dal prefiltro, senza OCR: {}. Sono quelle prive di tratti a contrasto tipo testo in ogni zona; i file che le contengono sono contati come parziali.",
+                run.timing.prefilter_skipped
+            )
+        } else {
+            "Prefiltro immagini disattivato: OCR su tutte le immagini e pagine entro i limiti.".into()
+        },
+        9.,
+    );
     if !run.issues.is_empty() {
         add("ERRORI, ESCLUSIONI E LIMITI INCONTRATI".into(), 12.);
         for (issue, n) in &run.issues {

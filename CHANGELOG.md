@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.3 - 2026-10-29
+
+- Dopo l'eliminazione i file eliminati escono dalla lista dei segnalati e l'intestazione mostra il conteggio attuale ("File segnalati (28)"); restano nel conteggio delle eliminazioni, nella console e nel verbale.
+
 ## 0.2.2 - 2026-10-29
 
 - Dopo l'eliminazione, il riepilogo conta solo le segnalazioni ancora presenti: "File con possibili copie", tipi, formati e verifica manuale coincidono con la lista e con "segnalazioni residue". Prima restavano i totali iniziali (es. residue 28 ma 29 ancora da verificare).

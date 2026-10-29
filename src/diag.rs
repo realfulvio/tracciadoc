@@ -55,7 +55,9 @@ pub fn mask(text: &str) -> String {
     while let Some(i) = lower[at..].find("\\users\\") {
         let name = at + i + 7;
         out.push_str(&text[at..name]);
-        let end = text[name..].find(['\\', '/']).map_or(text.len(), |e| name + e);
+        let end = text[name..]
+            .find(['\\', '/'])
+            .map_or(text.len(), |e| name + e);
         let segment = &text[name..end];
         if KEEP.contains(&segment.to_ascii_lowercase().as_str()) || segment.is_empty() {
             out.push_str(segment);
@@ -100,16 +102,28 @@ pub fn err(text: impl AsRef<str>) {
 /// Ultimi `n` eventi, dal piu vecchio.
 pub fn recent(n: usize) -> Vec<Event> {
     let events = EVENTS.lock().unwrap();
-    events.iter().skip(events.len().saturating_sub(n)).cloned().collect()
+    events
+        .iter()
+        .skip(events.len().saturating_sub(n))
+        .cloned()
+        .collect()
 }
 /// Mette il testo negli appunti di Windows (UTF-16). false se gli appunti sono occupati o non disponibili.
 pub fn copy_to_clipboard(text: &str) -> bool {
-    use windows_sys::Win32::System::{
-        DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
-        Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock},
+    use windows_sys::Win32::{
+        Foundation::GlobalFree,
+        System::{
+            DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
+            Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock},
+        },
     };
     const CF_UNICODETEXT: u32 = 13;
-    let wide: Vec<u16> = text.replace("\r\n", "\n").replace('\n', "\r\n").encode_utf16().chain(Some(0)).collect();
+    let wide: Vec<u16> = text
+        .replace("\r\n", "\n")
+        .replace('\n', "\r\n")
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
     unsafe {
         let mut opened = false;
         for _ in 0..10 {
@@ -158,7 +172,12 @@ fn persist(event: &Event) {
         options.append(true);
     }
     if let Ok(mut file) = options.open(&path) {
-        let _ = writeln!(file, "{} {}", chrono::Local::now().format("%Y-%m-%d"), event.line());
+        let _ = writeln!(
+            file,
+            "{} {}",
+            chrono::Local::now().format("%Y-%m-%d"),
+            event.line()
+        );
     }
 }
 pub fn log_path() -> std::path::PathBuf {
@@ -238,20 +257,32 @@ pub fn report(gpu: &str, phase: &str, current: &str, run: Option<&Run>) -> Strin
                 r.settings.workers,
                 r.settings.cpu_only,
                 r.settings.prefilter,
-                if r.backend.is_empty() { "-" } else { &r.backend }
+                if r.backend.is_empty() {
+                    "-"
+                } else {
+                    &r.backend
+                }
             ));
             line(format!(
                 "Fase: {} · {} · {}",
                 if phase.is_empty() { "-" } else { phase },
                 if r.finished { "terminata" } else { "in corso" },
-                if r.interrupted { "INTERROTTA" } else { "non interrotta" }
+                if r.interrupted {
+                    "INTERROTTA"
+                } else {
+                    "non interrotta"
+                }
             ));
             if !current.is_empty() {
                 line(format!("File corrente: {}", mask(current)));
             }
             line(format!(
                 "Aree: {}",
-                r.roots.iter().map(|p| mask(&p.display().to_string())).collect::<Vec<_>>().join(" · ")
+                r.roots
+                    .iter()
+                    .map(|p| mask(&p.display().to_string()))
+                    .collect::<Vec<_>>()
+                    .join(" · ")
             ));
             line(format!(
                 "Contatori: visti {} · analizzati {} · parziali {} · saltati {} · segnalati {} · eliminati {} · pagine OCR {} · {:.1} s",
@@ -272,14 +303,26 @@ pub fn report(gpu: &str, phase: &str, current: &str, run: Option<&Run>) -> Strin
             } else {
                 line(format!(
                     "Problemi: {}",
-                    r.issues.iter().map(|(k, n)| format!("{k} x{n}")).collect::<Vec<_>>().join(" · ")
+                    r.issues
+                        .iter()
+                        .map(|(k, n)| format!("{k} x{n}"))
+                        .collect::<Vec<_>>()
+                        .join(" · ")
                 ));
             }
-            let failed: Vec<_> = r.findings.iter().filter(|f| !f.delete_error.is_empty()).collect();
+            let failed: Vec<_> = r
+                .findings
+                .iter()
+                .filter(|f| !f.delete_error.is_empty())
+                .collect();
             if !failed.is_empty() {
                 line("--- Eliminazioni non riuscite ---".into());
                 for f in failed {
-                    line(format!("{} · {}", mask(&f.path.display().to_string()), f.delete_error));
+                    line(format!(
+                        "{} · {}",
+                        mask(&f.path.display().to_string()),
+                        f.delete_error
+                    ));
                 }
             }
         }
@@ -288,8 +331,14 @@ pub fn report(gpu: &str, phase: &str, current: &str, run: Option<&Run>) -> Strin
     for e in recent(COPIED_EVENTS) {
         line(e.line());
     }
-    line(format!("Log completo: {}", mask(&log_path().display().to_string())));
-    line("Contenuto dei documenti: mai incluso · nome utente nei percorsi sostituito con <utente>".into());
+    line(format!(
+        "Log completo: {}",
+        mask(&log_path().display().to_string())
+    ));
+    line(
+        "Contenuto dei documenti: mai incluso · nome utente nei percorsi sostituito con <utente>"
+            .into(),
+    );
     t
 }
 /// Percorso di un file con nome leggibile e nome utente mascherato, per i messaggi di errore.
@@ -301,11 +350,17 @@ mod tests {
     use super::*;
     #[test]
     fn masks_user_name() {
-        assert_eq!(mask(r"C:\Users\mario.rossi\Desktop\a.pdf"), r"C:\Users\<utente>\Desktop\a.pdf");
+        assert_eq!(
+            mask(r"C:\Users\mario.rossi\Desktop\a.pdf"),
+            r"C:\Users\<utente>\Desktop\a.pdf"
+        );
         assert_eq!(mask(r"c:\USERS\Mario"), r"c:\USERS\<utente>");
         assert_eq!(mask(r"C:\Users\Public\x"), r"C:\Users\Public\x");
         assert_eq!(mask(r"D:\Scansioni\a.pdf"), r"D:\Scansioni\a.pdf");
-        assert_eq!(mask(r"C:\Users\a\x e C:\Users\b\y"), r"C:\Users\<utente>\x e C:\Users\<utente>\y");
+        assert_eq!(
+            mask(r"C:\Users\a\x e C:\Users\b\y"),
+            r"C:\Users\<utente>\x e C:\Users\<utente>\y"
+        );
     }
     #[test]
     fn keeps_last_events_only() {

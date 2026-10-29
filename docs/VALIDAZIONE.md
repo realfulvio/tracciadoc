@@ -99,10 +99,10 @@ Immagine ridotta a 1024 px, griglia 8x8, quota di pixel con salto di luminosita 
 
 Sul corpus OSD restituisce angoli sbagliati con confidenza bassa (es. `carta.png` dritta data a 180 gradi con 1,57; `generico-ruotato-180.jpg` data a 0 gradi con 0,71). Per questo una sola passata solo con confidenza >= 2; sotto soglia restano le 4 rotazioni, prima dritta e poi quella suggerita. Nessun falso negativo introdotto sul corpus.
 
-### GUI e firma
+### GUI
 
-GUI collaudata a schermo sulla VM (DirectX 12 su WARP, UI Automation e clic reali): scansione del corpus da 41 file in 16-18 s con 2 foto scartate, eliminazione con conferma (file modificato dopo l'analisi non eliminato), ri-scansione finale e verbale PDF dal dialogo di salvataggio, con stemma in testa, "3 worker" e "scartate dal prefiltro: 2". `scripts/sign.ps1` provato solo con un certificato self-signed temporaneo in `LocalMachine\My`, rimosso subito dopo: firma apposta, stato non attendibile. Serve un certificato di firma codice di una CA attendibile.
+GUI collaudata a schermo sulla VM (DirectX 12 su WARP, UI Automation e clic reali): scansione del corpus da 41 file in 16-18 s con 2 foto scartate, eliminazione con conferma (file modificato dopo l'analisi non eliminato), ri-scansione finale e verbale PDF dal dialogo di salvataggio, con stemma in testa, "3 worker" e "scartate dal prefiltro: 2".
 
 ### Non verificato
 
-GPU/iGPU reali; HDD o disco freddo; PC fisici con altri numeri di core; foto reali (il prefiltro e tarato su immagini sintetiche); finestra non massimizzata; firma con certificato attendibile e marca temporale.
+GPU/iGPU reali; HDD o disco freddo; PC fisici con altri numeri di core; foto reali (il prefiltro e tarato su immagini sintetiche); finestra non massimizzata.

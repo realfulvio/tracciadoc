@@ -14,7 +14,6 @@
 - Prefiltro: niente OCR sulle immagini e pagine senza zone con tratti a contrasto tipo testo; dichiarate nel verbale come "scartate dal prefiltro", file contati come parziali. `--no-prefilter` e casella nella GUI per l'OCR su tutto. L'OCR gira solo sulla zona con tratti tipo testo piu un margine.
 - Orientamento con OSD di Tesseract (`osd.traineddata` con hash verificato): una sola passata con confidenza >= 2, altrimenti le 4 rotazioni, prima dritta e poi quella suggerita.
 - Stemma del Comune di Bondeno nella barra laterale e in testa al verbale; fonte in `assets/ui/FONTI-E-LICENZE.md`.
-- `scripts/sign.ps1` per la firma Authenticode con certificato da variabile d'ambiente; provato solo con certificato self-signed temporaneo.
 - Corpus di validazione a 41 file: due foto senza testo, un PNG ruotato e un documento ruotato dentro una foto. `edge_tests.py`: timeout su un mosaico di testo.
 - Misure e collaudo sulla VM Windows in `docs/VALIDAZIONE.md`, sezione 0.2.0.
 

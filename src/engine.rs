@@ -333,7 +333,15 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 }
             }
             state.pages_ocr += result.pages_ocr;
-            if result.issues.is_empty() && result.supported {
+            if !result.supported
+                && result.reasons.is_empty()
+                && !result.issues.is_empty()
+                && result.issues.iter().all(|i| i == crate::parser::UNSUPPORTED)
+            {
+                // Firma non di interesse dopo lo sniff (es. .dat senza documenti): ignorato per tipo.
+                state.ignored_type += 1;
+                result.issues.clear();
+            } else if result.issues.is_empty() && result.supported {
                 state.analyzed += 1;
             } else if result.supported {
                 state.partial_files += 1;

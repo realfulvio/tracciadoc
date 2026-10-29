@@ -8,7 +8,7 @@
 - Titillium Web Regular/SemiBold incorporati, SIL OFL 1.1. Simbolo e icona TracciaDoc dal kit fornito, MIT. Firma originale realhcok fornita dal proprietario per questo uso, senza autorizzazione generale a terzi sul marchio. Licenze e provenienza in `licenze/ui-kit`.
 - Elenco versioni/licenze Rust completo in `licenze/dipendenze-rust.txt`; file di licenza, inclusi font di fallback, nella stessa cartella.
 
-Il file `SHA256SUMS.txt` verifica l'integrita dei componenti, non e una firma digitale del programma o del verbale. L'EXE non e firmato con un certificato Authenticode.
+Il file `SHA256SUMS.txt` verifica l'integrita dei componenti, non e una firma digitale del programma o del verbale. L'EXE distribuito non e ancora firmato con un certificato Authenticode: `scripts/sign.ps1` firma con signtool usando un certificato di firma codice indicato da variabile d'ambiente (impronta o `.pfx` fuori dal repository), mai salvato nel repository. Provato solo con un certificato self-signed temporaneo: firma apposta, catena non attendibile. Per la distribuzione serve un certificato di firma codice rilasciato da una CA attendibile al titolare (Comune o sviluppatore), con marca temporale RFC 3161.
 
 L'OCR e inizializzato soltanto al primo contenuto raster. Un'istanza viene riutilizzata nel parser persistente; un solo thread OCR evita sovrapposizione del parallelismo. Il parser e confinato da un Windows Job con limite di memoria e chiusura dei processi, timeout e recupero del worker; mantiene il token dell'operatore e non costituisce una sandbox di sicurezza.
 

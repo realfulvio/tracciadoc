@@ -88,7 +88,7 @@ cargo build --release --locked
 & .\scratch\tooling\Scripts\python.exe scripts/edge_tests.py
 ```
 
-Output dist/TracciaDoc/TracciaDoc.exe, runtime, licenze e prove sintetiche. Il manifesto MSYS2 e bloccato in [runtime-lock.json](docs/runtime-lock.json); PDFium e modelli sono verificati con SHA256 nello script. Gli hash attestano integrita, non sono firme digitali. Il programma non e firmato Authenticode.
+Output dist/TracciaDoc/TracciaDoc.exe, runtime, licenze e prove sintetiche. Il manifesto MSYS2 e bloccato in [runtime-lock.json](docs/runtime-lock.json); PDFium e modelli sono verificati con SHA256 nello script. Gli hash attestano integrita, non sono firme digitali. Il programma distribuito non e ancora firmato Authenticode: `scripts/sign.ps1` lo firma con un certificato di firma codice indicato da `TRACCIADOC_SIGN_THUMBPRINT` oppure `TRACCIADOC_SIGN_PFX`/`TRACCIADOC_SIGN_PFX_PASSWORD` (marca temporale con `TRACCIADOC_SIGN_TIMESTAMP`); nessun certificato nel repository. Serve un certificato rilasciato da una CA attendibile.
 
 CLI facoltativa, scansione solo con percorso assoluto esplicito:
 

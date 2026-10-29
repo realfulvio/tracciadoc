@@ -247,7 +247,9 @@ impl Run {
     pub fn finding_summary(&self) -> Vec<String> {
         let mut formats: BTreeMap<&str, u64> = BTreeMap::new();
         let mut classes: BTreeMap<&str, u64> = BTreeMap::new();
-        for file in &self.findings {
+        // Solo le segnalazioni non ancora eliminate: dopo l'eliminazione i conteggi devono coincidere con la lista.
+        let live: Vec<&Finding> = self.findings.iter().filter(|f| !f.deleted()).collect();
+        for file in live.iter().copied() {
             let kind = match file.format.to_ascii_lowercase().as_str() {
                 "pdf" => "PDF",
                 "png" | "jpeg" | "bmp" | "gif" | "tiff" | "webp" => "Immagini",
@@ -272,9 +274,17 @@ impl Run {
         }
         let mut out = vec![format!(
             "File con possibili copie di documenti: {}",
-            self.findings.len()
+            live.len()
         )];
         if !self.findings.is_empty() {
+            out.push(format!(
+                "Eliminazioni eseguite dall'operatore: {} | segnalazioni residue: {}",
+                self.deleted_count(),
+                self.remaining()
+            ));
+            if live.is_empty() {
+                return out;
+            }
             out.push(format!(
                 "Tipi rilevati: {}",
                 classes
@@ -293,26 +303,46 @@ impl Run {
             ));
             out.push("Conteggi per tipo: file con indizi, non numero di documenti fisici. Un file puo contenere piu tipi.".into());
             out.push(format!(
-                "Eliminazioni eseguite dall'operatore: {} | segnalazioni residue: {}",
-                self.deleted_count(),
-                self.remaining()
-            ));
-            out.push(format!(
                 "Verifica manuale: {} confermati | {} scartati | {} ancora da verificare",
-                self.findings
-                    .iter()
+                live.iter()
                     .filter(|f| f.review == Review::Confirmed)
                     .count(),
-                self.findings
-                    .iter()
+                live.iter()
                     .filter(|f| f.review == Review::Discarded)
                     .count(),
-                self.findings
-                    .iter()
+                live.iter()
                     .filter(|f| f.review == Review::Pending)
                     .count()
             ));
         }
         out
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn summary_counts_follow_deletions() {
+        let mut r = crate::engine::new_run(vec![], Default::default(), "t".into(), "t".into());
+        for name in ["a.pdf", "b.pdf", "c.png"] {
+            r.findings.push(Finding {
+                path: name.into(),
+                format: name.rsplit('.').next().unwrap().into(),
+                reasons: vec!["Carta d'identita: indizio".into()],
+                ..Default::default()
+            });
+        }
+        assert_eq!(r.finding_summary()[0], "File con possibili copie di documenti: 3");
+        r.findings[0].deleted_at = "2026-10-29T12:00:00+02:00".into();
+        let text = r.finding_summary().join("\n");
+        assert!(text.contains("possibili copie di documenti: 2"));
+        assert!(text.contains("Eliminazioni eseguite dall'operatore: 1 | segnalazioni residue: 2"));
+        assert!(text.contains("2 ancora da verificare"));
+        for f in &mut r.findings {
+            f.deleted_at = "x".into();
+        }
+        let text = r.finding_summary().join("\n");
+        assert!(text.contains("possibili copie di documenti: 0"));
+        assert!(text.contains("segnalazioni residue: 0"));
     }
 }

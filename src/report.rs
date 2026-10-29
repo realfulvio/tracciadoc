@@ -271,6 +271,23 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
         for (index, lines) in pages.into_iter().enumerate() {
             let mut page = doc.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
             page.set_content_regeneration_strategy(PdfPageContentRegenerationStrategy::Manual);
+            if index == 0 {
+                // Stemma on the white page: alpha flattened on white, PDF images have no transparency.
+                let stemma = image::load_from_memory(include_bytes!("../assets/ui/stemma-comune-bondeno.png"))?.to_rgba8();
+                let mut flat = image::RgbImage::from_pixel(stemma.width(), stemma.height(), image::Rgb([255, 255, 255]));
+                for (x, y, p) in stemma.enumerate_pixels() {
+                    let a = p[3] as u32;
+                    let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
+                    flat.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+                }
+                page.objects_mut().create_image_object(
+                    PdfPoints::new(470.),
+                    PdfPoints::new(715.),
+                    &image::DynamicImage::ImageRgb8(flat),
+                    Some(PdfPoints::new(80.)),
+                    Some(PdfPoints::new(80.)),
+                )?;
+            }
             let mut y = 790.;
             for (text, size) in lines {
                 if size >= 12. {

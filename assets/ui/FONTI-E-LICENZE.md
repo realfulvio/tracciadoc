@@ -31,3 +31,12 @@ Licenza SIL Open Font License 1.1, testo completo in `assets/fonts/OFL.txt`. Man
 ## Richiamo al Comune di Bondeno
 
 Riferimento visivo: https://www.comune.bondeno.fe.it/ . Dalla pagina sono stati osservati blu notte `#001A4D`, petrolio `#005E8E` e Titillium Web. Non è stato riutilizzato lo stemma comunale; il kit non implica approvazione o certificazione del Comune o di Lepida.
+
+## Stemma del Comune di Bondeno
+
+`stemma-comune-bondeno.png` (300x300, PNG con trasparenza, 23617 byte, SHA256 `174a12086eb2fc89aa0604f51823f54a5ace0cefba00b55616fc85063e7f999f`): copia senza modifiche di `Stemma-del-Comune-di-Bondeno-1.png`.
+
+- Fonte originale: https://www.comune.bondeno.fe.it/wp-content/uploads/2024/09/Stemma-del-Comune-di-Bondeno-1.png, sito ufficiale del Comune, scaricato il 2026-10-26.
+- Copia ripresa da https://github.com/realfulvio/cedro/blob/main/assets/bondeno/Stemma-del-Comune-di-Bondeno-1.png (vedi `FONTE.md` nella stessa cartella).
+- Licenza: nessuna licenza o termine d'uso pubblicato dal Comune; non ricercato un manuale d'identità visiva. Lo stemma resta del Comune di Bondeno e non è coperto dalla licenza MIT del progetto. L'uso nella GUI e in testa al verbale è stato confermato dal proprietario del progetto per il deployment presso il Comune; non costituisce autorizzazione a terzi.
+- Nella GUI è mostrato su un disco bianco, perché la scritta è scura; nel verbale PDF la trasparenza è composta su bianco.

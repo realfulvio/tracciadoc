@@ -91,6 +91,61 @@ pub struct App {
     console_open: bool,
     /// Esito dell'ultima copia della diagnostica, mostrato per qualche secondo.
     copied: Option<(String, Instant)>,
+    /// Campioni (istante, file esaminati) degli ultimi secondi: velocita e tempo residuo.
+    samples: Vec<(Instant, u64)>,
+}
+/// Numero con separatore delle migliaia all'italiana (12.480).
+fn it_num(n: u64) -> String {
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, c) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
+            out.push('.');
+        }
+        out.push(c);
+    }
+    out
+}
+fn it_eta(secs: f64) -> String {
+    let s = secs.ceil() as u64;
+    if s < 60 {
+        format!("~ {s} s")
+    } else if s < 3600 {
+        format!("~ {} min", s.div_ceil(60))
+    } else {
+        format!("~ {} h {} min", s / 3600, (s % 3600).div_ceil(60))
+    }
+}
+/// Cerchio che si riempie con la percentuale al centro.
+fn ring(ui: &mut egui::Ui, frac: f32, text: &str) {
+    let size = 120.;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+    let (c, r, w) = (rect.center(), size / 2. - 7., 10.);
+    let painter = ui.painter();
+    painter.circle_stroke(c, r, egui::Stroke::new(w, SURFACE));
+    let frac = frac.clamp(0., 1.);
+    if frac > 0. {
+        let start = -std::f32::consts::FRAC_PI_2;
+        let steps = ((frac * 96.).ceil() as usize).max(2);
+        let at = |i: usize| {
+            let a = start + frac * std::f32::consts::TAU * i as f32 / steps as f32;
+            c + egui::vec2(a.cos(), a.sin()) * r
+        };
+        let points: Vec<egui::Pos2> = (0..=steps).map(at).collect();
+        painter.add(egui::Shape::line(points, egui::Stroke::new(w, PRIMARY)));
+        painter.circle_filled(at(0), w / 2., PRIMARY);
+        painter.circle_filled(at(steps), w / 2., PRIMARY);
+    }
+    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(30.), Color32::from_rgb(236, 239, 242));
+}
+fn stat(ui: &mut egui::Ui, label: &str, value: String) {
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.;
+        ui.label(RichText::new(label).small().weak());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(RichText::new(value).small().font(semibold(13.)));
+        });
+    });
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -196,6 +251,7 @@ impl App {
             gpu,
             console_open: true,
             copied: None,
+            samples: vec![],
             // Su WARP ogni frame costa CPU sottratta all'OCR: a 150 ms la scansione sintetica passava da ~12 s a ~90 s.
             repaint: if cc.wgpu_render_state.as_ref().is_some_and(|rs| {
                 rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu
@@ -238,6 +294,8 @@ impl App {
         self.shared.lock().unwrap().run.as_mut().unwrap().previous = previous;
         self.confirm = false;
         self.previews.clear();
+        self.samples.clear();
+        self.shared.lock().unwrap().counts = Default::default();
         let shared = self.shared.clone();
         let stop = self.stop.clone();
         self.started = Some(Instant::now());
@@ -378,6 +436,26 @@ impl eframe::App for App {
                     });
                 }
             });
+        let (done, total, total_final, outcome) = {
+            let p = self.shared.lock().unwrap();
+            (
+                p.counts.done.load(Ordering::Relaxed),
+                p.counts.total.load(Ordering::Relaxed),
+                p.counts.total_final.load(Ordering::Relaxed),
+                p.run.as_ref().map(|r| (r.finished, r.interrupted)),
+            )
+        };
+        if running {
+            self.samples.push((Instant::now(), done));
+            self.samples.retain(|(t, _)| t.elapsed() < Duration::from_secs(20));
+        }
+        let rate = match (self.samples.first(), self.samples.last()) {
+            (Some((t0, d0)), Some((t1, d1))) if t1.duration_since(*t0) >= Duration::from_secs(3) => {
+                d1.saturating_sub(*d0) as f64 / t1.duration_since(*t0).as_secs_f64()
+            }
+            _ => 0.,
+        };
+        let elapsed = self.started.map_or(0., |t| t.elapsed().as_secs_f64());
         egui::Panel::left("steps")
             .exact_size(220.)
             .frame(egui::Frame::new().fill(Color32::from_rgb(20, 22, 26)).inner_margin(16))
@@ -391,13 +469,44 @@ impl eframe::App for App {
                     let (mark, color) = if n < active { ("◉", Color32::from_rgb(126, 217, 134)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(154, 164, 173)) };
                     ui.label(RichText::new(format!("{mark}  {label}")).font(semibold(16.)).color(color));
                 }
-                ui.add_space(24.);
-                // Stemma con scritta scura: su disco bianco per restare leggibile sul fondo blu.
-                ui.vertical_centered(|ui| {
-                    let (rect, response) = ui.allocate_exact_size(egui::vec2(140., 140.), egui::Sense::hover());
-                    ui.painter().circle_filled(rect.center(), 70., Color32::WHITE);
-                    egui::Image::from_texture(&self.stemma).paint_at(ui, rect.shrink(4.));
-                    response.on_hover_text("Comune di Bondeno");
+                ui.add_space(20.);
+                let shown = running || outcome.is_some_and(|(finished, _)| finished);
+                if shown {
+                    let finished_ok = !running && outcome.is_some_and(|(f, i)| f && !i);
+                    let frac = if finished_ok { 1. } else if total > 0 { (done as f32 / total as f32).min(1.) } else { 0. };
+                    let text = if finished_ok {
+                        "100%".to_string()
+                    } else {
+                        // Mai 100% finche la scansione non e davvero finita; "~" se il totale e ancora in conteggio.
+                        let pct = ((frac * 100.).floor() as u32).min(99);
+                        if total_final || total == 0 { format!("{pct}%") } else { format!("~{pct}%") }
+                    };
+                    ui.vertical_centered(|ui| {
+                        ring(ui, frac, &text);
+                        let label = if running { if total_final { "Scansione in corso" } else { "Stima in corso..." } } else if finished_ok { "Scansione completata" } else { "Scansione interrotta" };
+                        ui.label(RichText::new(label).small().weak());
+                    });
+                    ui.add_space(4.);
+                    stat(ui, "File", format!("{} / {}{}", it_num(done), it_num(total), if total_final || !running { "" } else { "+" }));
+                    if running {
+                        stat(ui, "Velocita", if rate > 0. { format!("{} file/s", it_num(rate.round() as u64)) } else { "-".into() });
+                        let eta = if total_final && rate > 0.5 && done >= 30 && elapsed >= 10. {
+                            it_eta(total.saturating_sub(done) as f64 / rate)
+                        } else {
+                            "-".into()
+                        };
+                        stat(ui, "Tempo residuo", eta);
+                    }
+                }
+                // Stemma con scritta scura: su disco bianco per restare leggibile sul fondo scuro; piu piccolo con l'indicatore.
+                let size = if shown { 92. } else { 140. };
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                    if ui.available_height() >= size {
+                        let (rect, response) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
+                        ui.painter().circle_filled(rect.center(), size / 2., Color32::WHITE);
+                        egui::Image::from_texture(&self.stemma).paint_at(ui, rect.shrink(4.));
+                        response.on_hover_text("Comune di Bondeno");
+                    }
                 });
             });
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(24)).show(root,|ui| {

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 - 2026-10-29
+
+- Dopo l'eliminazione, il riepilogo conta solo le segnalazioni ancora presenti: "File con possibili copie", tipi, formati e verifica manuale coincidono con la lista e con "segnalazioni residue". Prima restavano i totali iniziali (es. residue 28 ma 29 ancora da verificare).
+
 ## 0.2.1 - 2026-10-29
 
 - Nuova palette della GUI: grafite neutro con accento verde acqua e avvisi ambra, al posto del blu notte.

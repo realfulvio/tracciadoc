@@ -41,7 +41,8 @@ L'esito mostra se sono state trovate possibili copie, quanti file, quali tipi (c
 - egui/eframe 0.37, font Titillium Web e asset del kit incorporati, palette blu notte/petrolio, firma originale realhcok, icona PE e finestra.
 - Enumerazione streaming, nessuna esclusione automatica di AppData/cestino/profili. Scelta di dischi, cartelle e volumi senza lettera; rete esclusa e rimovibili solo su selezione esplicita. Junction e collegamenti discendenti non attraversati, volumi montati da selezionare separatamente.
 - Lettura per firma, anche con estensione errata/assente; PDFium per PDF, XML/ZIP con decompressione limitata per Office, decoder immagini limitati e Tesseract 5.5.3 ita+eng. Nei PDF viene eseguito OCR anche sulle pagine che contengono testo digitale.
-- Parser persistente separato, un thread OCR, Windows Job con memoria limitata, timeout/annullamento e recupero. Non e una sandbox di sicurezza e mantiene i privilegi dell'operatore.
+- N parser persistenti in parallelo (default core fisici - 1), ognuno processo separato con un thread OCR e il proprio Windows Job con memoria limitata, timeout/annullamento e recupero. Non e una sandbox di sicurezza e mantiene i privilegi dell'operatore.
+- Prefiltro prima dell'OCR: immagini e pagine senza zone con tratti a contrasto tipo testo non vanno all'OCR e sono dichiarate nel verbale; l'OCR gira sulla sola zona con testo. Orientamento con OSD di Tesseract quando e affidabile, altrimenti 4 rotazioni.
 - CPU x64 di base, CRT statica. Automatico: AVX2/SSE solo dopo rilevamento runtime Rust e conferma della scelta Tesseract. Solo CPU: prodotto scalare generic per confronto, stesse regole. AVX-512/GPU/NPU non implementate. Nessun target-cpu=native globale.
 - Nessuna cache persistente. I duplicati vengono rianalizzati conservando i percorsi. Audit JSONL limitato a eventi/conteggi, senza documenti, testo OCR o percorsi.
 
@@ -54,6 +55,8 @@ Formati e limiti esatti: [istruzioni](docs/ISTRUZIONI.txt). Componenti, licenze 
 - Stesse motivazioni sui percorsi generico e AVX2; fixture invariate dopo i controlli.
 - Prove interattive Windows di selezione, avanzamento, interruzione, apertura file/cartella, controllo manuale, PDF e scala dell'interfaccia.
 - Circa **11,85 secondi di motore** sul corpus, contro 12,78 con percorso generico; circa 158 MiB di picco working set del worker e pacchetto di circa 63,5 MiB non compresso. Hardware di prova: Ryzen 7 PRO 5750G, 32 GB RAM, SSD NVMe.
+
+- 0.2.0 sulla VM Windows di test (4 vCPU, nessuna GPU reale, 3 worker): 296 file sintetici in 44,8 s invece di 96,2 s con gli stessi 216 rilevamenti; 8 foto senza testo in 0,5 s invece di 203 s (scartate dal prefiltro e dichiarate). Corpus di validazione a 41 file: 29 positivi analizzabili rilevati, nessun falso negativo o positivo. Dettagli in [docs/VALIDAZIONE.md](docs/VALIDAZIONE.md).
 
 Sono risultati del collaudo di sviluppo su un corpus piccolo e sintetico, non stime statistiche di accuratezza su documenti reali o promesse su altri PC. Metodi di misura, cache e limiti sono descritti in [docs/VALIDAZIONE.md](docs/VALIDAZIONE.md).
 

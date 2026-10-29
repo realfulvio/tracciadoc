@@ -318,10 +318,10 @@ impl eframe::App for App {
                 ui.add_space(24.);
                 // Stemma con scritta scura: su disco bianco per restare leggibile sul fondo blu.
                 ui.vertical_centered(|ui| {
-                    egui::Frame::new().fill(Color32::WHITE).corner_radius(70).inner_margin(4).show(ui, |ui| {
-                        ui.add(egui::Image::from_texture(&self.stemma).fit_to_exact_size(egui::vec2(132., 132.)))
-                            .on_hover_text("Comune di Bondeno");
-                    });
+                    let (rect, response) = ui.allocate_exact_size(egui::vec2(140., 140.), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 70., Color32::WHITE);
+                    egui::Image::from_texture(&self.stemma).paint_at(ui, rect.shrink(4.));
+                    response.on_hover_text("Comune di Bondeno");
                 });
             });
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(24)).show(root,|ui| {

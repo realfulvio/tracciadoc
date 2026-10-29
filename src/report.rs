@@ -131,11 +131,12 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add("CONTEGGI".into(), 12.);
     add(
         format!(
-            "File incontrati: {} | analizzati integralmente nelle capacita dichiarate: {} | parziali: {} | saltati/falliti: {} | file segnalati: {}",
+            "File incontrati: {} | analizzati integralmente nelle capacita dichiarate: {} | parziali: {} | saltati/falliti: {} | ignorati per tipo (estensione o firma non di interesse): {} | file segnalati: {}",
             run.encountered,
             run.analyzed,
             run.partial_files,
             run.skipped,
+            run.ignored_type,
             run.findings.len()
         ),
         10.,

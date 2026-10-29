@@ -175,6 +175,40 @@ impl Drop for Ocr {
 /// Below this OSD confidence the 4-rotation search is kept.
 const OSD_MIN_CONF: f32 = 2.0;
 
+pub const UNSUPPORTED: &str = "Formato non supportato o archivio non aperto";
+pub const INTERRUPTED: &str = "Verifica interrotta";
+
+const WANTED_EXT: &[&str] = &[
+    "jpg", "jpeg", "jfif", "png", "bmp", "tif", "tiff", "gif", "webp", "heic", "heif", "pdf",
+    "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf", "txt", "csv", "tsv", "log", "md",
+];
+/// Extensions of files that are often renamed scans or have no type at all: only these are sniffed.
+const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp"];
+const SNIFF_MIN_BYTES: u64 = 20 * 1024;
+
+/// True when the file can hold a document worth opening. Decided from the name and size alone,
+/// without touching the disk: everything else is only counted as "ignored by type".
+pub fn worth_opening(path: &std::path::Path, size: u64, max_bytes: u64) -> bool {
+    let ext = path
+        .extension()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    WANTED_EXT.contains(&ext.as_str())
+        || (SNIFF_EXT.contains(&ext.as_str()) && size >= SNIFF_MIN_BYTES && size <= max_bytes)
+}
+
+/// Messages that happen once per file and only inflate the log: counted, never listed.
+pub fn is_quiet(note: &str) -> bool {
+    note == PREFILTERED
+        || note == UNSUPPORTED
+        || note == INTERRUPTED
+        || note.starts_with("TIFF/GIF: solo prima pagina")
+        || note.starts_with("RTF: solo testo grezzo")
+        || note.starts_with("Archivio generico non aperto")
+        || note.starts_with("Codifica testo non UTF-8")
+}
+
 pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
 
 /// Cheap pre-OCR check on the image reduced to 1024 px, split into an 8x8 grid: a zone is
@@ -539,7 +573,7 @@ impl Parser {
             let img = image::guess_format(head).ok();
             let text_ext = ["txt", "csv", "tsv", "log", "md", "rtf"].contains(&ext.as_str());
             if !is_pdf && !is_zip && img.is_none() && !text_ext {
-                return Err("Formato non supportato o archivio non aperto".into());
+                return Err(UNSUPPORTED.into());
             }
             let cap = if text_ext && !is_pdf && !is_zip && img.is_none() {
                 4_000_000
@@ -588,7 +622,7 @@ impl Parser {
                         .push("RTF: solo testo grezzo, oggetti non analizzati".into());
                 }
             } else {
-                return Err("Formato non supportato o archivio non aperto".into());
+                return Err(UNSUPPORTED.into());
             }
             let after = f
                 .metadata()

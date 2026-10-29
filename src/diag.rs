@@ -102,8 +102,45 @@ pub fn recent(n: usize) -> Vec<Event> {
     let events = EVENTS.lock().unwrap();
     events.iter().skip(events.len().saturating_sub(n)).cloned().collect()
 }
-pub fn count() -> usize {
-    EVENTS.lock().unwrap().len()
+/// Mette il testo negli appunti di Windows (UTF-16). false se gli appunti sono occupati o non disponibili.
+pub fn copy_to_clipboard(text: &str) -> bool {
+    use windows_sys::Win32::System::{
+        DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData},
+        Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalFree, GlobalLock, GlobalUnlock},
+    };
+    const CF_UNICODETEXT: u32 = 13;
+    let wide: Vec<u16> = text.replace("\r\n", "\n").replace('\n', "\r\n").encode_utf16().chain(Some(0)).collect();
+    unsafe {
+        let mut opened = false;
+        for _ in 0..10 {
+            if OpenClipboard(std::ptr::null_mut()) != 0 {
+                opened = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+        if !opened {
+            return false;
+        }
+        let bytes = wide.len() * 2;
+        let handle = GlobalAlloc(GMEM_MOVEABLE, bytes);
+        let mut done = false;
+        if !handle.is_null() {
+            let target = GlobalLock(handle) as *mut u16;
+            if !target.is_null() {
+                std::ptr::copy_nonoverlapping(wide.as_ptr(), target, wide.len());
+                GlobalUnlock(handle);
+                EmptyClipboard();
+                // In caso di successo la memoria passa agli appunti.
+                done = !SetClipboardData(CF_UNICODETEXT, handle).is_null();
+            }
+            if !done {
+                GlobalFree(handle);
+            }
+        }
+        CloseClipboard();
+        done
+    }
 }
 /// Aggiunge la riga al file di log; se supera il limite riparte da zero. Errori ignorati: il log non deve fermare la verifica.
 fn persist(event: &Event) {
@@ -275,7 +312,7 @@ mod tests {
         for i in 0..MAX_EVENTS + 20 {
             log(Level::Info, format!("evento {i}"));
         }
-        assert!(count() <= MAX_EVENTS);
+        assert!(recent(usize::MAX).len() <= MAX_EVENTS);
         assert!(recent(1)[0].text.ends_with(&format!("{}", MAX_EVENTS + 19)));
     }
 }

@@ -54,6 +54,7 @@ pub fn new_run(
         analyzed: 0,
         partial_files: 0,
         skipped: 0,
+        ignored_type: 0,
         pages_ocr: 0,
         ocr_seconds: 0.,
         ocr_init_ms: 0.,
@@ -158,7 +159,7 @@ impl Worker {
         let start = Instant::now();
         loop {
             if stop.load(Ordering::Relaxed) {
-                return Err("Verifica interrotta".into());
+                return Err(crate::parser::INTERRUPTED.into());
             }
             unsafe {
                 let mut counters: PROCESS_MEMORY_COUNTERS = std::mem::zeroed();
@@ -215,7 +216,7 @@ pub fn audit(run: &Run, event: &str) -> std::io::Result<()> {
     }
     let mut file = OpenOptions::new().append(true).create(true).open(path)?;
     // No paths, operator names, document contents or identifiers in persistent audit.
-    let value = serde_json::json!({"event":event,"id":run.id,"time":now(),"version":env!("CARGO_PKG_VERSION"),"rules":RULES,"deep":run.settings.deep,"encountered":run.encountered,"analyzed":run.analyzed,"partial_files":run.partial_files,"skipped":run.skipped,"findings":run.findings.len(),"incomplete":run.incomplete(),"issues":run.issues,"seconds":run.elapsed_secs});
+    let value = serde_json::json!({"event":event,"id":run.id,"time":now(),"version":env!("CARGO_PKG_VERSION"),"rules":RULES,"deep":run.settings.deep,"encountered":run.encountered,"analyzed":run.analyzed,"partial_files":run.partial_files,"skipped":run.skipped,"ignored_type":run.ignored_type,"findings":run.findings.len(),"incomplete":run.incomplete(),"issues":run.issues,"seconds":run.elapsed_secs});
     serde_json::to_writer(&mut file, &value)?;
     writeln!(file)?;
     file.sync_data()
@@ -245,7 +246,7 @@ fn worker_loop(
         let roundtrip = Instant::now();
         let mut o = Outcome {
             path: request.path.clone(),
-            result: Err("Verifica interrotta".into()),
+            result: Err(crate::parser::INTERRUPTED.into()),
             notes: vec![],
             peak: 0,
             roundtrip_ms: 0.,
@@ -307,7 +308,9 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
     state.peak_worker_bytes = state.peak_worker_bytes.max(o.peak);
     let shown = diag::shown(&o.path);
     for note in o.notes {
-        diag::warn(format!("{shown} · {note}"));
+        if !crate::parser::is_quiet(&note) {
+            diag::warn_file(&note, format!("{shown} · {note}"));
+        }
         state.issue(note);
     }
     match o.result {
@@ -330,7 +333,15 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 }
             }
             state.pages_ocr += result.pages_ocr;
-            if result.issues.is_empty() && result.supported {
+            if !result.supported
+                && result.reasons.is_empty()
+                && !result.issues.is_empty()
+                && result.issues.iter().all(|i| i == crate::parser::UNSUPPORTED)
+            {
+                // Firma non di interesse dopo lo sniff (es. .dat senza documenti): ignorato per tipo.
+                state.ignored_type += 1;
+                result.issues.clear();
+            } else if result.issues.is_empty() && result.supported {
                 state.analyzed += 1;
             } else if result.supported {
                 state.partial_files += 1;
@@ -338,7 +349,9 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 state.skipped += 1;
             }
             for issue in result.issues {
-                diag::warn(format!("{shown} · {issue}"));
+                if !crate::parser::is_quiet(&issue) {
+                    diag::warn_file(&issue, format!("{shown} · {issue}"));
+                }
                 state.issue(issue);
             }
             if !result.reasons.is_empty() {
@@ -358,9 +371,16 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
             }
         }
         Err(e) => {
-            state.skipped += 1;
-            diag::err(format!("{shown} · {e}"));
-            state.issue(e);
+            if e == crate::parser::UNSUPPORTED {
+                // Firma non di interesse dopo lo sniff: come i file ignorati per tipo, non e un problema.
+                state.ignored_type += 1;
+            } else if e == crate::parser::INTERRUPTED {
+                state.skipped += 1;
+            } else {
+                state.skipped += 1;
+                diag::err_file(&e, format!("{shown} · {e}"));
+                state.issue(e);
+            }
             if stop.load(Ordering::Relaxed) {
                 state.interrupted = true;
                 return true;
@@ -378,6 +398,7 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
 pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let start = Instant::now();
     let mut state = shared.lock().unwrap().run.clone().unwrap();
+    diag::reset_caps();
     diag::info(format!(
         "AVVIO verifica · aree: {} · worker {}",
         state
@@ -489,6 +510,14 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                     continue;
                 }
             };
+            if !crate::parser::worth_opening(
+                path,
+                metadata.len(),
+                state.settings.max_mb * 1024 * 1024,
+            ) {
+                state.ignored_type += 1;
+                continue;
+            }
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
                 state.issue(diag::noted("File reparse, offline, cloud recall o cifrato EFS non aperto"));

@@ -2,7 +2,7 @@
 //! Mai contenuti dei documenti; il nome utente nei percorsi diventa `<utente>`.
 use crate::model::Run;
 use std::{
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     fs::OpenOptions,
     io::Write,
     path::Path,
@@ -99,6 +99,39 @@ pub fn noted(text: &str) -> &str {
 pub fn err(text: impl AsRef<str>) {
     log(Level::Err, text);
 }
+/// Al massimo questi eventi per tipo di problema: oltre, il problema resta nei contatori ma non nel log.
+const MAX_PER_KIND: u32 = 50;
+static KIND_COUNTS: Mutex<BTreeMap<String, u32>> = Mutex::new(BTreeMap::new());
+/// true se l'evento va scritto; all'ultimo ammesso scrive l'avviso di soppressione.
+fn within_cap(kind: &str) -> bool {
+    let mut counts = KIND_COUNTS.lock().unwrap();
+    let n = counts.entry(kind.to_string()).or_insert(0);
+    *n += 1;
+    if *n == MAX_PER_KIND + 1 {
+        drop(counts);
+        log(
+            Level::Info,
+            format!("«{kind}»: oltre {MAX_PER_KIND} casi, i successivi sono solo conteggiati"),
+        );
+        return false;
+    }
+    *n <= MAX_PER_KIND
+}
+/// Avviso per singolo file, con tetto per tipo di problema.
+pub fn warn_file(kind: &str, text: impl AsRef<str>) {
+    if within_cap(kind) {
+        log(Level::Warn, text);
+    }
+}
+pub fn err_file(kind: &str, text: impl AsRef<str>) {
+    if within_cap(kind) {
+        log(Level::Err, text);
+    }
+}
+/// Azzera i tetti all'inizio di una nuova verifica.
+pub fn reset_caps() {
+    KIND_COUNTS.lock().unwrap().clear();
+}
 /// Ultimi `n` eventi, dal piu vecchio.
 pub fn recent(n: usize) -> Vec<Event> {
     let events = EVENTS.lock().unwrap();
@@ -165,11 +198,10 @@ fn persist(event: &Event) {
     let _ = std::fs::create_dir_all(&dir);
     let path = dir.join("diagnostica.log");
     let mut options = OpenOptions::new();
-    options.create(true);
+    options.create(true).append(true);
     if std::fs::metadata(&path).is_ok_and(|m| m.len() > MAX_LOG_BYTES) {
-        options.write(true).truncate(true);
-    } else {
-        options.append(true);
+        // Tiene una sola copia precedente: il log non cresce oltre ~2 x MAX_LOG_BYTES.
+        let _ = std::fs::rename(&path, dir.join("diagnostica.old.log"));
     }
     if let Ok(mut file) = options.open(&path) {
         let _ = writeln!(
@@ -285,11 +317,12 @@ pub fn report(gpu: &str, phase: &str, current: &str, run: Option<&Run>) -> Strin
                     .join(" · ")
             ));
             line(format!(
-                "Contatori: visti {} · analizzati {} · parziali {} · saltati {} · segnalati {} · eliminati {} · pagine OCR {} · {:.1} s",
+                "Contatori: visti {} · analizzati {} · parziali {} · saltati {} · ignorati per tipo {} · segnalati {} · eliminati {} · pagine OCR {} · {:.1} s",
                 r.encountered,
                 r.analyzed,
                 r.partial_files,
                 r.skipped,
+                r.ignored_type,
                 r.findings.len(),
                 r.deleted_count(),
                 r.pages_ocr,

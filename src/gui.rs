@@ -285,11 +285,18 @@ impl eframe::App for App {
             .show(root, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
-                    ui.add(
-                        egui::Image::from_texture(&self.signature)
-                            .fit_to_exact_size(egui::vec2(168., 168. * ratio)),
-                    )
-                    .on_hover_text("powered by realhcok");
+                    ui.vertical(|ui| {
+                        ui.add(
+                            egui::Image::from_texture(&self.signature)
+                                .fit_to_exact_size(egui::vec2(120., 120. * ratio)),
+                        )
+                        .on_hover_text("powered by realhcok");
+                        ui.label(
+                            RichText::new(format!("TracciaDoc v{}", env!("CARGO_PKG_VERSION")))
+                                .small()
+                                .weak(),
+                        );
+                    });
                     ui.separator();
                     ui.label(
                         RichText::new("Locale  /  Solo lettura  /  Nessuna telemetria")
@@ -465,7 +472,7 @@ impl eframe::App for App {
                         // Niente ui.spinner(): chiede un ridisegno a ogni frame; l'indicatore avanza col ridisegno periodico.
                         if running {let tick=self.started.map(|s|s.elapsed().as_millis()/self.repaint.as_millis()).unwrap_or(0) as usize;ui.horizontal(|ui|{ui.label(RichText::new(["◐","◓","◑","◒"][tick%4]).color(ACCENT));ui.label(&phase);});ui.label(current);}
                         let elapsed=if running {self.started.map(|s|s.elapsed().as_secs_f64()).unwrap_or(0.)}else{run.elapsed_secs};
-                        ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.findings.len(),elapsed));
+                        ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Ignorati per tipo {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.ignored_type,run.findings.len(),elapsed));
                         if run.timing.prefilter_skipped>0 {ui.label(format!("Immagini scartate dal prefiltro (senza OCR): {}",run.timing.prefilter_skipped));}
                         if !running {
                             ui.label(RichText::new(run.outcome()).font(semibold(21.)).color(if run.incomplete(){Color32::from_rgb(242, 184, 75)}else{ACCENT}));

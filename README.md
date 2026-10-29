@@ -6,7 +6,7 @@
 
 MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei file locali e produrre un verbale PDF. Repository **privato**, sorgenti MIT. Nessuna scansione automatica, telemetria o elaborazione cloud.
 
-**[Scarica TracciaDoc 0.1.0 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.1.0/TracciaDoc-0.1.0-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.1.0) · [Changelog](CHANGELOG.md)
+**[Scarica TracciaDoc 0.2.0 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.0/TracciaDoc-0.2.0-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md)
 
 ## Avvio rapido
 
@@ -57,6 +57,7 @@ Formati e limiti esatti: [istruzioni](docs/ISTRUZIONI.txt). Componenti, licenze 
 - Circa **11,85 secondi di motore** sul corpus, contro 12,78 con percorso generico; circa 158 MiB di picco working set del worker e pacchetto di circa 63,5 MiB non compresso. Hardware di prova: Ryzen 7 PRO 5750G, 32 GB RAM, SSD NVMe.
 
 - 0.2.0 sulla VM Windows di test (4 vCPU, nessuna GPU reale, 3 worker): 296 file sintetici in 44,8 s invece di 96,2 s con gli stessi 216 rilevamenti; 8 foto senza testo in 0,5 s invece di 203 s (scartate dal prefiltro e dichiarate). Corpus di validazione a 41 file: 29 positivi analizzabili rilevati, nessun falso negativo o positivo. Dettagli in [docs/VALIDAZIONE.md](docs/VALIDAZIONE.md).
+- 0.2.0 su PC fisico (Ryzen 7 PRO 5750G, 8 core, Quadro RTX 4000): 296 file sintetici in 21,1 s con 7 worker (default), stessi 216 rilevamenti; GUI non massimizzata su DirectX 12 con la GPU NVIDIA, non WARP.
 
 Sono risultati del collaudo di sviluppo su un corpus piccolo e sintetico, non stime statistiche di accuratezza su documenti reali o promesse su altri PC. Metodi di misura, cache e limiti sono descritti in [docs/VALIDAZIONE.md](docs/VALIDAZIONE.md).
 

@@ -26,6 +26,8 @@ type GetText = unsafe extern "C" fn(*mut c_void) -> *mut c_char;
 type DeleteText = unsafe extern "C" fn(*const c_char);
 type Delete = unsafe extern "C" fn(*mut c_void);
 type SetVariable = unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int;
+type DetectOrientation =
+    unsafe extern "C" fn(*mut c_void, *mut c_int, *mut f32, *mut *const c_char, *mut f32) -> c_int;
 
 // Loaded only in an expendable worker; one engine reused for the entire scan.
 struct Ocr {
@@ -36,6 +38,8 @@ struct Ocr {
     free: DeleteText,
     delete: Delete,
     backend: String,
+    /// Separate engine with osd.traineddata; None when the model is missing or fails to load.
+    osd: Option<(*mut c_void, DetectOrientation)>,
 }
 impl Ocr {
     unsafe fn load(cpu_only: bool) -> Result<Self, String> {
@@ -85,8 +89,22 @@ impl Ocr {
             } else {
                 CStr::from_ptr(method).to_string_lossy().into_owned()
             };
+            let osd = (|| {
+                let detect: DetectOrientation = *lib.get(b"TessBaseAPIDetectOrientationScript\0").ok()?;
+                let api = create();
+                if api.is_null() {
+                    return None;
+                }
+                if init(api, data.as_ptr(), c"osd".as_ptr()) != 0 {
+                    delete(api);
+                    return None;
+                }
+                set(api, c"user_defined_dpi".as_ptr(), c"200".as_ptr());
+                Some((api, detect))
+            })();
             let backend = format!(
-                "CPU / Tesseract 5.5.3 LSTM ita+eng; dotproduct effettivo: {method}; nessuna GPU"
+                "CPU / Tesseract 5.5.3 LSTM ita+eng; dotproduct effettivo: {method}; orientamento: {}; nessuna GPU",
+                if osd.is_some() { "OSD, 4 rotazioni se incerto" } else { "4 rotazioni" }
             );
             Ok(Self {
                 _lib: lib,
@@ -96,7 +114,28 @@ impl Ocr {
                 free,
                 delete,
                 backend,
+                osd,
             })
+        }
+    }
+    /// Clockwise rotation of the text detected by OSD and whether it is confident.
+    fn orientation(&self, img: &DynamicImage) -> Option<(i32, bool)> {
+        let (api, detect) = self.osd?;
+        let rgb = img.to_rgb8();
+        unsafe {
+            (self.image)(
+                api,
+                rgb.as_ptr(),
+                rgb.width() as i32,
+                rgb.height() as i32,
+                3,
+                (rgb.width() * 3) as i32,
+            );
+            let (mut deg, mut conf, mut script, mut script_conf) = (0, 0f32, std::ptr::null(), 0f32);
+            if detect(api, &mut deg, &mut conf, &mut script, &mut script_conf) == 0 {
+                return None;
+            }
+            Some((deg, conf >= OSD_MIN_CONF))
         }
     }
     fn recognize(&self, img: &DynamicImage) -> Result<String, String> {
@@ -125,20 +164,29 @@ impl Ocr {
 }
 impl Drop for Ocr {
     fn drop(&mut self) {
-        unsafe { (self.delete)(self.api) }
+        unsafe {
+            if let Some((api, _)) = self.osd {
+                (self.delete)(api);
+            }
+            (self.delete)(self.api)
+        }
     }
 }
+/// Below this OSD confidence the 4-rotation search is kept.
+const OSD_MIN_CONF: f32 = 2.0;
 
 pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
 
-/// Cheap pre-OCR check: at least one 1/64 region of the image (reduced to 1024 px) must contain
-/// sharp contrast edges like printed strokes. Calibrated on the synthetic corpus: text >= 0.10,
-/// smooth photos 0.00; the 0.02 threshold keeps a wide margin and a single small text area suffices.
-pub fn text_like(img: &DynamicImage) -> bool {
+/// Cheap pre-OCR check on the image reduced to 1024 px, split into an 8x8 grid: a zone is
+/// text-like when at least 2% of its pixels are sharp contrast edges like printed strokes.
+/// Calibrated on the synthetic corpus: text zones >= 0.10, smooth photos 0.00. Returns the
+/// region to OCR (text-like zones plus one zone of margin) or None when no zone qualifies.
+pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
+    let (iw, ih) = (img.width(), img.height());
     let g = img.thumbnail(1024, 1024).to_luma8();
     let (w, h) = g.dimensions();
     if w < 64 || h < 64 {
-        return true;
+        return Some((0, 0, iw, ih));
     }
     const T: u32 = 8;
     let (tw, th) = ((w - 1) / T, (h - 1) / T);
@@ -154,8 +202,23 @@ pub fn text_like(img: &DynamicImage) -> bool {
             }
         }
     }
-    let best = count.iter().flatten().copied().max().unwrap_or(0);
-    best as f64 / (tw * th) as f64 >= 0.02
+    let (mut x0, mut y0, mut x1, mut y1) = (T, T, 0, 0);
+    for (ty, row) in count.iter().enumerate() {
+        for (tx, n) in row.iter().enumerate() {
+            if *n as f64 / (tw * th) as f64 >= 0.02 {
+                let (tx, ty) = (tx as u32, ty as u32);
+                (x0, y0, x1, y1) = (x0.min(tx), y0.min(ty), x1.max(tx + 1), y1.max(ty + 1));
+            }
+        }
+    }
+    if x1 == 0 {
+        return None;
+    }
+    let (x0, y0, x1, y1) = (x0.saturating_sub(1), y0.saturating_sub(1), (x1 + 1).min(T), (y1 + 1).min(T));
+    // Zones map back proportionally; the last zone absorbs rounding up to the full size.
+    let sx = |t: u32| if t == T { iw } else { ((t * tw) as u64 * iw as u64 / w as u64) as u32 };
+    let sy = |t: u32| if t == T { ih } else { ((t * th) as u64 * ih as u64 / h as u64) as u32 };
+    Some((sx(x0), sy(y0), sx(x1), sy(y1)))
 }
 
 pub struct Parser {
@@ -189,21 +252,51 @@ impl Parser {
             a.issues.push(self.ocr_error.clone().unwrap_or_default());
             return;
         };
+        let mut img = img;
         if req.settings.prefilter {
             let start = std::time::Instant::now();
-            let keep = text_like(&img);
+            let region = text_region(&img);
             a.timing.prefilter_ms += start.elapsed().as_secs_f64() * 1000.;
-            if !keep {
-                a.timing.prefilter_skipped += 1;
-                a.issues.push(PREFILTERED.into());
-                return;
+            match region {
+                None => {
+                    a.timing.prefilter_skipped += 1;
+                    a.issues.push(PREFILTERED.into());
+                    return;
+                }
+                Some((x0, y0, x1, y1)) if (x1 - x0, y1 - y0) != (img.width(), img.height()) => {
+                    a.timing.prefilter_cropped += 1;
+                    img = img.crop_imm(x0, y0, x1 - x0, y1 - y0);
+                }
+                _ => {}
             }
         }
         a.backend = ocr.backend.clone();
         let start = std::time::Instant::now();
-        let mut current = img;
+        let osd = std::time::Instant::now();
+        let detected = ocr.orientation(&img);
+        a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
+        // OSD reports the clockwise rotation of the text. Confident: undo it and read once.
+        // Otherwise all 4 corrections stay: upright first, then the suggested one.
+        let (deg, confident) = detected.unwrap_or((0, false));
+        let mut order = vec![if confident { deg } else { 0 }];
+        if !confident {
+            for d in [deg, 90, 180, 270] {
+                if !order.contains(&d) {
+                    order.push(d);
+                }
+            }
+        }
+        if confident {
+            a.timing.osd_hits += 1;
+        }
         let mut useful = false;
-        for turn in 0..4 {
+        for deg in order {
+            let current = match deg {
+                90 => img.rotate270(),
+                180 => img.rotate180(),
+                270 => img.rotate90(),
+                _ => img.clone(),
+            };
             a.timing.ocr_calls += 1;
             match ocr.recognize(&current) {
                 Ok(s) => {
@@ -219,9 +312,6 @@ impl Parser {
                     a.issues.push(e);
                     break;
                 }
-            }
-            if turn < 3 {
-                current = current.rotate90();
             }
         }
         a.pages_ocr += 1;

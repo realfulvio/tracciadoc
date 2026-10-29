@@ -38,13 +38,16 @@ finally:
 
 large=OUT/'large';large.mkdir();(large/'large.txt').write_bytes(b'x'*1_100_000)
 assert scan('size',large,['--max-mb','1'])['incomplete']
-images=OUT/'images';images.mkdir();shutil.copy2(PKG/'prove-sintetiche'/'appunti.png',images/'a.png')
+# A 3x3 mosaic of a text image: OCR well above one second even with a single confident pass.
+from PIL import Image
+note=Image.open(PKG/'prove-sintetiche'/'appunti.png');mosaic=Image.new('RGB',(note.width*3,note.height*3),'white')
+for i in range(9):mosaic.paste(note,((i%3)*note.width,(i//3)*note.height))
+images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',images/'z.txt')
 result=scan('timeout',images,['--timeout-secs','1'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
 # Deterministic memory pressure: a 5600x5600 RGB raster decodes to ~94 MB, within the 128 MiB decoder
 # limit but above a 64 MiB worker Job limit, whatever the OCR footprint of the machine.
-from PIL import Image
 heavy=OUT/'memory';heavy.mkdir();Image.new('RGB',(5600,5600),'white').save(heavy/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.txt',heavy/'z.txt')
 result=scan('memory',heavy,['--memory-mb','64'])

@@ -62,6 +62,14 @@ pub struct Timing {
     pub prefilter_ms: f64,
     #[serde(default)]
     pub prefilter_skipped: u64,
+    /// Orientation detection time, included in ocr_ms.
+    #[serde(default)]
+    pub osd_ms: f64,
+    #[serde(default)]
+    pub osd_hits: u64,
+    /// Images reduced to their text-like region before OCR.
+    #[serde(default)]
+    pub prefilter_cropped: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -78,6 +86,9 @@ impl Timing {
         self.ocr_blank_ms += o.ocr_blank_ms;
         self.prefilter_ms += o.prefilter_ms;
         self.prefilter_skipped += o.prefilter_skipped;
+        self.osd_ms += o.osd_ms;
+        self.osd_hits += o.osd_hits;
+        self.prefilter_cropped += o.prefilter_cropped;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

@@ -220,6 +220,154 @@ pub fn audit(run: &Run, event: &str) -> std::io::Result<()> {
     writeln!(file)?;
     file.sync_data()
 }
+struct Outcome {
+    path: PathBuf,
+    result: Result<Analysis, String>,
+    notes: Vec<&'static str>,
+    peak: u64,
+    roundtrip_ms: f64,
+    /// The worker could not be started: stop dispatching.
+    fatal: bool,
+}
+/// One isolated parser process per thread, reused across files and respawned after a crash.
+fn worker_loop(
+    settings: Settings,
+    jobs: Arc<Mutex<mpsc::Receiver<Request>>>,
+    out: mpsc::Sender<Outcome>,
+    stop: Arc<AtomicBool>,
+    fallback: Arc<AtomicBool>,
+) {
+    let mut worker: Option<(Worker, bool)> = None;
+    loop {
+        let Ok(request) = jobs.lock().unwrap().recv() else {
+            break;
+        };
+        let roundtrip = Instant::now();
+        let mut o = Outcome {
+            path: request.path.clone(),
+            result: Err("Verifica interrotta".into()),
+            notes: vec![],
+            peak: 0,
+            roundtrip_ms: 0.,
+            fatal: false,
+        };
+        if !stop.load(Ordering::Relaxed) {
+            // After the first crash every worker moves to the generic scalar product.
+            let cpu_only = settings.cpu_only || fallback.load(Ordering::Relaxed);
+            if worker.as_ref().is_some_and(|(_, c)| *c != cpu_only) {
+                worker = None;
+            }
+            if worker.is_none() {
+                let mut s = settings.clone();
+                s.cpu_only = cpu_only;
+                match Worker::spawn(&s) {
+                    Ok(w) => worker = Some((w, cpu_only)),
+                    Err(e) => {
+                        o.result = Err(e.to_string());
+                        o.fatal = true;
+                    }
+                }
+            }
+            if let Some((w, _)) = worker.as_mut() {
+                o.result = w.analyze(&request, &stop, &mut o.peak);
+                if o
+                    .result
+                    .as_ref()
+                    .is_err_and(|e| e.starts_with("Parser terminato"))
+                    && !settings.cpu_only
+                    && !fallback.swap(true, Ordering::Relaxed)
+                    && !stop.load(Ordering::Relaxed)
+                {
+                    worker = None;
+                    o.notes.push("Arresto parser: fallback al prodotto scalare CPU generico e nuova analisi del file");
+                    let mut safe = settings.clone();
+                    safe.cpu_only = true;
+                    o.result = match Worker::spawn(&safe) {
+                        Ok(mut w) => {
+                            let r = w.analyze(&request, &stop, &mut o.peak);
+                            worker = Some((w, true));
+                            r
+                        }
+                        Err(e) => Err(e.to_string()),
+                    };
+                }
+                if o.result.is_err() {
+                    worker = None;
+                }
+            }
+        }
+        o.roundtrip_ms = roundtrip.elapsed().as_secs_f64() * 1000.;
+        if out.send(o).is_err() {
+            break;
+        }
+    }
+}
+/// Applies one file result to the run; true when dispatching must stop.
+fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
+    state.peak_worker_bytes = state.peak_worker_bytes.max(o.peak);
+    for note in o.notes {
+        state.issue(note);
+    }
+    match o.result {
+        Ok(mut result) => {
+            result.timing.roundtrip_ms = o.roundtrip_ms;
+            state.timing.add(&result.timing);
+            state
+                .timing_by_format
+                .entry(result.format.clone())
+                .or_default()
+                .add(&result.timing);
+            state.ocr_seconds += result.ocr_seconds;
+            state.ocr_init_ms += result.ocr_init_ms;
+            if result.pages_ocr > 0 && !state.backend.contains(&result.backend) {
+                if state.pages_ocr == 0 {
+                    state.backend = result.backend.clone();
+                } else {
+                    state.backend.push_str("; ");
+                    state.backend.push_str(&result.backend);
+                }
+            }
+            state.pages_ocr += result.pages_ocr;
+            if result.issues.is_empty() && result.supported {
+                state.analyzed += 1;
+            } else if result.supported {
+                state.partial_files += 1;
+            } else {
+                state.skipped += 1;
+            }
+            for issue in result.issues {
+                state.issue(issue);
+            }
+            if !result.reasons.is_empty() && state.findings.len() < 5000 {
+                let meta = std::fs::metadata(&o.path).ok();
+                state.findings.push(Finding {
+                    size: meta.as_ref().map_or(0, |m| m.len()),
+                    modified: meta.and_then(|m| m.modified().ok()),
+                    path: o.path,
+                    format: result.format,
+                    reasons: result.reasons,
+                    review: Review::Pending,
+                    ..Default::default()
+                });
+            }
+        }
+        Err(e) => {
+            state.skipped += 1;
+            state.issue(e);
+            if stop.load(Ordering::Relaxed) {
+                state.interrupted = true;
+                return true;
+            }
+        }
+    }
+    if state.findings.len() >= 5000 {
+        if !state.issues.contains_key("Limite 5000 segnalazioni raggiunto") {
+            state.issue("Limite 5000 segnalazioni raggiunto");
+        }
+        return true;
+    }
+    o.fatal
+}
 pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let start = Instant::now();
     let mut state = shared.lock().unwrap().run.clone().unwrap();
@@ -227,8 +375,26 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
         state.audit_error = true;
         state.issue("Storico locale non scrivibile o pieno");
     }
-    let mut worker = None;
-    let mut fallback_cpu = false;
+    let workers = state.settings.workers.max(1);
+    let (job_tx, job_rx) = mpsc::sync_channel::<Request>(workers);
+    let job_rx = Arc::new(Mutex::new(job_rx));
+    let (out_tx, out_rx) = mpsc::channel::<Outcome>();
+    let fallback = Arc::new(AtomicBool::new(false));
+    let pool: Vec<_> = (0..workers)
+        .map(|_| {
+            let (settings, jobs, out, stop, fallback) = (
+                state.settings.clone(),
+                job_rx.clone(),
+                out_tx.clone(),
+                stop.clone(),
+                fallback.clone(),
+            );
+            thread::spawn(move || worker_loop(settings, jobs, out, stop, fallback))
+        })
+        .collect();
+    drop(out_tx);
+    // Halted: no further files are dispatched (limits, fatal worker error, stop).
+    let mut halted = false;
     let mut published = Instant::now();
     let roots = state.roots.clone();
     let mut scanned_roots: Vec<PathBuf> = vec![];
@@ -305,126 +471,61 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             if published.elapsed() >= Duration::from_millis(100) || state.encountered == 1 {
                 let mut p = shared.lock().unwrap();
                 p.current = path.to_string_lossy().into_owned();
-                p.phase = if state.settings.deep {
-                    "Analisi testo e OCR locale"
-                } else {
-                    "Estrazione preliminare"
-                }
-                .into();
+                p.phase = format!("Analisi testo e OCR locale ({workers} worker)");
                 p.run = Some(state.clone());
                 published = Instant::now();
             }
-            if worker.is_none() {
-                let mut worker_settings = state.settings.clone();
-                worker_settings.cpu_only |= fallback_cpu;
-                match Worker::spawn(&worker_settings) {
-                    Ok(w) => worker = Some(w),
-                    Err(e) => {
-                        state.issue(e);
-                        state.skipped += 1;
-                        break 'roots;
-                    }
-                }
-            }
-            let request = Request {
+            let mut request = Request {
                 path: path.to_path_buf(),
                 settings: state.settings.clone(),
             };
-            let roundtrip = Instant::now();
-            let mut result =
-                worker
-                    .as_mut()
-                    .unwrap()
-                    .analyze(&request, &stop, &mut state.peak_worker_bytes);
-            if result
-                .as_ref()
-                .is_err_and(|e| e.starts_with("Parser terminato"))
-                && !state.settings.cpu_only
-                && !fallback_cpu
-                && !stop.load(Ordering::Relaxed)
-            {
-                worker.take();
-                fallback_cpu = true;
-                state.issue("Arresto parser: fallback al prodotto scalare CPU generico e nuova analisi del file");
-                let mut safe = state.settings.clone();
-                safe.cpu_only = true;
-                result = match Worker::spawn(&safe) {
-                    Ok(w) => {
-                        worker = Some(w);
-                        worker.as_mut().unwrap().analyze(
-                            &request,
-                            &stop,
-                            &mut state.peak_worker_bytes,
-                        )
-                    }
-                    Err(e) => Err(e),
-                };
-            }
-            match result {
-                Ok(mut result) => {
-                    result.timing.roundtrip_ms = roundtrip.elapsed().as_secs_f64() * 1000.;
-                    state.timing.add(&result.timing);
-                    state
-                        .timing_by_format
-                        .entry(result.format.clone())
-                        .or_default()
-                        .add(&result.timing);
-                    state.ocr_seconds += result.ocr_seconds;
-                    state.ocr_init_ms += result.ocr_init_ms;
-                    if result.pages_ocr > 0 && !state.backend.contains(&result.backend) {
-                        if state.pages_ocr == 0 {
-                            state.backend = result.backend.clone();
-                        } else {
-                            state.backend.push_str("; ");
-                            state.backend.push_str(&result.backend);
+            // Dispatch while draining results, so the bounded queue never deadlocks.
+            loop {
+                match job_tx.try_send(request) {
+                    Ok(()) => break,
+                    Err(mpsc::TrySendError::Full(r)) => {
+                        request = r;
+                        if let Ok(o) = out_rx.recv_timeout(Duration::from_millis(50)) {
+                            halted |= collect(&mut state, o, &stop);
+                        }
+                        if stop.load(Ordering::Relaxed) {
+                            state.interrupted = true;
+                            break 'roots;
+                        }
+                        if halted {
+                            break 'roots;
                         }
                     }
-                    state.pages_ocr += result.pages_ocr;
-                    if result.issues.is_empty() && result.supported {
-                        state.analyzed += 1;
-                    } else if result.supported {
-                        state.partial_files += 1;
-                    } else {
-                        state.skipped += 1;
-                    }
-                    for issue in result.issues {
-                        state.issue(issue);
-                    }
-                    if !result.reasons.is_empty() {
-                        let meta = std::fs::metadata(path).ok();
-                        state.findings.push(Finding {
-                            size: meta.as_ref().map_or(0, |m| m.len()),
-                            modified: meta.and_then(|m| m.modified().ok()),
-                            path: path.to_path_buf(),
-                            format: result.format,
-                            reasons: result.reasons,
-                            review: Review::Pending,
-                            ..Default::default()
-                        });
-                    }
-                }
-                Err(e) => {
-                    state.skipped += 1;
-                    state.issue(e);
-                    worker.take();
-                    if stop.load(Ordering::Relaxed) {
-                        state.interrupted = true;
-                        break 'roots;
-                    }
+                    Err(mpsc::TrySendError::Disconnected(_)) => break 'roots,
                 }
             }
-            state.elapsed_secs = start.elapsed().as_secs_f64();
-            if state.findings.len() >= 5000 {
-                state.issue("Limite 5000 segnalazioni raggiunto");
+            while let Ok(o) = out_rx.try_recv() {
+                halted |= collect(&mut state, o, &stop);
+            }
+            if halted {
                 break 'roots;
             }
+            state.elapsed_secs = start.elapsed().as_secs_f64();
             if published.elapsed() >= Duration::from_millis(100) {
                 shared.lock().unwrap().run = Some(state.clone());
                 published = Instant::now();
             }
         }
     }
-    drop(worker);
+    drop(job_tx);
+    for o in out_rx {
+        collect(&mut state, o, &stop);
+        state.elapsed_secs = start.elapsed().as_secs_f64();
+        if published.elapsed() >= Duration::from_millis(100) {
+            shared.lock().unwrap().run = Some(state.clone());
+            published = Instant::now();
+        }
+    }
+    for t in pool {
+        let _ = t.join();
+    }
+    // Parallel workers complete out of order: stable output independent of scheduling.
+    state.findings.sort_by(|a, b| a.path.cmp(&b.path));
     state.interrupted |= stop.load(Ordering::Relaxed);
     state.finished = true;
     state.end = now();
@@ -452,6 +553,33 @@ pub fn is_network(path: &Path) -> bool {
     };
     let w: Vec<u16> = root.encode_utf16().chain(Some(0)).collect();
     unsafe { GetDriveTypeW(w.as_ptr()) == 4 }
+}
+/// Physical cores (not SMT threads): OCR workers are CPU-bound.
+pub fn physical_cores() -> usize {
+    use windows_sys::Win32::System::SystemInformation::{
+        GetLogicalProcessorInformation, RelationProcessorCore,
+        SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+    };
+    let logical = thread::available_parallelism().map_or(1, |n| n.get());
+    let mut len = 0u32;
+    unsafe {
+        GetLogicalProcessorInformation(std::ptr::null_mut(), &mut len);
+        let n = len as usize / std::mem::size_of::<SYSTEM_LOGICAL_PROCESSOR_INFORMATION>();
+        let mut info: Vec<SYSTEM_LOGICAL_PROCESSOR_INFORMATION> = Vec::with_capacity(n);
+        if n == 0 || GetLogicalProcessorInformation(info.as_mut_ptr(), &mut len) == 0 {
+            return logical;
+        }
+        info.set_len(n);
+        let cores = info
+            .iter()
+            .filter(|i| i.Relationship == RelationProcessorCore)
+            .count();
+        if cores == 0 { logical } else { cores }
+    }
+}
+/// Default OCR workers: physical cores minus one for the coordinator and GUI.
+pub fn default_workers() -> usize {
+    physical_cores().saturating_sub(1).max(1)
 }
 pub fn cpu_method(baseline: bool) -> &'static str {
     if baseline {

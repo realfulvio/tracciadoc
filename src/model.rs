@@ -11,6 +11,12 @@ pub struct Settings {
     pub timeout_secs: u64,
     pub max_entries: u64,
     pub memory_mb: u64,
+    /// Parallel parser/OCR processes, each in its own Windows Job.
+    #[serde(default = "one")]
+    pub workers: usize,
+}
+fn one() -> usize {
+    1
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -22,6 +28,7 @@ impl Default for Settings {
             timeout_secs: 120,
             max_entries: 1_000_000,
             memory_mb: 768,
+            workers: crate::engine::default_workers(),
         }
     }
 }

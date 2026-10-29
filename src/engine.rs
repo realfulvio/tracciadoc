@@ -1,4 +1,4 @@
-use crate::model::*;
+use crate::{diag, model::*};
 use chrono::Local;
 use std::{
     fs::OpenOptions,
@@ -305,7 +305,9 @@ fn worker_loop(
 /// Applies one file result to the run; true when dispatching must stop.
 fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
     state.peak_worker_bytes = state.peak_worker_bytes.max(o.peak);
+    let shown = diag::shown(&o.path);
     for note in o.notes {
+        diag::warn(format!("{shown} · {note}"));
         state.issue(note);
     }
     match o.result {
@@ -336,7 +338,11 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 state.skipped += 1;
             }
             for issue in result.issues {
+                diag::warn(format!("{shown} · {issue}"));
                 state.issue(issue);
+            }
+            if !result.reasons.is_empty() {
+                diag::info(format!("SEGNALATO {shown} ({})", result.format));
             }
             if !result.reasons.is_empty() && state.findings.len() < 5000 {
                 let meta = std::fs::metadata(&o.path).ok();
@@ -353,6 +359,7 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
         }
         Err(e) => {
             state.skipped += 1;
+            diag::err(format!("{shown} · {e}"));
             state.issue(e);
             if stop.load(Ordering::Relaxed) {
                 state.interrupted = true;
@@ -371,9 +378,19 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
 pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let start = Instant::now();
     let mut state = shared.lock().unwrap().run.clone().unwrap();
+    diag::info(format!(
+        "AVVIO verifica · aree: {} · worker {}",
+        state
+            .roots
+            .iter()
+            .map(|r| diag::shown(r))
+            .collect::<Vec<_>>()
+            .join(", "),
+        state.settings.workers
+    ));
     if audit(&state, "start").is_err() {
         state.audit_error = true;
-        state.issue("Storico locale non scrivibile o pieno");
+        state.issue(diag::noted("Storico locale non scrivibile o pieno"));
     }
     let workers = state.settings.workers.max(1);
     let (job_tx, job_rx) = mpsc::sync_channel::<Request>(workers);
@@ -399,19 +416,20 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let roots = state.roots.clone();
     let mut scanned_roots: Vec<PathBuf> = vec![];
     'roots: for root in roots {
+        diag::info(format!("Area: {}", diag::shown(&root)));
         if is_network(&root) {
-            state.issue("Percorso di rete escluso: ambito solo locale");
+            state.issue(diag::noted("Percorso di rete escluso: ambito solo locale"));
             continue;
         }
         if !root.exists() {
-            state.issue("Percorso selezionato non disponibile o accesso negato");
+            state.issue(diag::noted("Percorso selezionato non disponibile o accesso negato"));
             continue;
         }
         // An explicitly selected volume/mount root is allowed; descendant reparses are not followed.
         let root_reparse =
             std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
         if root_reparse && !is_volume_mount(&root) {
-            state.issue("Radice collegamento/junction esclusa: selezionare la destinazione locale");
+            state.issue(diag::noted("Radice collegamento/junction esclusa: selezionare la destinazione locale"));
             continue;
         }
         if scanned_roots.iter().any(|r| root.starts_with(r)) && !is_volume_mount(&root) {
@@ -428,13 +446,13 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 break 'roots;
             }
             if state.encountered >= state.settings.max_entries {
-                state.issue("Limite file raggiunto");
+                state.issue(diag::noted("Limite file raggiunto"));
                 break 'roots;
             }
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => {
-                    state.issue("Enumerazione: accesso negato o voce non disponibile");
+                    state.issue(diag::noted("Enumerazione: accesso negato o voce non disponibile"));
                     continue;
                 }
             };
@@ -448,24 +466,32 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 if entry.file_type().is_dir() {
                     entries.skip_current_dir();
                 }
-                state.issue("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente");
+                state.issue(diag::noted("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente"));
                 continue;
             }
             if entry.file_type().is_dir() {
                 continue;
             }
             state.encountered += 1;
+            if state.encountered.is_multiple_of(2000) {
+                diag::info(format!(
+                    "Avanzamento · visti {} · analizzati {} · segnalati {}",
+                    state.encountered,
+                    state.analyzed,
+                    state.findings.len()
+                ));
+            }
             let metadata = match std::fs::symlink_metadata(path) {
                 Ok(m) => m,
                 Err(_) => {
                     state.skipped += 1;
-                    state.issue("File: metadati non leggibili");
+                    state.issue(diag::noted("File: metadati non leggibili"));
                     continue;
                 }
             };
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
-                state.issue("File reparse, offline, cloud recall o cifrato EFS non aperto");
+                state.issue(diag::noted("File reparse, offline, cloud recall o cifrato EFS non aperto"));
                 continue;
             }
             if published.elapsed() >= Duration::from_millis(100) || state.encountered == 1 {
@@ -532,7 +558,22 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     state.elapsed_secs = start.elapsed().as_secs_f64();
     if audit(&state, "end").is_err() {
         state.audit_error = true;
-        state.issue("Storico locale non scrivibile o pieno");
+        state.issue(diag::noted("Storico locale non scrivibile o pieno"));
+    }
+    let summary = format!(
+        "FINE verifica · {} · visti {} · analizzati {} · parziali {} · saltati {} · segnalati {} · {:.1} s",
+        if state.interrupted { "INTERROTTA" } else { "completata" },
+        state.encountered,
+        state.analyzed,
+        state.partial_files,
+        state.skipped,
+        state.findings.len(),
+        state.elapsed_secs
+    );
+    if state.interrupted || !state.issues.is_empty() {
+        diag::warn(summary);
+    } else {
+        diag::ok(summary);
     }
     let mut p = shared.lock().unwrap();
     p.phase = "Verifica terminata".into();

@@ -5,19 +5,19 @@
     "cursor_realhcok": "#F2C230"
   },
   "dark": {
-    "background": "#111B2A",
-    "surface": "#1B2B40",
-    "sidebar": "#131F2F",
-    "border": "#314A60",
-    "text": "#F3F6FA",
-    "text_secondary": "#ABC1D2",
-    "primary": "#006EA6",
-    "primary_hover": "#007DB8",
-    "focus": "#79CDF2",
-    "selected": "#123E59",
-    "warning": "#F7C76E",
+    "background": "#1A1D21",
+    "surface": "#23272D",
+    "sidebar": "#14161A",
+    "border": "#363C44",
+    "text": "#ECEFF2",
+    "text_secondary": "#9AA4AD",
+    "primary": "#12806F",
+    "primary_hover": "#129680",
+    "focus": "#3ECFB2",
+    "selected": "#18463F",
+    "warning": "#F2B84B",
     "error": "#FF9494",
-    "success": "#67D6BF"
+    "success": "#7ED986"
   },
   "layout": {
     "initial_window_points": [

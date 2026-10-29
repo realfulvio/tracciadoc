@@ -15,10 +15,10 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-const ACCENT: Color32 = Color32::from_rgb(121, 205, 242);
-const PRIMARY: Color32 = Color32::from_rgb(0, 110, 166);
-const BG: Color32 = Color32::from_rgb(17, 27, 42);
-const SURFACE: Color32 = Color32::from_rgb(27, 43, 64);
+const ACCENT: Color32 = Color32::from_rgb(62, 207, 178);
+const PRIMARY: Color32 = Color32::from_rgb(18, 128, 111);
+const BG: Color32 = Color32::from_rgb(26, 29, 33);
+const SURFACE: Color32 = Color32::from_rgb(35, 39, 45);
 fn semibold(size: f32) -> egui::FontId {
     egui::FontId::new(size, egui::FontFamily::Name("Titillium SemiBold".into()))
 }
@@ -131,10 +131,10 @@ impl App {
             style.spacing.button_padding = egui::vec2(16., 10.);
             style.visuals.panel_fill = BG;
             style.visuals.window_fill = SURFACE;
-            style.visuals.override_text_color = Some(Color32::from_rgb(243, 246, 250));
-            style.visuals.weak_text_color = Some(Color32::from_rgb(171, 193, 210));
-            style.visuals.selection.bg_fill = Color32::from_rgb(18, 62, 89);
-            style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(0, 125, 184);
+            style.visuals.override_text_color = Some(Color32::from_rgb(236, 239, 242));
+            style.visuals.weak_text_color = Some(Color32::from_rgb(154, 164, 173));
+            style.visuals.selection.bg_fill = Color32::from_rgb(24, 70, 63);
+            style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(18, 150, 128);
             style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1., ACCENT);
             style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2., ACCENT);
             style
@@ -249,7 +249,7 @@ fn card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) {
     let width = ui.available_width();
     egui::Frame::new()
         .fill(SURFACE)
-        .stroke(egui::Stroke::new(1., Color32::from_rgb(49, 74, 96)))
+        .stroke(egui::Stroke::new(1., Color32::from_rgb(54, 60, 68)))
         .corner_radius(10)
         .inner_margin(16)
         .show(ui, |ui| {
@@ -279,7 +279,7 @@ impl eframe::App for App {
         egui::Panel::bottom("brand_footer")
             .frame(
                 egui::Frame::new()
-                    .fill(Color32::from_rgb(19, 31, 47))
+                    .fill(Color32::from_rgb(20, 22, 26))
                     .inner_margin(16),
             )
             .show(root, |ui| {
@@ -339,7 +339,7 @@ impl eframe::App for App {
             ctx.request_repaint_after(Duration::from_secs(1));
         }
         egui::Panel::bottom("console")
-            .frame(egui::Frame::new().fill(Color32::from_rgb(10, 17, 27)).inner_margin(egui::Margin::symmetric(16, 8)))
+            .frame(egui::Frame::new().fill(Color32::from_rgb(14, 16, 19)).inner_margin(egui::Margin::symmetric(16, 8)))
             .show(root, |ui| {
                 ui.horizontal(|ui| {
                     let arrow = if self.console_open { "▾" } else { "▸" };
@@ -353,7 +353,7 @@ impl eframe::App for App {
                     let doing = if running { format!("{phase}  {}", diag::mask(&current)) } else { "In attesa".to_string() };
                     ui.add(egui::Label::new(RichText::new(doing).small().weak()).truncate());
                     if let Some((msg, _)) = &self.copied {
-                        ui.label(RichText::new(msg).small().color(Color32::from_rgb(103, 214, 191)));
+                        ui.label(RichText::new(msg).small().color(Color32::from_rgb(126, 217, 134)));
                     }
                 });
                 if self.console_open {
@@ -361,9 +361,9 @@ impl eframe::App for App {
                         ui.spacing_mut().item_spacing.y = 2.;
                         for e in diag::recent(300) {
                             let color = match e.level {
-                                diag::Level::Info => Color32::from_rgb(171, 193, 210),
-                                diag::Level::Ok => Color32::from_rgb(103, 214, 191),
-                                diag::Level::Warn => Color32::from_rgb(247, 199, 110),
+                                diag::Level::Info => Color32::from_rgb(154, 164, 173),
+                                diag::Level::Ok => Color32::from_rgb(126, 217, 134),
+                                diag::Level::Warn => Color32::from_rgb(242, 184, 75),
                                 diag::Level::Err => Color32::from_rgb(255, 148, 148),
                             };
                             ui.add(egui::Label::new(RichText::new(e.line()).monospace().size(13.).color(color)).wrap());
@@ -373,7 +373,7 @@ impl eframe::App for App {
             });
         egui::Panel::left("steps")
             .exact_size(220.)
-            .frame(egui::Frame::new().fill(Color32::from_rgb(19, 31, 47)).inner_margin(16))
+            .frame(egui::Frame::new().fill(Color32::from_rgb(20, 22, 26)).inner_margin(16))
             .show(root, |ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(36., 36.)));
@@ -381,7 +381,7 @@ impl eframe::App for App {
                 });
                 ui.add_space(14.);
                 for (n, label) in [(1, "Aree da controllare"), (2, "Scansione"), (3, "Revisione e pulizia"), (4, "Verifica finale")] {
-                    let (mark, color) = if n < active { ("◉", Color32::from_rgb(103, 214, 191)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(171, 193, 210)) };
+                    let (mark, color) = if n < active { ("◉", Color32::from_rgb(126, 217, 134)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(154, 164, 173)) };
                     ui.label(RichText::new(format!("{mark}  {label}")).font(semibold(16.)).color(color));
                 }
                 ui.add_space(24.);
@@ -425,7 +425,7 @@ impl eframe::App for App {
                         let mut remove=None;
                         for (i,p) in self.roots.iter().enumerate() {ui.horizontal_wrapped(|ui|{ui.label(p.to_string_lossy());if ui.small_button("Rimuovi").clicked(){remove=Some(i);}});}
                         if let Some(i)=remove {self.roots.remove(i);}
-                        if self.roots.is_empty(){ui.label(RichText::new("Seleziona almeno una cartella o un disco locale.").color(Color32::from_rgb(247,199,110)));}
+                        if self.roots.is_empty(){ui.label(RichText::new("Seleziona almeno una cartella o un disco locale.").color(Color32::from_rgb(242, 184, 75)));}
                         ui.collapsing("Copertura ed esclusioni",|ui| {
                             ui.label("Incluse tutte le sottocartelle accessibili: profili, AppData, temporanei e cestino. Nessuna estensione esclusa silenziosamente.");
                             ui.label("Esclusi percorsi esterni, rete, collegamenti e junction. I volumi montati discendenti vanno selezionati separatamente. File cloud offline, EFS, negati, formati non supportati e limiti rendono la verifica incompleta.");
@@ -455,7 +455,7 @@ impl eframe::App for App {
                 });
                 ui.add_space(10.);
                 if !running && self.operator.trim().is_empty(){ui.label("Compila il nome dell'operatore per avviare la verifica.");}
-                if !self.notice.is_empty(){ui.label(RichText::new(&self.notice).color(Color32::from_rgb(247,199,110)));}
+                if !self.notice.is_empty(){ui.label(RichText::new(&self.notice).color(Color32::from_rgb(242, 184, 75)));}
                 let mut rescan: Option<Previous> = None;
                 let (run,current,phase)={let p=self.shared.lock().unwrap();(p.run.clone(),p.current.clone(),p.phase.clone())};
                 if let Some(mut run)=run {
@@ -468,7 +468,7 @@ impl eframe::App for App {
                         ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.findings.len(),elapsed));
                         if run.timing.prefilter_skipped>0 {ui.label(format!("Immagini scartate dal prefiltro (senza OCR): {}",run.timing.prefilter_skipped));}
                         if !running {
-                            ui.label(RichText::new(run.outcome()).font(semibold(21.)).color(if run.incomplete(){Color32::from_rgb(247,199,110)}else{ACCENT}));
+                            ui.label(RichText::new(run.outcome()).font(semibold(21.)).color(if run.incomplete(){Color32::from_rgb(242, 184, 75)}else{ACCENT}));
                             for line in run.finding_summary(){ui.label(line);}
                         }
                         if !running && run.finished {
@@ -491,7 +491,7 @@ impl eframe::App for App {
                         }
                         if !running && self.confirm {
                             let n=run.findings.iter().filter(|f|f.selected&&!f.deleted()).count();
-                            ui.label(RichText::new(format!("ATTENZIONE: {n} file saranno eliminati in modo definitivo (non vanno nel cestino) e non potranno essere recuperati da TracciaDoc.")).color(Color32::from_rgb(247,199,110)));
+                            ui.label(RichText::new(format!("ATTENZIONE: {n} file saranno eliminati in modo definitivo (non vanno nel cestino) e non potranno essere recuperati da TracciaDoc.")).color(Color32::from_rgb(242, 184, 75)));
                             ui.horizontal(|ui|{
                                 if ui.button("Conferma eliminazione definitiva").clicked() {
                                     for f in run.findings.iter_mut().filter(|f|f.selected&&!f.deleted()) {
@@ -516,7 +516,7 @@ impl eframe::App for App {
                                     ui.label(format!("Formato rilevato: {}",f.format));
                                     for reason in &f.reasons{ui.label(reason);}
                                     if f.deleted(){ui.label(RichText::new(format!("ELIMINATO definitivamente: {}",f.deleted_at)).color(ACCENT));}
-                                    else if !f.delete_error.is_empty(){ui.label(RichText::new(&f.delete_error).color(Color32::from_rgb(247,199,110)));}
+                                    else if !f.delete_error.is_empty(){ui.label(RichText::new(&f.delete_error).color(Color32::from_rgb(242, 184, 75)));}
                                     ui.add_enabled_ui(!running&&!f.deleted(),|ui| {ui.horizontal_wrapped(|ui| {
                                         if ui.button("Apri file").clicked()&& let Err(e)=crate::open::document(f){self.notice=e;}
                                         if ui.button("Mostra nella cartella").clicked()&& let Err(e)=crate::open::folder(&f.path){self.notice=e;}
@@ -528,10 +528,10 @@ impl eframe::App for App {
 
                                     });});
                                     let (rect,resp)=ui.allocate_exact_size(egui::vec2(side,112.),egui::Sense::hover());
-                                    ui.painter().rect_filled(rect,8.,Color32::from_rgb(27,43,64));
+                                    ui.painter().rect_filled(rect,8.,Color32::from_rgb(35, 39, 45));
                                     match self.previews.get(&f.path) {
                                         Some(Some((blur,sharp)))=>{let tex=if resp.hovered(){sharp}else{blur};egui::Image::from_texture(tex).fit_to_exact_size(rect.size()).paint_at(ui,rect);ui.painter().text(rect.center_bottom()-egui::vec2(0.,8.),egui::Align2::CENTER_BOTTOM,if resp.hovered(){""}else{"passa sopra"},egui::FontId::proportional(12.),Color32::WHITE);}
-                                        _=>{ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,f.format.to_uppercase(),semibold(15.),Color32::from_rgb(171,193,210));}
+                                        _=>{ui.painter().text(rect.center(),egui::Align2::CENTER_CENTER,f.format.to_uppercase(),semibold(15.),Color32::from_rgb(154, 164, 173));}
                                     }
                                 });
                                 ui.separator();

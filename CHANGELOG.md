@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 - 2026-10-29
+
+- Prima di aprire un file si guarda nome e dimensione: si aprono solo immagini (jpg, png, bmp, tif, gif, webp, heic), pdf, documenti Office/OpenDocument, rtf e testo. exe, dll, svg e il resto non vengono aperti e finiscono nel contatore "ignorati per tipo". Solo file senza estensione o con estensione tipo .dat/.tmp/.bak (20 KB fino al limite) vengono riconosciuti dalla firma.
+- Log e console puliti: "Formato non supportato", immagini scartate dal prefiltro, TIFF/GIF, RTF, archivi generici e testi non UTF-8 sono solo contati (restano nei problemi del report). Restano negli eventi i problemi veri (timeout, immagini corrotte, accesso negato, file bloccati, limiti), al massimo 50 per tipo. L'arresto manuale non produce più un errore per file.
+- Il log su file a 2 MiB non si azzera più: passa a `diagnostica.old.log`.
+- Versione mostrata sotto il logo realhcok, che è più piccolo.
+
 ## 0.2.3 - 2026-10-29
 
 - Dopo l'eliminazione i file eliminati escono dalla lista dei segnalati e l'intestazione mostra il conteggio attuale ("File segnalati (28)"); restano nel conteggio delle eliminazioni, nella console e nel verbale.

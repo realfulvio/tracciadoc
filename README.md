@@ -6,7 +6,7 @@
 
 MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei file locali e produrre un verbale PDF. Repository **privato**, sorgenti MIT. Nessuna scansione automatica, telemetria o elaborazione cloud.
 
-**[Scarica TracciaDoc 0.2.0 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.0/TracciaDoc-0.2.0-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.0) · [Changelog](CHANGELOG.md)
+**[Scarica TracciaDoc 0.2.1 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.1/TracciaDoc-0.2.1-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.1) · [Changelog](CHANGELOG.md)
 
 ## Avvio rapido
 

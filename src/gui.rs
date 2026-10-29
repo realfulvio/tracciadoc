@@ -1,4 +1,5 @@
 use crate::{
+    diag,
     engine::{self, Shared},
     model::{Previous, Review, Settings},
     parser, report,
@@ -85,6 +86,11 @@ pub struct App {
     previews: HashMap<PathBuf, Preview>,
     /// Intervallo di ridisegno durante la scansione: piu lungo sul rendering software (WARP).
     repaint: Duration,
+    /// Adattatore grafico della GUI, riportato nella diagnostica.
+    gpu: String,
+    console_open: bool,
+    /// Esito dell'ultima copia della diagnostica, mostrato per qualche secondo.
+    copied: Option<(String, Instant)>,
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -144,6 +150,17 @@ impl App {
                 .text_styles
                 .insert(egui::TextStyle::Small, egui::FontId::proportional(13.));
         });
+        let gpu = cc.wgpu_render_state.as_ref().map_or_else(
+            || "OpenGL (glow)".to_string(),
+            |rs| {
+                let i = rs.adapter.get_info();
+                format!("{:?} · {} · {:?}", i.backend, i.name, i.device_type)
+            },
+        );
+        diag::info(format!(
+            "TracciaDoc {} avviato · grafica {gpu}",
+            env!("CARGO_PKG_VERSION")
+        ));
         Self {
             roots: vec![],
             path: String::new(),
@@ -176,6 +193,9 @@ impl App {
             zoom: 1.,
             confirm: false,
             previews: HashMap::new(),
+            gpu,
+            console_open: true,
+            copied: None,
             // Su WARP ogni frame costa CPU sottratta all'OCR: a 150 ms la scansione sintetica passava da ~12 s a ~90 s.
             repaint: if cc.wgpu_render_state.as_ref().is_some_and(|rs| {
                 rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu
@@ -246,6 +266,7 @@ impl eframe::App for App {
             let mut p = self.shared.lock().unwrap();
             if let Some(r) = &mut p.run {
                 r.issue("Errore interno del coordinatore");
+                diag::err("Errore interno del coordinatore (thread terminato in panico)");
                 r.finished = true;
                 r.interrupted = true;
                 r.end = engine::now();
@@ -291,6 +312,16 @@ impl eframe::App for App {
                                 }
                             }
                         });
+                    if ui.add(egui::Button::new(RichText::new("⧉ Copia diagnostica").color(ACCENT)).stroke(egui::Stroke::new(1., ACCENT))).on_hover_text("Copia negli appunti un report per gli sviluppatori: nessun contenuto dei documenti, nome utente mascherato").clicked(){
+                        let (run,phase,current)={let p=self.shared.lock().unwrap();(p.run.clone(),p.phase.clone(),p.current.clone())};
+                        let text=diag::report(&self.gpu,&phase,&current,run.as_ref());
+                        let kb=text.len().div_ceil(1024);
+                        // Scrittura diretta negli appunti di Windows; se fallisce ripiega su egui.
+                        let direct=diag::copy_to_clipboard(&text);
+                        if !direct {ctx.copy_text(text);}
+                        diag::info(format!("Diagnostica copiata negli appunti ({kb} KB{})",if direct{""}else{", via egui"}));
+                        self.copied=Some((format!("Diagnostica copiata negli appunti ({kb} KB): incollala nella chat"),Instant::now()));
+                    }
                     if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start(None);}
                     if running && ui.button("Interrompi").clicked(){self.stop.store(true,Ordering::Relaxed);self.notice="Interruzione richiesta: chiusura parser e conservazione degli esiti raccolti.".into();}
                 });
@@ -302,6 +333,44 @@ impl eframe::App for App {
             (false, Some((true, false))) => 3,
             _ => 1,
         };
+        if self.copied.as_ref().is_some_and(|(_, t)| t.elapsed() > Duration::from_secs(8)) {
+            self.copied = None;
+        } else if self.copied.is_some() {
+            ctx.request_repaint_after(Duration::from_secs(1));
+        }
+        egui::Panel::bottom("console")
+            .frame(egui::Frame::new().fill(Color32::from_rgb(10, 17, 27)).inner_margin(egui::Margin::symmetric(16, 8)))
+            .show(root, |ui| {
+                ui.horizontal(|ui| {
+                    let arrow = if self.console_open { "▾" } else { "▸" };
+                    if ui.add(egui::Button::new(RichText::new(format!("{arrow} Console")).font(semibold(15.))).frame(false)).clicked() {
+                        self.console_open = !self.console_open;
+                    }
+                    let (phase, current) = {
+                        let p = self.shared.lock().unwrap();
+                        (p.phase.clone(), p.current.clone())
+                    };
+                    let doing = if running { format!("{phase}  {}", diag::mask(&current)) } else { "In attesa".to_string() };
+                    ui.add(egui::Label::new(RichText::new(doing).small().weak()).truncate());
+                    if let Some((msg, _)) = &self.copied {
+                        ui.label(RichText::new(msg).small().color(Color32::from_rgb(103, 214, 191)));
+                    }
+                });
+                if self.console_open {
+                    egui::ScrollArea::vertical().id_salt("console-scroll").max_height(110.).auto_shrink([false, true]).stick_to_bottom(true).show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.y = 2.;
+                        for e in diag::recent(300) {
+                            let color = match e.level {
+                                diag::Level::Info => Color32::from_rgb(171, 193, 210),
+                                diag::Level::Ok => Color32::from_rgb(103, 214, 191),
+                                diag::Level::Warn => Color32::from_rgb(247, 199, 110),
+                                diag::Level::Err => Color32::from_rgb(255, 148, 148),
+                            };
+                            ui.add(egui::Label::new(RichText::new(e.line()).monospace().size(13.).color(color)).wrap());
+                        }
+                    });
+                }
+            });
         egui::Panel::left("steps")
             .exact_size(220.)
             .frame(egui::Frame::new().fill(Color32::from_rgb(19, 31, 47)).inner_margin(16))
@@ -407,7 +476,7 @@ impl eframe::App for App {
                             ui.checkbox(&mut self.demo,"Contrassegna il verbale come DIMOSTRATIVO");
                             if ui.button("Genera verbale PDF...").clicked()
                                 && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(format!("Verbale-TracciaDoc-{}.pdf",run.id)).save_file() {
-                                    match report::write(&run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",path.display());let _=engine::audit(&run,"pdf-export");},Err(e)=>self.notice=e}
+                                    match report::write(&run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",path.display());diag::ok(format!("Verbale PDF salvato: {}",diag::shown(&path)));let _=engine::audit(&run,"pdf-export");},Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}}
                                 }
                         }
                         if !running && run.finished && !run.findings.is_empty() {
@@ -426,9 +495,9 @@ impl eframe::App for App {
                             ui.horizontal(|ui|{
                                 if ui.button("Conferma eliminazione definitiva").clicked() {
                                     for f in run.findings.iter_mut().filter(|f|f.selected&&!f.deleted()) {
-                                        match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;},Err(e)=>f.delete_error=e}
+                                        match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;diag::ok(format!("ELIMINATO {}",diag::shown(&f.path)));},Err(e)=>{diag::err(format!("Eliminazione fallita {} · {e}",diag::shown(&f.path)));f.delete_error=e}}
                                     }
-                                    let _=engine::audit(&run,"delete");
+                                    let _=engine::audit(&run,"delete");diag::info(format!("Eliminazione definitiva: eliminati {}, residui {}",run.deleted_count(),run.remaining()));
                                     self.notice=format!("Eliminati {} file; residui {}. Eseguire la ri-scansione di verifica.",run.deleted_count(),run.remaining());
                                     self.confirm=false;
                                 }

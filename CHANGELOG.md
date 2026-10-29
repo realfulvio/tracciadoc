@@ -1,5 +1,10 @@
 # Changelog
 
+## Non rilasciato
+
+- Console sempre visibile in basso (ripiegabile) con gli eventi di scansione, eliminazione e verbale, e pulsante "Copia diagnostica" che mette negli appunti un report per gli sviluppatori: versione, sistema, CPU, grafica, fase, contatori, errori con il file che li ha causati, ultimi 200 eventi. Mai il contenuto dei documenti; il nome utente nei percorsi diventa `<utente>`.
+- Log su file `%LOCALAPPDATA%\TracciaDoc\diagnostica.log` (massimo 2 MiB), separato dallo storico `audit.jsonl` che resta senza percorsi.
+
 ## 0.2.0 - 2026-10-29
 
 - Selezione dei file segnalati (casella singola e "Seleziona tutti") ed eliminazione definitiva con conferma esplicita. Solo file regolari locali; nessun cestino.

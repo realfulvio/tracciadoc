@@ -23,7 +23,7 @@ while pending:
  for entry in getattr(pe,'DIRECTORY_ENTRY_IMPORT',[]):pending.append(entry.dll.decode('ascii'))
  pe.close()
 data=out/'tessdata';data.mkdir(exist_ok=True)
-for lang in ['ita','eng']:shutil.copy2(ROOT/'runtime'/'models'/f'{lang}.traineddata',data)
+for lang in ['ita','eng','osd']:shutil.copy2(ROOT/'runtime'/'models'/f'{lang}.traineddata',data)
 shutil.copy2(ROOT/'runtime'/'models'/'LICENSE',data/'LICENSE.txt')
 shutil.copytree(ocr/'licenses',out/'licenses',dirs_exist_ok=True)
 shutil.copy2(ocr/'packages.json',out/'packages.json')

@@ -473,7 +473,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 continue;
             }
             state.encountered += 1;
-            if state.encountered % 2000 == 0 {
+            if state.encountered.is_multiple_of(2000) {
                 diag::info(format!(
                     "Avanzamento · visti {} · analizzati {} · segnalati {}",
                     state.encountered,

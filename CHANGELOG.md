@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 - non rilasciata
+## 0.2.0 - 2026-10-29
 
 - Selezione dei file segnalati (casella singola e "Seleziona tutti") ed eliminazione definitiva con conferma esplicita. Solo file regolari locali; nessun cestino.
 - Ri-scansione di verifica sugli stessi percorsi e verbale finale con riepilogo della verifica iniziale e delle eliminazioni.
@@ -9,7 +9,8 @@
 - GUI: tema scuro fisso (con il tema chiaro di Windows il testo era illeggibile), simboli dei passi visibili, ridisegno ogni 1000 ms durante la scansione quando il rendering e su WARP.
 - Collaudo su Windows 11 Enterprise LTSC 2024 x64 (VM senza driver video, DX12 su WARP, senza Mesa): `cargo test`, Clippy `-D warnings`, `validate.py` sul corpus sintetico; GUI a schermo con prove sintetiche, eliminazione con conferma, file modificato dopo l'analisi non eliminato, ri-scansione e verbale PDF finale con riepilogo e eliminazioni non riuscite.
 - `edge_tests.py`: il caso `memory` usa un raster 5600x5600 (~94 MB decodificati) invece dell'OCR di una piccola immagine, il cui consumo dipendeva dalla macchina e restava sotto 64 MiB. Tutti i casi passano sulla VM Windows.
-- Non verificati: GPU/iGPU reali, ripiego OpenGL con finestra aperta, finestra non massimizzata.
+- Collaudo su PC fisico (Ryzen 7 PRO 5750G, Quadro RTX 4000): test, validazione ed edge test passati; 296 file sintetici in 21,1 s con 7 worker; GUI non massimizzata su DirectX 12 con la GPU NVIDIA, non WARP. Dettagli in `docs/VALIDAZIONE.md`.
+- Non verificati: iGPU reali, ripiego OpenGL con finestra aperta.
 - OCR in parallelo: N worker parser/OCR, ognuno processo separato con il proprio Windows Job e limite di memoria; default core fisici - 1 (minimo 1), `--workers` e Opzioni avanzate della GUI. Segnalazioni ordinate per percorso; il verbale dichiara il numero di worker.
 - Prefiltro: niente OCR sulle immagini e pagine senza zone con tratti a contrasto tipo testo; dichiarate nel verbale come "scartate dal prefiltro", file contati come parziali. `--no-prefilter` e casella nella GUI per l'OCR su tutto. L'OCR gira solo sulla zona con tratti tipo testo piu un margine.
 - Orientamento con OSD di Tesseract (`osd.traineddata` con hash verificato): una sola passata con confidenza >= 2, altrimenti le 4 rotazioni, prima dritta e poi quella suggerita.

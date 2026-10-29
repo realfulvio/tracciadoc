@@ -103,6 +103,27 @@ Sul corpus OSD restituisce angoli sbagliati con confidenza bassa (es. `carta.png
 
 GUI collaudata a schermo sulla VM (DirectX 12 su WARP, UI Automation e clic reali): scansione del corpus da 41 file in 16-18 s con 2 foto scartate, eliminazione con conferma (file modificato dopo l'analisi non eliminato), ri-scansione finale e verbale PDF dal dialogo di salvataggio, con stemma in testa, "3 worker" e "scartate dal prefiltro: 2".
 
+### PC fisico con GPU reale
+
+Collaudo sul PC di lavoro: Ryzen 7 PRO 5750G (8 core fisici, 16 logici), 32 GB RAM, NVIDIA Quadro RTX 4000 (driver 32.0.16.1692), SSD NVMe, Windows 11 Pro 26300. Pacchetto ricompilato da zero dal commit cd0214f, stessi passi del README. `cargo test --release` (7 test), Clippy `-D warnings`, `validate.py` (TP 29, TN 6, limitati 6 in generic e AVX2; scansione completa 7,9-8,0 s automatico, 9,7 s generic) e `edge_tests.py` passati. Corpus solo sintetico, file in cache.
+
+| Corpus | Configurazione | Tempo | Core usati | Rilevamenti |
+|---|---|---:|---:|---:|
+| 296 file | default (7 worker), AVX2 | **21,1 s** | 6,62 | 216 |
+| 296 file | 7 worker, generic | 22,6 s | 6,62 | 216 |
+| 296 file | 3 worker, AVX2 | 43,4 s | 2,97 | 216 |
+| 296 file | 3 worker, generic | 46,0 s | 2,97 | 216 |
+| 296 file | 1 worker | 112,9 s | 0,99 | 216 |
+| 296 file | senza prefiltro | 22,5 s | 6,64 | 216 |
+| 8 foto senza testo | prefiltro attivo | 0,6 s | - | 0 (8 scartate) |
+| 8 foto senza testo | senza prefiltro | 85,4 s | 4,19 | 0 |
+| 41 file | default (7 worker) | 8,5 s | 3,63 | 29 |
+| 41 file | 3 worker | 8,7 s | 2,94 | 29 |
+
+Da 1 a 7 worker 5,35x. Sul corpus a 41 file il tempo e dominato da `documento-fotografato.jpg`, per cui piu worker non aiutano. Con 7 worker l'inizializzazione dei motori OCR somma circa 3,3 s di CPU (circa 1 s con 3). Un worker su questo PC e piu lento di una vCPU della VM (112,9 s contro 96,4 s). Le 8 foto senza testo sono le due del corpus copiate 4 volte.
+
+GUI in finestra non massimizzata (1196x859): wgpu carica sia il driver NVIDIA sia WARP durante l'enumerazione, ma il processo alloca memoria dedicata (194-224 MiB) solo sulla Quadro e nulla sugli altri adattatori: rendering sulla GPU reale. Scansione delle prove sintetiche dalla GUI: 41 file, 29 rilevamenti, 7,5 s.
+
 ### Non verificato
 
-GPU/iGPU reali; HDD o disco freddo; PC fisici con altri numeri di core; foto reali (il prefiltro e tarato su immagini sintetiche); finestra non massimizzata.
+iGPU reali (sul PC fisico l'iGPU non e esposta); HDD o disco freddo; foto reali (il prefiltro e tarato su immagini sintetiche); ripiego OpenGL con finestra aperta.

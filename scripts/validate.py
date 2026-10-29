@@ -9,7 +9,8 @@ OUT=ROOT/'scratch'/'validation';OUT.mkdir(parents=True,exist_ok=True)
 exe=PKG/'TracciaDoc.exe';corpus=PKG/'prove-sintetiche'
 manifest=json.loads((ROOT/'fixtures'/'manifest.json').read_text())
 hashes={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in corpus.iterdir() if p.is_file()}
-settings={'deep':True,'cpu_only':False,'max_mb':64,'max_pages':40,'timeout_secs':120,'max_entries':1000000,'memory_mb':768}
+settings={'deep':True,'cpu_only':False,'max_mb':64,'max_pages':40,'timeout_secs':120,'max_entries':1000000,'memory_mb':768,'workers':1,'prefilter':True}
+expected_findings=sum(1 for item in manifest if item['positive'] and not item['limited'])
 results=[]
 for method in ['generic','avx2']:
  env=os.environ.copy();env.update(DOTPRODUCT=method,OMP_THREAD_LIMIT='1',OMP_NUM_THREADS='1')
@@ -52,7 +53,7 @@ for label,flags in [('auto-cold',[]),('auto-warm',[]),('cpu-generic',['--cpu']),
  print(label,round(a['seconds'],3),'s',a['encountered'],'files',len(a['findings']),'findings',flush=True)
  if label=='cancelled':assert a['interrupted'] and a['incomplete']
  if label in ['auto-cold','auto-warm','cpu-generic']:
-  assert a['encountered']==len(manifest) and len(a['findings'])==27 and a['incomplete']
+  assert a['encountered']==len(manifest) and len(a['findings'])==expected_findings and a['incomplete']
 (OUT/'benchmark.json').write_text(json.dumps(bench,indent=2),encoding='utf-8')
 assert hashes=={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in corpus.iterdir() if p.is_file()}
 print('End-to-end package checks passed.',flush=True)

@@ -115,7 +115,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         ),
         9.,
     );
-    add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP; GIF/TIFF solo prima immagine (limite segnalato). DOCX/XLSX/PPTX e ODT/ODS/ODP: XML e immagini raster incorporate. Testo UTF-8 TXT/CSV/TSV/LOG/MD. RTF solo testo grezzo. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR.".into(),9.);
+    add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP; GIF/TIFF solo prima immagine (limite segnalato). DOCX/XLSX/PPTX e ODT/ODS/ODP: XML e immagini raster incorporate. RTF solo testo grezzo. I file di solo testo (TXT, CSV, LOG, MD) non vengono analizzati: non contengono copie di documenti. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR.".into(),9.);
     add(
         format!(
             "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 7000 px/lato e 128 MiB. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",

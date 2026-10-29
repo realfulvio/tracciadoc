@@ -180,7 +180,7 @@ pub const INTERRUPTED: &str = "Verifica interrotta";
 
 const WANTED_EXT: &[&str] = &[
     "jpg", "jpeg", "jfif", "png", "bmp", "tif", "tiff", "gif", "webp", "heic", "heif", "pdf",
-    "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf", "txt", "csv", "tsv", "log", "md",
+    "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf",
 ];
 /// Extensions of files that are often renamed scans or have no type at all: only these are sniffed.
 const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp"];
@@ -571,7 +571,7 @@ impl Parser {
             let is_pdf = head.starts_with(b"%PDF-");
             let is_zip = head.starts_with(b"PK\x03\x04");
             let img = image::guess_format(head).ok();
-            let text_ext = ["txt", "csv", "tsv", "log", "md", "rtf"].contains(&ext.as_str());
+            let text_ext = ext == "rtf";
             if !is_pdf && !is_zip && img.is_none() && !text_ext {
                 return Err(UNSUPPORTED.into());
             }

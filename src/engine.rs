@@ -8,7 +8,7 @@ use std::{
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         mpsc,
     },
     thread,
@@ -23,11 +23,22 @@ use windows_sys::Win32::{
 };
 
 pub type Shared = Arc<Mutex<Progress>>;
+/// Totale dei file da analizzare, calcolato da un conteggio preliminare in parallelo alla scansione.
+#[derive(Default)]
+pub struct Counts {
+    /// File con estensione/dimensione ammesse trovati finora dal conteggio.
+    pub total: AtomicU64,
+    /// Il conteggio ha percorso tutte le aree: `total` e definitivo.
+    pub total_final: AtomicBool,
+    /// File ammessi gia esaminati dalla scansione (anche con esito di salto).
+    pub done: AtomicU64,
+}
 #[derive(Default)]
 pub struct Progress {
     pub run: Option<Run>,
     pub current: String,
     pub phase: String,
+    pub counts: Arc<Counts>,
 }
 pub fn now() -> String {
     Local::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, false)
@@ -395,6 +406,52 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
     }
     o.fatal
 }
+fn collect_counted(state: &mut Run, o: Outcome, stop: &AtomicBool, counts: &Counts) -> bool {
+    counts.done.fetch_add(1, Ordering::Relaxed);
+    collect(state, o, stop)
+}
+/// Conta in anticipo i file che la scansione aprira (stessa enumerazione, solo metadati):
+/// serve al totale dell'indicatore di avanzamento. Si ferma con la scansione.
+fn precount(roots: Vec<PathBuf>, max_bytes: u64, max_entries: u64, stop: Arc<AtomicBool>, over: Arc<AtomicBool>, counts: Arc<Counts>) {
+    let mut seen = 0u64;
+    let mut counted: Vec<PathBuf> = vec![];
+    'roots: for root in roots {
+        if is_network(&root) || !root.exists() {
+            continue;
+        }
+        let root_reparse =
+            std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
+        if (root_reparse || counted.iter().any(|r| root.starts_with(r))) && !is_volume_mount(&root) {
+            continue;
+        }
+        counted.push(root.clone());
+        let mut entries = walkdir::WalkDir::new(&root).follow_links(false).max_open(16).into_iter();
+        while let Some(entry) = entries.next() {
+            if stop.load(Ordering::Relaxed) || over.load(Ordering::Relaxed) {
+                return;
+            }
+            let Ok(entry) = entry else { continue };
+            let Ok(meta) = entry.metadata() else { continue };
+            if entry.depth() > 0 && meta.file_attributes() & 0x400 != 0 && (meta.is_dir() || entry.file_type().is_symlink()) {
+                if entry.file_type().is_dir() {
+                    entries.skip_current_dir();
+                }
+                continue;
+            }
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            seen += 1;
+            if seen >= max_entries {
+                break 'roots;
+            }
+            if crate::parser::worth_opening(entry.path(), meta.len(), max_bytes) {
+                counts.total.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+    counts.total_final.store(true, Ordering::Relaxed);
+}
 pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let start = Instant::now();
     let mut state = shared.lock().unwrap().run.clone().unwrap();
@@ -413,6 +470,14 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
         state.audit_error = true;
         state.issue(diag::noted("Storico locale non scrivibile o pieno"));
     }
+    let counts = Arc::new(Counts::default());
+    shared.lock().unwrap().counts = counts.clone();
+    let counter_over = Arc::new(AtomicBool::new(false));
+    let counter = {
+        let (roots, stop, over, counts) = (state.roots.clone(), stop.clone(), counter_over.clone(), counts.clone());
+        let (max_bytes, max_entries) = (state.settings.max_mb * 1024 * 1024, state.settings.max_entries);
+        thread::spawn(move || precount(roots, max_bytes, max_entries, stop, over, counts))
+    };
     let workers = state.settings.workers.max(1);
     let (job_tx, job_rx) = mpsc::sync_channel::<Request>(workers);
     let job_rx = Arc::new(Mutex::new(job_rx));
@@ -506,6 +571,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 Ok(m) => m,
                 Err(_) => {
                     state.skipped += 1;
+                    counts.done.fetch_add(1, Ordering::Relaxed);
                     state.issue(diag::noted("File: metadati non leggibili"));
                     continue;
                 }
@@ -520,6 +586,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             }
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
+                counts.done.fetch_add(1, Ordering::Relaxed);
                 state.issue(diag::noted("File reparse, offline, cloud recall o cifrato EFS non aperto"));
                 continue;
             }
@@ -541,7 +608,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                     Err(mpsc::TrySendError::Full(r)) => {
                         request = r;
                         if let Ok(o) = out_rx.recv_timeout(Duration::from_millis(50)) {
-                            halted |= collect(&mut state, o, &stop);
+                            halted |= collect_counted(&mut state, o, &stop, &counts);
                         }
                         if stop.load(Ordering::Relaxed) {
                             state.interrupted = true;
@@ -555,7 +622,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 }
             }
             while let Ok(o) = out_rx.try_recv() {
-                halted |= collect(&mut state, o, &stop);
+                halted |= collect_counted(&mut state, o, &stop, &counts);
             }
             if halted {
                 break 'roots;
@@ -569,7 +636,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     }
     drop(job_tx);
     for o in out_rx {
-        collect(&mut state, o, &stop);
+        collect_counted(&mut state, o, &stop, &counts);
         state.elapsed_secs = start.elapsed().as_secs_f64();
         if published.elapsed() >= Duration::from_millis(100) {
             shared.lock().unwrap().run = Some(state.clone());
@@ -579,6 +646,9 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     for t in pool {
         let _ = t.join();
     }
+    // Il conteggio non serve piu: si ferma e non rallenta la chiusura.
+    counter_over.store(true, Ordering::Relaxed);
+    let _ = counter.join();
     // Parallel workers complete out of order: stable output independent of scheduling.
     state.findings.sort_by(|a, b| a.path.cmp(&b.path));
     state.interrupted |= stop.load(Ordering::Relaxed);

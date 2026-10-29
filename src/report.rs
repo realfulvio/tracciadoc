@@ -118,12 +118,13 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP; GIF/TIFF solo prima immagine (limite segnalato). DOCX/XLSX/PPTX e ODT/ODS/ODP: XML e immagini raster incorporate. Testo UTF-8 TXT/CSV/TSV/LOG/MD. RTF solo testo grezzo. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR.".into(),9.);
     add(
         format!(
-            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata worker; {} file. Un parser persistente, un thread OCR. Raster PDF max 1700x2400, immagini max 7000 px/lato e 128 MiB. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",
+            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 7000 px/lato e 128 MiB. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",
             run.settings.max_mb,
             run.settings.max_pages,
             run.settings.timeout_secs,
             run.settings.memory_mb,
-            run.settings.max_entries
+            run.settings.max_entries,
+            run.settings.workers
         ),
         9.,
     );
@@ -140,6 +141,17 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         10.,
     );
     add("Un file parziale o fallito non e contato come analizzato integralmente. Gli errori di enumerazione possono impedire di conoscere quanti file non siano stati raggiunti.".into(),9.);
+    add(
+        if run.settings.prefilter {
+            format!(
+                "Prefiltro immagini attivo: immagini o pagine scartate dal prefiltro, senza OCR: {}. Sono quelle prive di tratti a contrasto tipo testo in ogni zona; i file che le contengono sono contati come parziali.",
+                run.timing.prefilter_skipped
+            )
+        } else {
+            "Prefiltro immagini disattivato: OCR su tutte le immagini e pagine entro i limiti.".into()
+        },
+        9.,
+    );
     if !run.issues.is_empty() {
         add("ERRORI, ESCLUSIONI E LIMITI INCONTRATI".into(), 12.);
         for (issue, n) in &run.issues {
@@ -259,6 +271,23 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
         for (index, lines) in pages.into_iter().enumerate() {
             let mut page = doc.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
             page.set_content_regeneration_strategy(PdfPageContentRegenerationStrategy::Manual);
+            if index == 0 {
+                // Stemma on the white page: alpha flattened on white, PDF images have no transparency.
+                let stemma = image::load_from_memory(include_bytes!("../assets/ui/stemma-comune-bondeno.png"))?.to_rgba8();
+                let mut flat = image::RgbImage::from_pixel(stemma.width(), stemma.height(), image::Rgb([255, 255, 255]));
+                for (x, y, p) in stemma.enumerate_pixels() {
+                    let a = p[3] as u32;
+                    let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
+                    flat.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+                }
+                page.objects_mut().create_image_object(
+                    PdfPoints::new(470.),
+                    PdfPoints::new(715.),
+                    &image::DynamicImage::ImageRgb8(flat),
+                    Some(PdfPoints::new(80.)),
+                    Some(PdfPoints::new(80.)),
+                )?;
+            }
             let mut y = 790.;
             for (text, size) in lines {
                 if size >= 12. {

@@ -37,6 +37,7 @@ fn main() {
             let mut settings = model::Settings {
                 deep: true,
                 cpu_only: args.contains(&"--cpu".into()),
+                prefilter: !args.contains(&"--no-prefilter".into()),
                 ..Default::default()
             };
             for (flag, min, max, field) in [
@@ -55,6 +56,16 @@ fn main() {
                     }
                     *field = n;
                 }
+            }
+            if let Some(i) = args.iter().position(|s| s == "--workers") {
+                let n = args
+                    .get(i + 1)
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .ok_or("Numero worker non valido")?;
+                if !(1..=64).contains(&n) {
+                    return Err("Numero worker fuori intervallo".into());
+                }
+                settings.workers = n;
             }
             if let Some(i) = args.iter().position(|s| s == "--max-pages") {
                 let n = args
@@ -108,7 +119,7 @@ fn main() {
             }
             report::write(&run, &output, !args.contains(&"--omit-paths".into()), demo)?;
             // Structured CLI summary deliberately omits selected roots and finding paths.
-            let summary = serde_json::json!({"seconds":run.elapsed_secs,"encountered":run.encountered,"analyzed":run.analyzed,"partial":run.partial_files,"skipped":run.skipped,"findings":run.findings.iter().map(|f|serde_json::json!({"format":f.format,"reasons":f.reasons})).collect::<Vec<_>>(),"issues":run.issues,"incomplete":run.incomplete(),"interrupted":run.interrupted,"pages_ocr":run.pages_ocr,"ocr_seconds":run.ocr_seconds,"ocr_init_ms":run.ocr_init_ms,"peak_worker_bytes":run.peak_worker_bytes,"backend":run.backend});
+            let summary = serde_json::json!({"seconds":run.elapsed_secs,"encountered":run.encountered,"analyzed":run.analyzed,"partial":run.partial_files,"skipped":run.skipped,"findings":run.findings.iter().map(|f|serde_json::json!({"format":f.format,"reasons":f.reasons})).collect::<Vec<_>>(),"issues":run.issues,"incomplete":run.incomplete(),"interrupted":run.interrupted,"pages_ocr":run.pages_ocr,"ocr_seconds":run.ocr_seconds,"ocr_init_ms":run.ocr_init_ms,"peak_worker_bytes":run.peak_worker_bytes,"backend":run.backend,"timing":run.timing,"timing_by_format":run.timing_by_format});
             std::fs::write(
                 output.with_extension("json"),
                 serde_json::to_vec_pretty(&summary).unwrap(),

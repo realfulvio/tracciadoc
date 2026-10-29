@@ -97,6 +97,18 @@ pdf('ordinario.pdf','Appunti di riunione. Acquisto materiali e verifica preventi
 (DEST/'corrotto.pdf').write_bytes(b'%PDF-1.7\nBROKEN');record('corrotto.pdf',False,'problema','PDF corrotto',True)
 pdf('cifrato.pdf',TEXT['carta'],encrypted=True);record('cifrato.pdf',True,'carta','PDF cifrato',True)
 (DEST/'legacy.doc').write_bytes(bytes.fromhex('d0cf11e0a1b11ae1')+b'fixture-not-a-document');record('legacy.doc',False,'problema','DOC non supportato',True)
+# Photo-like images without text (smooth upscaled noise) and a rotated document inside a larger photo.
+from PIL import ImageFilter
+import random
+random.seed(11)
+def photo(w,h):
+ im=Image.effect_noise((w//8,h//8),60).convert('RGB').resize((w,h),Image.BICUBIC)
+ return Image.merge('RGB',[c.point(lambda v,k=k:(v+k*40)%256) for k,c in enumerate(im.split())]).filter(ImageFilter.GaussianBlur(3))
+for i,(w,h) in enumerate([(1600,1200),(2400,1800)],1):
+ photo(w,h).save(DEST/f'foto-senza-testo-{i}.jpg',quality=88);record(f'foto-senza-testo-{i}.jpg',False,'negativo','JPEG foto senza testo',True)
+image(TEXT['carta']).rotate(90,expand=True).save(DEST/'carta-ruotata-90.png');record('carta-ruotata-90.png',True,'carta','PNG ruotato')
+scene=photo(2400,1800);doc=image(TEXT['patente']).resize((900,600)).rotate(270,expand=True);scene.paste(doc,(1200,500))
+scene.save(DEST/'documento-fotografato.jpg',quality=90);record('documento-fotografato.jpg',True,'patente','JPEG foto con documento')
 with zipfile.ZipFile(DEST/'archivio.zip','w') as z:z.writestr('../../outside.txt','synthetic')
 record('archivio.zip',False,'problema','ZIP non aperto',True)
 (ROOT/'fixtures'/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')

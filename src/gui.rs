@@ -79,6 +79,7 @@ pub struct App {
     ocr_present: bool,
     mark: egui::TextureHandle,
     signature: egui::TextureHandle,
+    stemma: egui::TextureHandle,
     zoom: f32,
     confirm: bool,
     previews: HashMap<PathBuf, Preview>,
@@ -166,6 +167,11 @@ impl App {
                 &cc.egui_ctx,
                 "realhcok-original",
                 include_bytes!("../assets/ui/realhcok-kit-white-720.png"),
+            ),
+            stemma: texture(
+                &cc.egui_ctx,
+                "stemma-comune-bondeno",
+                include_bytes!("../assets/ui/stemma-comune-bondeno.png"),
             ),
             zoom: 1.,
             confirm: false,
@@ -309,6 +315,14 @@ impl eframe::App for App {
                     let (mark, color) = if n < active { ("◉", Color32::from_rgb(103, 214, 191)) } else if n == active { ("●", ACCENT) } else { ("○", Color32::from_rgb(171, 193, 210)) };
                     ui.label(RichText::new(format!("{mark}  {label}")).font(semibold(16.)).color(color));
                 }
+                ui.add_space(24.);
+                // Stemma con scritta scura: su disco bianco per restare leggibile sul fondo blu.
+                ui.vertical_centered(|ui| {
+                    let (rect, response) = ui.allocate_exact_size(egui::vec2(140., 140.), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 70., Color32::WHITE);
+                    egui::Image::from_texture(&self.stemma).paint_at(ui, rect.shrink(4.));
+                    response.on_hover_text("Comune di Bondeno");
+                });
             });
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(24)).show(root,|ui| {
             egui::ScrollArea::vertical().show(ui,|ui| {
@@ -359,11 +373,13 @@ impl eframe::App for App {
                         ui.horizontal(|ui|{ui.label("Riferimento");ui.add(egui::TextEdit::singleline(&mut self.reference).desired_width(300.));});
                         ui.collapsing("Opzioni avanzate e limiti",|ui| {
                             ui.horizontal_wrapped(|ui| {ui.selectable_value(&mut self.settings.cpu_only,false,"Automatico");ui.selectable_value(&mut self.settings.cpu_only,true,"Solo CPU");});
+                            ui.checkbox(&mut self.settings.prefilter,"Prefiltro: salta l'OCR delle immagini senza tratti tipo testo (dichiarate nel verbale come scartate)");
                             ui.label(format!("Disponibile: CPU. Automatico: {} rilevato a runtime; Solo CPU: prodotto scalare generico per confronto. GPU/NPU non implementate. Nessun requisito AVX globale; AVX-512 non selezionata.",engine::cpu_method(false)));
                             ui.horizontal(|ui|{ui.label("MiB/file");ui.add(egui::DragValue::new(&mut self.settings.max_mb).range(1..=256));ui.label("Pagine/immagini");ui.add(egui::DragValue::new(&mut self.settings.max_pages).range(1..=500));});
                             ui.horizontal(|ui|{ui.label("Secondi/file");ui.add(egui::DragValue::new(&mut self.settings.timeout_secs).range(1..=1800));ui.label("MiB worker");ui.add(egui::DragValue::new(&mut self.settings.memory_mb).range(256..=2048));});
                             ui.horizontal(|ui|{ui.label("Limite file");ui.add(egui::DragValue::new(&mut self.settings.max_entries).range(1..=10_000_000));});
-                            ui.label("Concorrenza: 1 parser e 1 thread OCR, adatta anche a HDD. Nessuna cache; nessun temporaneo OCR su disco. Limiti di decodifica e Office descritti nel verbale.");
+                            ui.horizontal(|ui|{ui.label("Worker OCR in parallelo");ui.add(egui::DragValue::new(&mut self.settings.workers).range(1..=engine::physical_cores().max(1)));ui.label(format!("(core fisici: {}; ogni worker usa fino a {} MiB)",engine::physical_cores(),self.settings.memory_mb));});
+                            ui.label("Concorrenza: ogni worker e un processo separato con un thread OCR e il proprio limite di memoria. Su HDD lenti ridurre a 1. Nessuna cache; nessun temporaneo OCR su disco. Limiti di decodifica e Office descritti nel verbale.");
                             ui.label(format!("Storico essenziale: {}. Solo conteggi e limiti, senza contenuti o percorsi. ACL ereditate dal profilo; nessuna protezione contro amministratori.",engine::state_dir().display()));
                         });
                     });
@@ -381,6 +397,7 @@ impl eframe::App for App {
                         if running {let tick=self.started.map(|s|s.elapsed().as_millis()/self.repaint.as_millis()).unwrap_or(0) as usize;ui.horizontal(|ui|{ui.label(RichText::new(["◐","◓","◑","◒"][tick%4]).color(ACCENT));ui.label(&phase);});ui.label(current);}
                         let elapsed=if running {self.started.map(|s|s.elapsed().as_secs_f64()).unwrap_or(0.)}else{run.elapsed_secs};
                         ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Segnalati {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.findings.len(),elapsed));
+                        if run.timing.prefilter_skipped>0 {ui.label(format!("Immagini scartate dal prefiltro (senza OCR): {}",run.timing.prefilter_skipped));}
                         if !running {
                             ui.label(RichText::new(run.outcome()).font(semibold(21.)).color(if run.incomplete(){Color32::from_rgb(247,199,110)}else{ACCENT}));
                             for line in run.finding_summary(){ui.label(line);}

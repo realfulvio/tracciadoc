@@ -129,6 +129,35 @@ impl Drop for Ocr {
     }
 }
 
+pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
+
+/// Cheap pre-OCR check: at least one 1/64 region of the image (reduced to 1024 px) must contain
+/// sharp contrast edges like printed strokes. Calibrated on the synthetic corpus: text >= 0.10,
+/// smooth photos 0.00; the 0.02 threshold keeps a wide margin and a single small text area suffices.
+pub fn text_like(img: &DynamicImage) -> bool {
+    let g = img.thumbnail(1024, 1024).to_luma8();
+    let (w, h) = g.dimensions();
+    if w < 64 || h < 64 {
+        return true;
+    }
+    const T: u32 = 8;
+    let (tw, th) = ((w - 1) / T, (h - 1) / T);
+    let mut count = [[0u32; T as usize]; T as usize];
+    for y in 0..h - 1 {
+        let ty = (y / th).min(T - 1) as usize;
+        for x in 0..w - 1 {
+            let v = g.get_pixel(x, y)[0] as i16;
+            let dx = (v - g.get_pixel(x + 1, y)[0] as i16).abs();
+            let dy = (v - g.get_pixel(x, y + 1)[0] as i16).abs();
+            if dx.max(dy) > 32 {
+                count[ty][(x / tw).min(T - 1) as usize] += 1;
+            }
+        }
+    }
+    let best = count.iter().flatten().copied().max().unwrap_or(0);
+    best as f64 / (tw * th) as f64 >= 0.02
+}
+
 pub struct Parser {
     ocr: Option<Ocr>,
     ocr_error: Option<String>,
@@ -160,6 +189,16 @@ impl Parser {
             a.issues.push(self.ocr_error.clone().unwrap_or_default());
             return;
         };
+        if req.settings.prefilter {
+            let start = std::time::Instant::now();
+            let keep = text_like(&img);
+            a.timing.prefilter_ms += start.elapsed().as_secs_f64() * 1000.;
+            if !keep {
+                a.timing.prefilter_skipped += 1;
+                a.issues.push(PREFILTERED.into());
+                return;
+            }
+        }
         a.backend = ocr.backend.clone();
         let start = std::time::Instant::now();
         let mut current = img;

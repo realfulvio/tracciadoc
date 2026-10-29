@@ -14,6 +14,9 @@ pub struct Settings {
     /// Parallel parser/OCR processes, each in its own Windows Job.
     #[serde(default = "one")]
     pub workers: usize,
+    /// Skip OCR of images without text-like strokes (declared in the report).
+    #[serde(default)]
+    pub prefilter: bool,
 }
 fn one() -> usize {
     1
@@ -29,6 +32,7 @@ impl Default for Settings {
             max_entries: 1_000_000,
             memory_mb: 768,
             workers: crate::engine::default_workers(),
+            prefilter: true,
         }
     }
 }
@@ -54,6 +58,10 @@ pub struct Timing {
     /// Immagini/pagine in cui nessuna rotazione ha prodotto testo alfanumerico utile.
     pub ocr_blank_images: u64,
     pub ocr_blank_ms: f64,
+    #[serde(default)]
+    pub prefilter_ms: f64,
+    #[serde(default)]
+    pub prefilter_skipped: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -68,6 +76,8 @@ impl Timing {
         self.ocr_images += o.ocr_images;
         self.ocr_blank_images += o.ocr_blank_images;
         self.ocr_blank_ms += o.ocr_blank_ms;
+        self.prefilter_ms += o.prefilter_ms;
+        self.prefilter_skipped += o.prefilter_skipped;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

@@ -316,8 +316,10 @@ impl eframe::App for App {
                         let (run,phase,current)={let p=self.shared.lock().unwrap();(p.run.clone(),p.phase.clone(),p.current.clone())};
                         let text=diag::report(&self.gpu,&phase,&current,run.as_ref());
                         let kb=text.len().div_ceil(1024);
-                        ctx.copy_text(text);
-                        diag::info(format!("Diagnostica copiata negli appunti ({kb} KB)"));
+                        // Scrittura diretta negli appunti di Windows; se fallisce ripiega su egui.
+                        let direct=diag::copy_to_clipboard(&text);
+                        if !direct {ctx.copy_text(text);}
+                        diag::info(format!("Diagnostica copiata negli appunti ({kb} KB{})",if direct{""}else{", via egui"}));
                         self.copied=Some((format!("Diagnostica copiata negli appunti ({kb} KB): incollala nella chat"),Instant::now()));
                     }
                     if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start(None);}

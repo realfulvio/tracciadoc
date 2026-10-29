@@ -504,15 +504,19 @@ impl eframe::App for App {
                                 if ui.button("Annulla").clicked(){self.confirm=false;}
                             });
                         }
-                        egui::CollapsingHeader::new(format!("File segnalati ({}) - percorso e verifica manuale",run.findings.len())).id_salt("finding-files").default_open(true).show(ui,|ui|{
+                        egui::CollapsingHeader::new(format!("File segnalati ({}) - percorso e verifica manuale",run.remaining())).id_salt("finding-files").default_open(true).show(ui,|ui|{
                             // Al massimo 2 decodifiche per frame: la GUI resta reattiva anche con molti risultati.
                             let mut budget=2;
+                            let mut shown=0;
                             for (i,f) in run.findings.iter_mut().enumerate().take(5000) {
+                                // I file eliminati escono dalla lista: restano nel conteggio delle eliminazioni, nella console e nel verbale.
+                                if f.deleted(){continue;}
+                                shown+=1;
                                 let side=164.;
                                 if budget>0&&!self.previews.contains_key(&f.path)&&!f.deleted(){budget-=1;let pv=make_preview(&ctx,&f.path,&f.format);self.previews.insert(f.path.clone(),pv);ctx.request_repaint();}
                                 ui.horizontal_top(|ui| {
                                     ui.allocate_ui(egui::vec2((ui.available_width()-side-12.).max(260.),0.),|ui| { ui.vertical(|ui| {
-                                ui.label(RichText::new(format!("{}. {}",i+1,f.path.display())).font(semibold(16.)));
+                                ui.label(RichText::new(format!("{}. {}",shown,f.path.display())).font(semibold(16.)));
                                     ui.label(format!("Formato rilevato: {}",f.format));
                                     for reason in &f.reasons{ui.label(reason);}
                                     if f.deleted(){ui.label(RichText::new(format!("ELIMINATO definitivamente: {}",f.deleted_at)).color(ACCENT));}

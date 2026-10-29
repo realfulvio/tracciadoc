@@ -56,6 +56,16 @@ fn main() {
                     *field = n;
                 }
             }
+            if let Some(i) = args.iter().position(|s| s == "--workers") {
+                let n = args
+                    .get(i + 1)
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .ok_or("Numero worker non valido")?;
+                if !(1..=64).contains(&n) {
+                    return Err("Numero worker fuori intervallo".into());
+                }
+                settings.workers = n;
+            }
             if let Some(i) = args.iter().position(|s| s == "--max-pages") {
                 let n = args
                     .get(i + 1)

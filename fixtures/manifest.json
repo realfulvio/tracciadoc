@@ -150,7 +150,7 @@
     "file": "nome-errato.bin",
     "positive": true,
     "document_class": "carta",
-    "format": "PDF firma",
+    "format": "PNG firma",
     "limited": false
   },
   {

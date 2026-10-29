@@ -87,7 +87,8 @@ image(TEXT['sanitaria'],True).save(DEST/'poco-contrasto.bmp');record('poco-contr
 pdf('misto.pdf','Nota ordinaria: documento sintetico incorporato.',image(TEXT['patente']));record('misto.pdf',True,'patente','PDF misto')
 pdf('raster.pdf',img=image(TEXT['carta']));record('raster.pdf',True,'carta','PDF raster')
 office('immagine.docx','Nota ordinaria.',image(TEXT['carta']));record('immagine.docx',True,'carta','DOCX immagine')
-pdf('nome-errato.bin',TEXT['carta']);record('nome-errato.bin',True,'carta','PDF firma')
+# La regola 0.2.4 apre i .bin solo da 20 KB in su: un PNG rinominato lo supera, un PDF testuale no.
+image(TEXT['carta']).save(DEST/'nome-errato.bin',format='PNG');record('nome-errato.bin',True,'carta','PNG firma')
 image(TEXT['patente']).save(DEST/'senza-estensione',format='PNG');record('senza-estensione',True,'patente','PNG firma')
 image('APPUNTI DI RIUNIONE\nAcquisto materiali\nVerifica preventivi\nProssimo incontro').save(DEST/'appunti.png');record('appunti.png',False,'negativo','PNG')
 pdf('ordinario.pdf','Appunti di riunione. Acquisto materiali e verifica preventivi.');record('ordinario.pdf',False,'negativo','PDF')

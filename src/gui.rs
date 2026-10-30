@@ -494,7 +494,7 @@ impl eframe::App for App {
                     });
                 });
                 if self.console_open {
-                    egui::ScrollArea::vertical().id_salt("console-scroll").min_scrolled_height(if short { 60. } else { 132. }).max_height(if short { 60. } else { 132. }).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt("console-scroll").min_scrolled_height(if short { 40. } else { 132. }).max_height(if short { 40. } else { 132. }).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.;
                         for e in diag::recent(300) {
                             let color = match e.level {
@@ -578,20 +578,12 @@ impl eframe::App for App {
                     match active {
                         1 => {
                             let ready = !self.roots.is_empty() && !self.operator.trim().is_empty();
-                            ui.vertical(|ui| {
-                                ui.spacing_mut().item_spacing.y = 2.;
-                                if self.ocr_present {
-                                    chip(ui, "OCR offline pronto", ACCENT, true);
-                                } else {
-                                    chip(ui, "OCR NON DISPONIBILE: copertura incompleta", WARN, true);
-                                }
-                            });
-                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else { format!("{} aree selezionate", self.roots.len()) };
-                            ui.label(RichText::new(hint).weak());
+                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else if self.roots.len() == 1 { "1 area selezionata".to_string() } else { format!("{} aree selezionate", self.roots.len()) };
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                 if ui.add_enabled(ready, primary("Avvia verifica", h)).clicked() {
                                     self.start(None);
                                 }
+                                ui.add(egui::Label::new(RichText::new(hint).weak()).truncate());
                             });
                         }
                         2 => {
@@ -649,8 +641,10 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
+            // Larghezza utile calcolata fuori dallo scorrimento: dentro, un elemento troppo largo la farebbe crescere.
+            let content_w = (ui.available_width() - 16.).clamp(300., 1100.);
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                ui.set_max_width(1100.);
+                ui.set_max_width(content_w);
                 if !self.notice.is_empty() {
                     ui.label(RichText::new(&self.notice).color(WARN));
                 }
@@ -668,8 +662,8 @@ impl eframe::App for App {
                             let name = if text.starts_with("\\\\?\\Volume") { format!("Volume senza lettera  ·  {kind}") } else { format!("{}  ·  {kind}", text.trim_end_matches('\\')) };
                             areas.push((path.clone(), name));
                         }
-                        let columns = ((ui.available_width() + 12.) / 332.).floor().max(1.) as usize;
-                        let card_w = ((ui.available_width() - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
+                        let columns = ((content_w + 12.) / 332.).floor().max(1.) as usize;
+                        let card_w = ((content_w - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
                         egui::Grid::new("areas").spacing([12., 12.]).show(ui, |ui| {
                             for (n, (path, label)) in areas.into_iter().enumerate() {
                                 let on = self.roots.contains(&path);
@@ -704,13 +698,15 @@ impl eframe::App for App {
                         ui.add_space(14.);
                         card(ui, |ui| {
                             ui.label(RichText::new("DATI DEL VERBALE").size(12.).color(DIM));
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label("Operatore");
                                 ui.add(egui::TextEdit::singleline(&mut self.operator).hint_text("nome e cognome").desired_width(220.));
                                 ui.label("Riferimento");
                                 ui.add(egui::TextEdit::singleline(&mut self.reference).hint_text("facoltativo").desired_width(260.));
                             });
                         });
+                        ui.add_space(8.);
+                        if self.ocr_present { chip(ui, "OCR offline pronto", ACCENT, true); } else { chip(ui, "OCR NON DISPONIBILE: copertura incompleta", WARN, true); }
                         ui.add_space(6.);
                         ui.collapsing("Altre opzioni di selezione", |ui| {
                             ui.horizontal(|ui| {
@@ -763,7 +759,7 @@ impl eframe::App for App {
                                 let tick = self.started.map(|s| s.elapsed().as_millis() / self.repaint.as_millis()).unwrap_or(0) as usize;
                                 ui.label(RichText::new(["◐","◓","◑","◒"][tick % 4]).color(ACCENT));
                                 ui.label(RichText::new("ORA IN ESAME").size(12.).color(DIM));
-                                ui.add(egui::Label::new(RichText::new(&current).monospace().size(13.).weak()).truncate());
+                                ui.add(egui::Label::new(RichText::new(diag::mask(&current)).monospace().size(13.).weak()).truncate());
                             });
                         });
                         if let Some(run) = &run {
@@ -822,6 +818,7 @@ impl eframe::App for App {
                                             let w = (ui.available_width() - 190.).max(140.);
                                             ui.allocate_ui(egui::vec2(w, 0.), |ui| {
                                                 ui.vertical(|ui| {
+                                                    ui.set_min_width(w);
                                                     ui.spacing_mut().item_spacing.y = 3.;
                                                     ui.horizontal(|ui| {
                                                         let name = f.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| f.path.display().to_string());

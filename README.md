@@ -42,6 +42,20 @@ Le fototessere e i semplici dati anagrafici sparsi nei file (un nome, un codice 
 
 L'esito **«nessun documento rilevato»** compare solo a copertura completa: errori, accessi negati e limiti raggiunti sono dichiarati e rendono la verifica incompleta.
 
+## Com'è fatto
+
+<p align="center">
+  <img src="docs/img/gui-scansione.png" alt="Scansione in corso con indicatore di avanzamento" width="49%">
+  <img src="docs/img/gui-segnalazioni.png" alt="Elenco delle segnalazioni con anteprime sfocate" width="49%">
+</p>
+<p align="center"><sub>Scansione in corso e revisione delle segnalazioni, su file sintetici di prova.</sub></p>
+
+<p align="center">
+  <img src="docs/img/gui-verbale.png" alt="Verifica finale dopo la ri-scansione" width="49%">
+  <img src="docs/img/verbale-esempio.png" alt="Pagina del verbale PDF di esempio" width="38%">
+</p>
+<p align="center"><sub>Verifica finale e prima pagina del verbale PDF (esempio dimostrativo).</sub></p>
+
 ## Sotto il cofano
 
 - **Rust**, eseguibile portatile con GUI nativa (egui) su DirectX 12; con PC senza driver video usa l'adattatore software WARP, con OpenGL come ripiego. Nessuna installazione, nessun Python, nessun Internet.

@@ -56,7 +56,7 @@ Scale UI 100%, 125%, 150% e 200% controllate visivamente in finestre Windows rea
 
 ## Limiti ancora presenti
 
-Il corpus e piccolo e sintetico; nessuna scansione di documenti reali eseguita. Nessun confronto hardware su HDD, altro PC o CPU priva di AVX2; SSE, AVX-512, GPU e NPU non collaudati come percorsi accelerati alternativi. GIF/TIFF: prima immagine; DOC/XLS/PPT legacy, archivi generici, OLE/macro, cifratura e risorse esterne non analizzati. Rotazioni ortogonali provate, deskew e prospettiva non implementati. Documenti e parti illeggibili o oltre limite rendono la verifica incompleta.
+Il corpus e piccolo e sintetico; nessuna scansione di documenti reali eseguita. Nessun confronto hardware su HDD, altro PC o CPU priva di AVX2; SSE, AVX-512, GPU e NPU non collaudati come percorsi accelerati alternativi. GIF/TIFF: prima immagine; XLS/PPT legacy, archivi generici, OLE/macro, cifratura e risorse esterne non analizzati. Rotazioni ortogonali provate, deskew e prospettiva non implementati. Documenti e parti illeggibili o oltre limite rendono la verifica incompleta.
 
 Il parser mantiene i privilegi dell'operatore: Windows Job e processo separato non sono una sandbox di sicurezza. Nessuno snapshot o protezione contro modifiche concorrenti intenzionali del filesystem. Nessuna firma Authenticode o sottoscrizione digitale automatica del verbale. Firma del responsabile e accettazione Lepida restano decisioni esterne al programma.
 

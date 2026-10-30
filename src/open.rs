@@ -17,7 +17,8 @@ fn safe_extension(f: &Finding) -> bool {
         "gif" => ext == "gif",
         "tiff" => ["tif", "tiff"].contains(&ext.as_str()),
         "office xml / zip" => ["docx", "xlsx", "pptx", "odt", "ods", "odp"].contains(&ext.as_str()),
-        "testo utf-8" => ["txt", "csv", "tsv", "log", "md", "rtf"].contains(&ext.as_str()),
+        "word doc" => ext == "doc",
+        "testo utf-8" => ["txt", "csv", "tsv", "log", "md", "rtf", "doc"].contains(&ext.as_str()),
         _ => false,
     }
 }

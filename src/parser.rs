@@ -201,7 +201,7 @@ pub const INTERRUPTED: &str = "Verifica interrotta";
 
 const WANTED_EXT: &[&str] = &[
     "jpg", "jpeg", "jfif", "png", "bmp", "tif", "tiff", "gif", "webp", "heic", "heif", "pdf",
-    "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf",
+    "doc", "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf",
 ];
 /// Extensions of files that are often renamed scans or have no type at all: only these are sniffed.
 const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp"];
@@ -568,6 +568,20 @@ impl Parser {
         a.reasons.extend(rules::detect(&text));
         Ok(())
     }
+    /// Word 97-2003 (.doc): testo dalla tabella dei pezzi, immagini incorporate all'OCR.
+    fn legacy_doc(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) -> Result<(), String> {
+        let doc = crate::doc::read(bytes)?;
+        a.reasons.extend(rules::detect(&doc.text));
+        a.issues.extend(doc.issues);
+        for (n, image) in doc.images.iter().enumerate() {
+            if n >= req.settings.max_pages {
+                a.issues.push("Office: limite immagini raggiunto".into());
+                break;
+            }
+            self.image_bytes(image, a, req);
+        }
+        Ok(())
+    }
     pub fn analyze(&mut self, req: &Request) -> Analysis {
         let mut a = Analysis {
             backend: "CPU / estrazione testuale".into(),
@@ -605,8 +619,11 @@ impl Parser {
             // I lettori PDF accettano byte spuri prima dell'intestazione.
             let is_pdf = head.starts_with(b"%PDF-")
                 || (!is_zip && img.is_none() && head.windows(5).any(|w| w == b"%PDF-"));
-            let text_ext = ext == "rtf";
-            if !is_pdf && !is_zip && img.is_none() && !text_ext {
+            // Un .doc puo essere un vero Word binario (OLE) oppure un RTF salvato con quell'estensione.
+            let is_doc = ext == "doc" && head.starts_with(&crate::doc::SIGNATURE);
+            let is_rtf = head.starts_with(b"{\\rtf");
+            let text_ext = ext == "rtf" || (ext == "doc" && is_rtf);
+            if !is_pdf && !is_zip && img.is_none() && !text_ext && !is_doc {
                 return Err(unrecognized(&ext, head).into());
             }
             let cap = if text_ext && !is_pdf && !is_zip && img.is_none() {
@@ -630,6 +647,10 @@ impl Parser {
                 a.supported = true;
                 a.format = "Office XML / ZIP".into();
                 self.office(&bytes, &mut a, req)?;
+            } else if is_doc {
+                a.supported = true;
+                a.format = "Word DOC".into();
+                self.legacy_doc(&bytes, &mut a, req)?;
             } else if let Some(image_format) = img {
                 a.supported = true;
                 a.format = format!("{image_format:?}");
@@ -651,7 +672,7 @@ impl Parser {
                     Ok(s) => a.reasons.extend(rules::detect(&s)),
                     Err(_) => return Err("Codifica testo non UTF-8".into()),
                 }
-                if ext == "rtf" {
+                if ext == "rtf" || is_rtf {
                     a.issues
                         .push("RTF: solo testo grezzo, oggetti non analizzati".into());
                 }

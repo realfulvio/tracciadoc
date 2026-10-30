@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.7 - in preparazione
+## 0.2.7 - 2026-10-30
 
 - Lettura dei vecchi documenti Word `.doc` (binario OLE, Word 97-2003 e successivi, anche Word 6/95), scritta in Rust senza dipendenze nuove: il testo viene estratto dalla tabella dei pezzi (corpo, intestazioni, note, caselle di testo) e analizzato con le regole esistenti; le immagini incorporate (JPEG, PNG, TIFF, DIB, inline e mobili) vanno all'OCR come quelle dei `.docx`. Prima i `.doc` finivano in "formato non supportato".
 - Restano segnalati come verifica incompleta: `.doc` cifrati con password, immagini vettoriali EMF/WMF/PICT, oggetti OLE incorporati e macro, file corrotti. Un `.doc` che in realtà è un RTF viene letto come RTF.

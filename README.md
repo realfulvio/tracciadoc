@@ -6,7 +6,7 @@
 
 MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei file locali e produrre un verbale PDF. Repository **privato**, sorgenti MIT. Nessuna scansione automatica, telemetria o elaborazione cloud.
 
-**[Scarica TracciaDoc 0.2.6 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.6/TracciaDoc-0.2.6-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.6) · [Changelog](CHANGELOG.md)
+**[Scarica TracciaDoc 0.2.7 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.7/TracciaDoc-0.2.7-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.7) · [Changelog](CHANGELOG.md)
 
 ## Avvio rapido
 
@@ -50,7 +50,8 @@ Formati e limiti esatti: [istruzioni](docs/ISTRUZIONI.txt). Componenti, licenze 
 
 ## Collaudo e prestazioni documentate
 
-- 0.2.6 sulla VM Windows 11: 11 test Rust, Clippy `-D warnings`, `validate.py` (23 positivi rilevati su 23 analizzabili, nessun falso positivo) ed `edge_tests.py` passati; corpus di stress di 3.424 file sintetici in circa 15 s con 3 worker.
+- 0.2.7 sulla VM Windows 11: 17 test Rust (6 nuovi sui `.doc`), Clippy `-D warnings`, `validate.py` (25 positivi rilevati su 25 analizzabili, inclusi `documento.doc` e `immagine.doc`, nessun falso positivo) ed `edge_tests.py` passati. Il corpus di stress da 3.424 file della 0.2.6 non è stato rieseguito.
+- 0.2.6 sulla VM: corpus di stress di 3.424 file sintetici in circa 15 s con 3 worker.
 - Corpus sintetico di **37 file**: 27 positivi analizzabili rilevati, 6 negativi senza segnalazioni e 4 casi con limiti. Fra questi ultimi c'è un ulteriore positivo cifrato non analizzato: **27 rilevati su 28 positivi noti complessivi**.
 - Stesse motivazioni sui percorsi generico e AVX2; fixture invariate dopo i controlli.
 - Prove interattive Windows di selezione, avanzamento, interruzione, apertura file/cartella, controllo manuale, PDF e scala dell'interfaccia.

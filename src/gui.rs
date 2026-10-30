@@ -110,6 +110,10 @@ fn it_num(n: u64) -> String {
     }
     out
 }
+/// "1 area" / "2 aree": singolare e plurale.
+fn plural(n: usize, one: &str, many: &str) -> String {
+    if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
+}
 fn it_eta(secs: f64) -> String {
     let s = secs.ceil() as u64;
     if s < 60 {
@@ -462,7 +466,7 @@ impl eframe::App for App {
         egui::Panel::bottom("console")
             .frame(egui::Frame::new().fill(Color32::from_rgb(14, 16, 19)).inner_margin(egui::Margin::symmetric(16, 8)))
             .show(root, |ui| {
-                ui.horizontal(|ui| {
+                ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 30.), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let arrow = if self.console_open { "▾" } else { "▸" };
                     if ui.add(egui::Button::new(RichText::new(format!("{arrow} Console")).font(semibold(15.))).frame(false)).clicked() {
                         self.console_open = !self.console_open;
@@ -578,18 +582,20 @@ impl eframe::App for App {
                     match active {
                         1 => {
                             let ready = !self.roots.is_empty() && !self.operator.trim().is_empty();
-                            ui.vertical(|ui| {
+                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else { plural(self.roots.len(), "area selezionata", "aree selezionate") };
+                            let button_w = if ui.available_width() < 560. { 170. } else { 220. };
+                            let left_w = (ui.available_width() - button_w - 16.).max(60.);
+                            ui.allocate_ui_with_layout(egui::vec2(left_w, h), egui::Layout::top_down(egui::Align::Min), |ui| {
                                 ui.spacing_mut().item_spacing.y = 2.;
                                 if self.ocr_present {
                                     chip(ui, "OCR offline pronto", ACCENT, true);
                                 } else {
-                                    chip(ui, "OCR NON DISPONIBILE: copertura incompleta", WARN, true);
+                                    chip(ui, "OCR NON DISPONIBILE", WARN, true);
                                 }
+                                ui.add(egui::Label::new(RichText::new(hint).weak()).truncate());
                             });
-                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else { format!("{} aree selezionate", self.roots.len()) };
-                            ui.label(RichText::new(hint).weak());
                             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                if ui.add_enabled(ready, primary("Avvia verifica", h)).clicked() {
+                                if ui.add_enabled(ready, primary("Avvia verifica", h).min_size(egui::vec2(button_w, h))).clicked() {
                                     self.start(None);
                                 }
                             });
@@ -615,7 +621,7 @@ impl eframe::App for App {
                                             match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;diag::ok(format!("ELIMINATO {}",diag::shown(&f.path)));},Err(e)=>{diag::err(format!("Eliminazione fallita {} · {e}",diag::shown(&f.path)));f.delete_error=e}}
                                         }
                                         let _=engine::audit(run,"delete");diag::info(format!("Eliminazione definitiva: eliminati {}, residui {}",run.deleted_count(),run.remaining()));
-                                        self.notice=format!("Eliminati {} file; residui {}. Eseguire la ri-scansione di verifica.",run.deleted_count(),run.remaining());
+                                        self.notice=format!("{} eliminati; {} residui. Eseguire la ri-scansione di verifica.",plural(run.deleted_count(),"file","file"),run.remaining());
                                         self.confirm=false;
                                     }
                                     if ui.add(egui::Button::new("Annulla").min_size(egui::vec2(0., h))).clicked() { self.confirm = false; }
@@ -625,7 +631,7 @@ impl eframe::App for App {
                                 if ui.add_enabled(open > 0, egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
                                     for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
                                 }
-                                ui.label(RichText::new(format!("{selected} selezionati")).weak());
+                                ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
                                     if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {
@@ -638,7 +644,7 @@ impl eframe::App for App {
                                         let btn = if resolved && run.deleted_count() == 0 || active == 4 { primary("Genera verbale PDF...", h) } else { egui::Button::new("Genera verbale PDF...").min_size(egui::vec2(0., h)) };
                                         if ui.add(btn).clicked()
                                             && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(format!("Verbale-TracciaDoc-{}.pdf",run.id)).save_file() {
-                                                match report::write(run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",path.display());diag::ok(format!("Verbale PDF salvato: {}",diag::shown(&path)));let _=engine::audit(run,"pdf-export");},Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}}
+                                                match report::write(run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",diag::shown(&path));diag::ok(format!("Verbale PDF salvato: {}",diag::shown(&path)));let _=engine::audit(run,"pdf-export");},Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}}
                                             }
                                     }
                                 });
@@ -650,7 +656,8 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                ui.set_max_width(1100.);
+                // set_max_width(1100) da solo allargava l'ui oltre il pannello nelle finestre strette.
+                ui.set_max_width(ui.available_width().min(1100.));
                 if !self.notice.is_empty() {
                     ui.label(RichText::new(&self.notice).color(WARN));
                 }
@@ -668,8 +675,9 @@ impl eframe::App for App {
                             let name = if text.starts_with("\\\\?\\Volume") { format!("Volume senza lettera  ·  {kind}") } else { format!("{}  ·  {kind}", text.trim_end_matches('\\')) };
                             areas.push((path.clone(), name));
                         }
-                        let columns = ((ui.available_width() + 12.) / 332.).floor().max(1.) as usize;
-                        let card_w = ((ui.available_width() - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
+                        let usable = ui.available_width().max(240.);
+                        let columns = ((usable + 12.) / 332.).floor().max(1.) as usize;
+                        let card_w = ((usable - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
                         egui::Grid::new("areas").spacing([12., 12.]).show(ui, |ui| {
                             for (n, (path, label)) in areas.into_iter().enumerate() {
                                 let on = self.roots.contains(&path);
@@ -681,10 +689,11 @@ impl eframe::App for App {
                                     .inner_margin(egui::Margin::symmetric(16, 12))
                                     .show(ui, |ui| {
                                         ui.set_width(card_w - 34.);
-                                        ui.checkbox(&mut v, RichText::new(label).font(semibold(18.)));
+                                        ui.set_max_width(card_w - 34.);
+                                        ui.checkbox(&mut v, RichText::new(label).font(semibold(if card_w < 340. { 15. } else { 18. })));
                                     })
                                     .response
-                                    .on_hover_text(path.to_string_lossy());
+                                    .on_hover_text(diag::shown(&path));
                                 if v != on {
                                     if v { self.add(path); } else { self.roots.retain(|r| r != &path); }
                                 }
@@ -695,7 +704,7 @@ impl eframe::App for App {
                         for (i, p) in self.roots.iter().enumerate() {
                             if self.volumes.iter().any(|(v, _)| v == p) { continue; }
                             ui.horizontal(|ui| {
-                                ui.label(p.to_string_lossy());
+                                ui.label(diag::shown(p));
                                 if ui.small_button("Rimuovi").clicked() { remove = Some(i); }
                             });
                         }
@@ -704,7 +713,7 @@ impl eframe::App for App {
                         ui.add_space(14.);
                         card(ui, |ui| {
                             ui.label(RichText::new("DATI DEL VERBALE").size(12.).color(DIM));
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label("Operatore");
                                 ui.add(egui::TextEdit::singleline(&mut self.operator).hint_text("nome e cognome").desired_width(220.));
                                 ui.label("Riferimento");
@@ -763,7 +772,7 @@ impl eframe::App for App {
                                 let tick = self.started.map(|s| s.elapsed().as_millis() / self.repaint.as_millis()).unwrap_or(0) as usize;
                                 ui.label(RichText::new(["◐","◓","◑","◒"][tick % 4]).color(ACCENT));
                                 ui.label(RichText::new("ORA IN ESAME").size(12.).color(DIM));
-                                ui.add(egui::Label::new(RichText::new(&current).monospace().size(13.).weak()).truncate());
+                                ui.add(egui::Label::new(RichText::new(diag::mask(&current)).monospace().size(13.).weak()).truncate());
                             });
                         });
                         if let Some(run) = &run {
@@ -819,8 +828,9 @@ impl eframe::App for App {
                                                     ui.painter().text(rect.center_bottom() - egui::vec2(0., 4.), egui::Align2::CENTER_BOTTOM, "passa sopra", egui::FontId::proportional(11.), Color32::WHITE);
                                                 }
                                             }
-                                            let w = (ui.available_width() - 190.).max(140.);
+                                            let w = (ui.available_width() - 200.).max(100.);
                                             ui.allocate_ui(egui::vec2(w, 0.), |ui| {
+                                                ui.set_width(w);
                                                 ui.vertical(|ui| {
                                                     ui.spacing_mut().item_spacing.y = 3.;
                                                     ui.horizontal(|ui| {
@@ -828,7 +838,7 @@ impl eframe::App for App {
                                                         ui.add(egui::Label::new(RichText::new(name).font(semibold(19.))).truncate());
                                                         chip(ui, kind, color, true);
                                                     });
-                                                    ui.add(egui::Label::new(RichText::new(f.path.display().to_string()).monospace().size(12.5).weak()).truncate());
+                                                    ui.add(egui::Label::new(RichText::new(diag::shown(&f.path)).monospace().size(12.5).weak()).truncate());
                                                     if let Some(reason) = f.reasons.first() {
                                                         ui.add(egui::Label::new(RichText::new(reason).small()).truncate()).on_hover_text(f.reasons.join("\n"));
                                                     }
@@ -857,7 +867,7 @@ impl eframe::App for App {
                                 ui.collapsing("Riepilogo", |ui| { for line in run.finding_summary() { ui.label(line); } });
                             }
                             if !run.issues.is_empty() {
-                                ui.collapsing(format!("Errori e limiti ({} categorie)", run.issues.len()), |ui| { for (s, n) in &run.issues { ui.label(format!("{n} - {s}")); } });
+                                ui.collapsing(format!("Errori e limiti ({})", plural(run.issues.len(), "categoria", "categorie")), |ui| { for (s, n) in &run.issues { ui.label(format!("{n} - {s}")); } });
                             }
                             ui.collapsing("Opzioni del verbale", |ui| {
                                 ui.checkbox(&mut self.include_paths, "Includi percorsi dei file segnalati nel PDF (possono contenere dati personali)");

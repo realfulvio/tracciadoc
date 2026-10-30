@@ -272,8 +272,10 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
         for (index, lines) in pages.into_iter().enumerate() {
             let mut page = doc.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
             page.set_content_regeneration_strategy(PdfPageContentRegenerationStrategy::Manual);
-            if index == 0 {
-                if let Some(logo) = org_logo() {
+            if index == 0
+                && let Some(logo) = org_logo()
+            {
+                {
                     // Logo on the white page: alpha flattened on white, PDF images have no transparency.
                     let mut flat = image::RgbImage::from_pixel(logo.width(), logo.height(), image::Rgb([255, 255, 255]));
                     for (x, y, p) in logo.enumerate_pixels() {

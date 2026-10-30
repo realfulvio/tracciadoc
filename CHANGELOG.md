@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.6 - 2026-10-30
+
+Correzioni dal collaudo sulla VM Windows 11 (corpus sintetico di stress con 3.424 file: scansioni ad alta risoluzione, file corrotti o con estensione ingannevole, Office protetto da password, HEIC, PDF lunghi, nomi Unicode, percorsi oltre 260 caratteri, migliaia di file).
+
+- File con estensione di un formato cercato ma contenuto non riconosciuto (foto `.heic`, `.docx` protetto da password o in formato OLE, `.jpg`/`.pdf` corrotti o rinominati) non vengono più contati in silenzio come "ignorati per tipo": sono saltati con un motivo esplicito e la verifica risulta incompleta. Restano ignorati i file senza estensione significativa (.dat, .tmp, ...) che non contengono un formato di interesse.
+- Le scansioni A4 a 600 dpi (4960x7016) erano scartate come "immagine corrotta" per il limite di 7000 px: il limite passa a 10000 px per lato (sempre entro 128 MiB decodificati) e le immagini oltre 3600 px vengono ridotte prima dell'OCR (circa 300 dpi).
+- PDF con byte spuri prima dell'intestazione `%PDF-` riconosciuti come PDF.
+- Regole 2026.10.30-1: le etichette dei campi contano solo a inizio parola. Prima "COGNOME" contava anche come "NOME" e "SURNAME" come "NAME", e un modulo che chiede di allegare la carta d'identità con un codice pratica veniva segnalato come documento.
+- Avvisi di enumerazione (accesso negato, collegamenti, file cloud/EFS) limitati a 50 per tipo nel log, con il percorso del file; prima ogni voce scriveva una riga.
+- Conteggio preliminare dell'avanzamento allineato al limite file (contava un file in meno).
+- GUI a finestra piccola (minimo 640x540) e su schermi 1024x768: footer su una riga ("Interrompi" prende il posto di "Avvia verifica"), console ridotta, indicatore a cerchio più piccolo, anteprime nascoste quando non c'è spazio; la finestra ripristinata misura 980x660 e non esce più dallo schermo.
+- "Apri file" accetta anche le immagini `.jfif`.
+- Generare il verbale su un file esistente dà un messaggio chiaro invece dell'errore di sistema.
+- Clippy `-D warnings` torna pulito con Rust 1.99 (`needless_borrow` in engine.rs).
+- `edge_tests.py`: il caso `memory` usa un raster 6400x6400 e un limite di 96 MiB; a 64 MiB anche l'OCR di una piccola immagine (motori ita+eng e OSD, ~90 MiB) non entrava più, e il test falliva sul file che doveva riuscire.
+
 ## 0.2.5 - 2026-10-29
 
 - Indicatore di avanzamento nella barra laterale: cerchio che si riempie con la percentuale, file esaminati/totale, file al secondo e tempo residuo. Il totale viene da un conteggio preliminare in parallelo (solo nomi e dimensioni, niente lettura dei file): finché non è finito la percentuale è indicata con "~", il totale con "+" e il tempo residuo resta "-". Non arriva al 100% finché la scansione non è conclusa.

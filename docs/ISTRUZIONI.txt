@@ -39,9 +39,15 @@ Formati: PDF, PNG/JPEG/BMP/WebP, GIF/TIFF (solo prima immagine),
 DOCX/XLSX/PPTX, ODT/ODS/ODP, RTF (solo testo grezzo).
 I file di solo testo (TXT, CSV, TSV, LOG, MD) non vengono analizzati.
 Office: XML e immagini raster incorporate.
-Legacy DOC/XLS/PPT, archivi generici, OLE, macro, file cifrati/non locali
-e parti non supportate non vengono ignorati: generano limiti visibili.
-Le firme dei formati sono controllate anche con estensione errata/assente.
+Legacy DOC/XLS/PPT, archivi generici (.zip, .7z...) e gli altri tipi non
+cercati sono solo contati come "ignorati per tipo". Office protetto da
+password o OLE con estensione moderna, HEIC/HEIF, file corrotti o con
+contenuto diverso dall'estensione, OLE/macro, file cifrati/non locali e
+parti non supportate generano limiti visibili (verifica incompleta).
+Firma controllata anche per i file senza estensione o con estensione
+generica (.dat, .tmp, .bak, .bin, .old, .cache, .temp) da 20 KB in su.
+Immagini fino a 10000 px per lato e 128 MiB decodificati; oltre 3600 px
+vengono ridotte prima dell'OCR (scansioni A4 a 600 dpi comprese).
 Le immagini a basso contrasto e ruotate sono euristiche: non e garantito
 il riconoscimento in ogni condizione (es. inclinazione, ritagli, grafia).
 
@@ -51,7 +57,9 @@ le stesse regole. GPU, NPU e AVX-512 non sono implementate/selezionate.
 La GUI usa DirectX 12 e, senza driver video del produttore, l'adattatore software WARP di Windows; ripiego automatico su OpenGL 3.3. Non installa driver.
 Non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract.
 
-Nessuna modifica, cancellazione, quarantena o invio dei documenti.
+Nessuna modifica, quarantena o invio dei documenti. L'eliminazione
+definitiva avviene solo sui file segnalati selezionati dall'operatore,
+dopo conferma esplicita.
 Il processo separato con limiti Windows Job non e una sandbox di sicurezza.
 L'app non garantisce coerenza temporale dell'intero disco durante la ricerca.
 I duplicati sono rianalizzati; tutti i percorsi incontrati restano disponibili.

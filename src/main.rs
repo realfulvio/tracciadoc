@@ -171,7 +171,8 @@ fn gui_run(renderer: eframe::Renderer) -> eframe::Result {
     }));
     let native = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
-            .with_inner_size([1180., 820.])
+            // Dimensione al ripristino dalla finestra massimizzata: deve stare anche su 1024x768 / 1366x768.
+            .with_inner_size([980., 660.])
             .with_maximized(true)
             .with_min_inner_size([640., 540.])
             .with_icon({

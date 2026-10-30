@@ -11,7 +11,7 @@ fn safe_extension(f: &Finding) -> bool {
     match f.format.to_ascii_lowercase().as_str() {
         "pdf" => ext == "pdf",
         "png" => ext == "png",
-        "jpeg" => ["jpg", "jpeg"].contains(&ext.as_str()),
+        "jpeg" => ["jpg", "jpeg", "jfif"].contains(&ext.as_str()),
         "bmp" => ext == "bmp",
         "webp" => ext == "webp",
         "gif" => ext == "gif",

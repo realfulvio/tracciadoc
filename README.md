@@ -6,7 +6,7 @@
 
 MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei file locali e produrre un verbale PDF. Repository **privato**, sorgenti MIT. Nessuna scansione automatica, telemetria o elaborazione cloud.
 
-**[Scarica TracciaDoc 0.2.4 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.4/TracciaDoc-0.2.4-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.4) · [Changelog](CHANGELOG.md)
+**[Scarica TracciaDoc 0.2.6 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.6/TracciaDoc-0.2.6-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.6) · [Changelog](CHANGELOG.md)
 
 ## Avvio rapido
 
@@ -50,7 +50,7 @@ Formati e limiti esatti: [istruzioni](docs/ISTRUZIONI.txt). Componenti, licenze 
 
 ## Collaudo e prestazioni documentate
 
-- 6 test Rust e Clippy passati, build release nativa Windows.
+- 0.2.6 sulla VM Windows 11: 11 test Rust, Clippy `-D warnings`, `validate.py` (23 positivi rilevati su 23 analizzabili, nessun falso positivo) ed `edge_tests.py` passati; corpus di stress di 3.424 file sintetici in circa 15 s con 3 worker.
 - Corpus sintetico di **37 file**: 27 positivi analizzabili rilevati, 6 negativi senza segnalazioni e 4 casi con limiti. Fra questi ultimi c'è un ulteriore positivo cifrato non analizzato: **27 rilevati su 28 positivi noti complessivi**.
 - Stesse motivazioni sui percorsi generico e AVX2; fixture invariate dopo i controlli.
 - Prove interattive Windows di selezione, avanzamento, interruzione, apertura file/cartella, controllo manuale, PDF e scala dell'interfaccia.
@@ -63,7 +63,7 @@ Sono risultati del collaudo di sviluppo su un corpus piccolo e sintetico, non st
 
 ## Limiti da conoscere
 
-AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; legacy DOC/XLS/PPT, archivi generici, cifrati, OLE/macro e risorse esterne non vengono analizzati. Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
+AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; HEIC/HEIF, legacy DOC/XLS/PPT, archivi generici, cifrati, OLE/macro e risorse esterne non vengono analizzati (HEIC e Office protetti con estensione moderna rendono la verifica incompleta). Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
 
 Il parser mantiene i privilegi dell'operatore: processo separato e Windows Job **non sono una sandbox di sicurezza**. Non c'è uno snapshot coerente dell'intero disco. L'esito non garantisce l'assenza di documenti né un'approvazione o accettazione di Lepida.
 

@@ -118,7 +118,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP; GIF/TIFF solo prima immagine (limite segnalato). DOCX/XLSX/PPTX e ODT/ODS/ODP: XML e immagini raster incorporate. RTF solo testo grezzo. I file di solo testo (TXT, CSV, LOG, MD) non vengono analizzati: non contengono copie di documenti. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR.".into(),9.);
     add(
         format!(
-            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 7000 px/lato e 128 MiB. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",
+            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 10000 px/lato e 128 MiB decodificati, OCR a 3600 px/lato al massimo. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",
             run.settings.max_mb,
             run.settings.max_pages,
             run.settings.timeout_secs,
@@ -328,6 +328,10 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
         temp.persist_noclobber(path)?;
         Ok(())
     };
+    if path.exists() {
+        // Anche se la finestra di salvataggio ha chiesto conferma: un verbale non si sovrascrive.
+        return Err("Esiste gia un file con questo nome: il verbale non viene sovrascritto, scegli un altro nome".into());
+    }
     write_pdf().map_err(|e| format!("Impossibile creare il PDF: {e}"))
 }
 

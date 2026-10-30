@@ -144,9 +144,9 @@ fn ring(ui: &mut egui::Ui, size: f32, frac: f32, text: &str) {
 fn stat(ui: &mut egui::Ui, label: &str, value: String) {
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.y = 2.;
-        ui.label(RichText::new(label).small().weak());
+        ui.label(RichText::new(label).size(14.).weak());
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(RichText::new(value).small().font(semibold(13.)));
+            ui.label(RichText::new(value).font(semibold(14.5)));
         });
     });
 }
@@ -170,7 +170,7 @@ fn step_row(ui: &mut egui::Ui, n: u32, label: &str, active: u32) {
     } else {
         painter.text(c, egui::Align2::CENTER_CENTER, n.to_string(), semibold(13.), if n == active { Color32::from_rgb(6, 49, 42) } else { text_color });
     }
-    painter.text(egui::pos2(rect.left() + 44., rect.center().y), egui::Align2::LEFT_CENTER, label, semibold(16.), text_color);
+    painter.text(egui::pos2(rect.left() + 44., rect.center().y), egui::Align2::LEFT_CENTER, label, semibold(17.), text_color);
 }
 /// Etichetta arrotondata: stato, tipo di documento, accelerazione.
 fn chip(ui: &mut egui::Ui, text: &str, color: Color32, strong: bool) {
@@ -180,7 +180,7 @@ fn chip(ui: &mut egui::Ui, text: &str, color: Color32, strong: bool) {
         .corner_radius(99)
         .inner_margin(egui::Margin::symmetric(9, 1))
         .show(ui, |ui| {
-            ui.label(RichText::new(text).size(12.5).font(semibold(12.5)).color(color));
+            ui.label(RichText::new(text).font(semibold(13.5)).color(color));
         });
 }
 fn heading(ui: &mut egui::Ui, title: &str, sub: &str) {
@@ -256,6 +256,7 @@ impl App {
             style.spacing.button_padding = egui::vec2(16., 10.);
             style.visuals.panel_fill = BG;
             style.visuals.window_fill = SURFACE;
+            style.visuals.extreme_bg_color = Color32::from_rgb(20, 22, 26);
             style.visuals.override_text_color = Some(Color32::from_rgb(236, 239, 242));
             style.visuals.weak_text_color = Some(Color32::from_rgb(154, 164, 173));
             style.visuals.selection.bg_fill = Color32::from_rgb(24, 70, 63);
@@ -493,7 +494,7 @@ impl eframe::App for App {
                     });
                 });
                 if self.console_open {
-                    egui::ScrollArea::vertical().id_salt("console-scroll").max_height(if short { 60. } else { 132. }).auto_shrink([false, true]).stick_to_bottom(true).show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt("console-scroll").min_scrolled_height(if short { 60. } else { 132. }).max_height(if short { 60. } else { 132. }).auto_shrink([false, false]).stick_to_bottom(true).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.;
                         for e in diag::recent(300) {
                             let color = match e.level {
@@ -530,7 +531,7 @@ impl eframe::App for App {
                 if shown {
                     ui.vertical_centered(|ui| {
                         ring(ui, if ui.available_height() < 400. { 76. } else { 104. }, frac, &ring_text);
-                        ui.label(RichText::new(ring_label).small().weak());
+                        ui.label(RichText::new(ring_label).size(14.).weak());
                     });
                     ui.add_space(2.);
                     stat(ui, "File", files_text.clone());
@@ -539,34 +540,30 @@ impl eframe::App for App {
                         stat(ui, "Tempo residuo", eta_text.clone());
                     }
                 }
-                // Dal basso: firma, poi accelerazioni (grigie se inattive, verdi se usate nella scansione).
+                // Accelerazioni subito sotto le statistiche: grigie se inattive, verdi se usate nella scansione.
+                ui.add_space(14.);
+                ui.label(RichText::new("ACCELERAZIONI").size(11.5).color(DIM));
+                let method = engine::cpu_method(self.settings.cpu_only);
+                let items = [
+                    ("SSE4.2", running && (method == "avx2" || method == "sse")),
+                    ("AVX2", running && method == "avx2"),
+                    ("AVX-512", false),
+                    ("GPU", false),
+                    ("iGPU", false),
+                    ("NPU", false),
+                ];
+                egui::Grid::new("accel").spacing([6., 6.]).show(ui, |ui| {
+                    for (i, (name, on)) in items.into_iter().enumerate() {
+                        chip(ui, name, if on { ACCENT } else { DIM }, on);
+                        if i % 3 == 2 { ui.end_row(); }
+                    }
+                });
+                // Firma in basso.
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                     if ui.available_height() >= 28. {
                         let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
                         ui.add(egui::Image::from_texture(&self.signature).fit_to_exact_size(egui::vec2(112., 112. * ratio))).on_hover_text("powered by realhcok");
-                        ui.label(RichText::new("powered by").size(11.).weak());
-                    }
-                    if ui.available_height() >= 70. {
-                        ui.add_space(8.);
-                        let method = engine::cpu_method(self.settings.cpu_only);
-                        let cpu = running;
-                        let items = [
-                            ("SSE4.2", cpu && (method == "avx2" || method == "sse")),
-                            ("AVX2", cpu && method == "avx2"),
-                            ("AVX-512", false),
-                            ("GPU", false),
-                            ("iGPU", false),
-                            ("NPU", false),
-                        ];
-                        ui.with_layout(egui::Layout::top_down(egui::Align::Min), |ui| {
-                            ui.label(RichText::new("ACCELERAZIONI").size(10.5).color(DIM));
-                            ui.horizontal_wrapped(|ui| {
-                                ui.spacing_mut().item_spacing = egui::vec2(5., 5.);
-                                for (name, on) in items {
-                                    chip(ui, name, if on { ACCENT } else { DIM }, on);
-                                }
-                            });
-                        });
+                        ui.label(RichText::new("powered by").size(12.).weak());
                     }
                 });
             });
@@ -653,6 +650,7 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                ui.set_max_width(1100.);
                 if !self.notice.is_empty() {
                     ui.label(RichText::new(&self.notice).color(WARN));
                 }
@@ -661,8 +659,19 @@ impl eframe::App for App {
                         heading(ui, "Dove cerchiamo?", "Scegli i dischi o le cartelle da controllare. Tutto resta su questo computer, in sola lettura.");
                         ui.add_space(12.);
                         ui.label(RichText::new("AREE").size(12.).color(DIM));
-                        ui.horizontal_wrapped(|ui| {
-                            for (path, label) in self.volumes.clone() {
+                        // Griglia a colonne fisse: le schede vanno a capo invece di uscire dalla finestra. Rete esclusa: add() la rifiuterebbe.
+                        let mut areas: Vec<(PathBuf, String)> = vec![];
+                        for (path, label) in &self.volumes {
+                            if label.contains("rete") || areas.iter().any(|(p, _)| p == path) { continue; }
+                            let text = path.to_string_lossy();
+                            let kind = label.rsplit("  -  ").next().unwrap_or("");
+                            let name = if text.starts_with("\\\\?\\Volume") { format!("Volume senza lettera  ·  {kind}") } else { format!("{}  ·  {kind}", text.trim_end_matches('\\')) };
+                            areas.push((path.clone(), name));
+                        }
+                        let columns = ((ui.available_width() + 12.) / 332.).floor().max(1.) as usize;
+                        let card_w = ((ui.available_width() - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
+                        egui::Grid::new("areas").spacing([12., 12.]).show(ui, |ui| {
+                            for (n, (path, label)) in areas.into_iter().enumerate() {
                                 let on = self.roots.contains(&path);
                                 let mut v = on;
                                 egui::Frame::new()
@@ -671,12 +680,15 @@ impl eframe::App for App {
                                     .corner_radius(10)
                                     .inner_margin(egui::Margin::symmetric(16, 12))
                                     .show(ui, |ui| {
-                                        ui.set_min_width(220.);
+                                        ui.set_width(card_w - 34.);
                                         ui.checkbox(&mut v, RichText::new(label).font(semibold(18.)));
-                                    });
+                                    })
+                                    .response
+                                    .on_hover_text(path.to_string_lossy());
                                 if v != on {
                                     if v { self.add(path); } else { self.roots.retain(|r| r != &path); }
                                 }
+                                if (n + 1) % columns == 0 { ui.end_row(); }
                             }
                         });
                         let mut remove = None;
@@ -694,7 +706,7 @@ impl eframe::App for App {
                             ui.label(RichText::new("DATI DEL VERBALE").size(12.).color(DIM));
                             ui.horizontal(|ui| {
                                 ui.label("Operatore");
-                                ui.add(egui::TextEdit::singleline(&mut self.operator).desired_width(220.));
+                                ui.add(egui::TextEdit::singleline(&mut self.operator).hint_text("nome e cognome").desired_width(220.));
                                 ui.label("Riferimento");
                                 ui.add(egui::TextEdit::singleline(&mut self.reference).hint_text("facoltativo").desired_width(260.));
                             });

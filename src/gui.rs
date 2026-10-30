@@ -45,8 +45,8 @@ fn make_preview(ctx: &egui::Context, path: &Path, format: &str) -> Preview {
     }
     let mut reader = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
     let mut limits = image::Limits::default();
-    limits.max_image_width = Some(7000);
-    limits.max_image_height = Some(7000);
+    limits.max_image_width = Some(parser::MAX_SIDE);
+    limits.max_image_height = Some(parser::MAX_SIDE);
     limits.max_alloc = Some(128 * 1024 * 1024);
     reader.limits(limits);
     let small = reader.decode().ok()?.thumbnail(176, 120).to_rgba8();
@@ -117,8 +117,7 @@ fn it_eta(secs: f64) -> String {
     }
 }
 /// Cerchio che si riempie con la percentuale al centro.
-fn ring(ui: &mut egui::Ui, frac: f32, text: &str) {
-    let size = 120.;
+fn ring(ui: &mut egui::Ui, size: f32, frac: f32, text: &str) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let (c, r, w) = (rect.center(), size / 2. - 7., 10.);
     let painter = ui.painter();
@@ -136,7 +135,7 @@ fn ring(ui: &mut egui::Ui, frac: f32, text: &str) {
         painter.circle_filled(at(0), w / 2., PRIMARY);
         painter.circle_filled(at(steps), w / 2., PRIMARY);
     }
-    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(30.), Color32::from_rgb(236, 239, 242));
+    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(size / 4.), Color32::from_rgb(236, 239, 242));
 }
 fn stat(ui: &mut egui::Ui, label: &str, value: String) {
     ui.horizontal(|ui| {
@@ -334,14 +333,19 @@ impl eframe::App for App {
         if running {
             ctx.request_repaint_after(self.repaint);
         }
+        // Finestra stretta o bassa (minimo 640x540): footer su una riga e console ridotta,
+        // altrimenti i pannelli fissi lasciano al contenuto poco piu di 200 px.
+        let screen = ctx.content_rect();
+        let narrow = screen.width() < 900.;
+        let short = screen.height() < 700.;
         egui::Panel::bottom("brand_footer")
             .frame(
                 egui::Frame::new()
                     .fill(Color32::from_rgb(20, 22, 26))
-                    .inner_margin(16),
+                    .inner_margin(if short { 10 } else { 16 }),
             )
             .show(root, |ui| {
-                ui.horizontal_wrapped(|ui| {
+                ui.horizontal(|ui| {
                     let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
                     ui.vertical(|ui| {
                         ui.add(
@@ -356,11 +360,13 @@ impl eframe::App for App {
                         );
                     });
                     ui.separator();
-                    ui.label(
-                        RichText::new("Locale  /  Solo lettura  /  Nessuna telemetria")
-                            .small()
-                            .weak(),
-                    );
+                    if !narrow {
+                        ui.label(
+                            RichText::new("Locale  /  Solo lettura  /  Nessuna telemetria")
+                                .small()
+                                .weak(),
+                        );
+                    }
                     egui::ComboBox::from_id_salt("ui-scale")
                         .selected_text(format!("UI {:.0}%", self.zoom * 100.))
                         .show_ui(ui, |ui| {
@@ -377,7 +383,7 @@ impl eframe::App for App {
                                 }
                             }
                         });
-                    if ui.add(egui::Button::new(RichText::new("⧉ Copia diagnostica").color(ACCENT)).stroke(egui::Stroke::new(1., ACCENT))).on_hover_text("Copia negli appunti un report per gli sviluppatori: nessun contenuto dei documenti, nome utente mascherato").clicked(){
+                    if ui.add(egui::Button::new(RichText::new(if narrow {"Diagnostica"} else {"Copia diagnostica"}).color(ACCENT)).stroke(egui::Stroke::new(1., ACCENT))).on_hover_text("Copia negli appunti un report per gli sviluppatori: nessun contenuto dei documenti, nome utente mascherato").clicked(){
                         let (run,phase,current)={let p=self.shared.lock().unwrap();(p.run.clone(),p.phase.clone(),p.current.clone())};
                         let text=diag::report(&self.gpu,&phase,&current,run.as_ref());
                         let kb=text.len().div_ceil(1024);
@@ -387,8 +393,11 @@ impl eframe::App for App {
                         diag::info(format!("Diagnostica copiata negli appunti ({kb} KB{})",if direct{""}else{", via egui"}));
                         self.copied=Some((format!("Diagnostica copiata negli appunti ({kb} KB): incollala nella chat"),Instant::now()));
                     }
-                    if ui.add_enabled(!running && !self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220.,48.))).clicked(){self.start(None);}
-                    if running && ui.button("Interrompi").clicked(){self.stop.store(true,Ordering::Relaxed);self.notice="Interruzione richiesta: chiusura parser e conservazione degli esiti raccolti.".into();}
+                    // Interrompi prende il posto di Avvia verifica: il footer non va a capo durante la scansione.
+                    let size=egui::vec2(if narrow {160.} else {220.},if short {40.} else {48.});
+                    if running {
+                        if ui.add(egui::Button::new(RichText::new("Interrompi").font(semibold(19.))).min_size(size)).clicked(){self.stop.store(true,Ordering::Relaxed);self.notice="Interruzione richiesta: chiusura parser e conservazione degli esiti raccolti.".into();}
+                    } else if ui.add_enabled(!self.roots.is_empty() && !self.operator.trim().is_empty(),egui::Button::new(RichText::new("Avvia verifica").font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(size)).clicked(){self.start(None);}
                 });
             });
         let phase_state = self.shared.lock().unwrap().run.as_ref().map(|r| (r.finished, r.previous.is_some()));
@@ -422,7 +431,7 @@ impl eframe::App for App {
                     }
                 });
                 if self.console_open {
-                    egui::ScrollArea::vertical().id_salt("console-scroll").max_height(110.).auto_shrink([false, true]).stick_to_bottom(true).show(ui, |ui| {
+                    egui::ScrollArea::vertical().id_salt("console-scroll").max_height(if short { 54. } else { 110. }).auto_shrink([false, true]).stick_to_bottom(true).show(ui, |ui| {
                         ui.spacing_mut().item_spacing.y = 2.;
                         for e in diag::recent(300) {
                             let color = match e.level {
@@ -482,7 +491,7 @@ impl eframe::App for App {
                         if total_final || total == 0 { format!("{pct}%") } else { format!("~{pct}%") }
                     };
                     ui.vertical_centered(|ui| {
-                        ring(ui, frac, &text);
+                        ring(ui, if ui.available_height() < 330. { 76. } else { 120. }, frac, &text);
                         let label = if running { if total_final { "Scansione in corso" } else { "Stima in corso..." } } else if finished_ok { "Scansione completata" } else { "Scansione interrotta" };
                         ui.label(RichText::new(label).small().weak());
                     });
@@ -550,7 +559,7 @@ impl eframe::App for App {
                     ui.add_space(8.);
                     card(ui,|ui| {
                         ui.label(RichText::new("2   Ricerca completa e verbale").font(semibold(21.)));
-                        ui.label("Testo, immagini, PDF anche misti e Office con immagini incorporate. OCR locale con tentativi di rotazione, entro i limiti dichiarati.");
+                        ui.label("Immagini, PDF anche misti, RTF e Office con immagini incorporate. OCR locale con tentativi di rotazione, entro i limiti dichiarati. I file di solo testo non vengono letti.");
                         ui.label(RichText::new(if self.ocr_present {"OCR: componenti ita + eng presenti; caricamento e funzionamento verificati all'uso."}else{"OCR NON DISPONIBILE: mancano motore o modelli; copertura incompleta."}).color(if self.ocr_present {ACCENT}else{Color32::YELLOW}));
                         ui.horizontal(|ui| {
                             ui.label("Operatore");ui.add(egui::TextEdit::singleline(&mut self.operator).desired_width(220.));
@@ -628,10 +637,11 @@ impl eframe::App for App {
                                 // I file eliminati escono dalla lista: restano nel conteggio delle eliminazioni, nella console e nel verbale.
                                 if f.deleted(){continue;}
                                 shown+=1;
-                                let side=164.;
-                                if budget>0&&!self.previews.contains_key(&f.path)&&!f.deleted(){budget-=1;let pv=make_preview(&ctx,&f.path,&f.format);self.previews.insert(f.path.clone(),pv);ctx.request_repaint();}
+                                // Finestra stretta: l'anteprima resta solo se il testo ha almeno 260 px, altrimenti esce dal riquadro.
+                                let side=if ui.available_width()>=260.+164.+12. {164.} else {0.};
+                                if side>0.&&budget>0&&!self.previews.contains_key(&f.path)&&!f.deleted(){budget-=1;let pv=make_preview(&ctx,&f.path,&f.format);self.previews.insert(f.path.clone(),pv);ctx.request_repaint();}
                                 ui.horizontal_top(|ui| {
-                                    ui.allocate_ui(egui::vec2((ui.available_width()-side-12.).max(260.),0.),|ui| { ui.vertical(|ui| {
+                                    ui.allocate_ui(egui::vec2(if side>0. {ui.available_width()-side-12.} else {ui.available_width()},0.),|ui| { ui.vertical(|ui| {
                                 ui.label(RichText::new(format!("{}. {}",shown,f.path.display())).font(semibold(16.)));
                                     ui.label(format!("Formato rilevato: {}",f.format));
                                     for reason in &f.reasons{ui.label(reason);}
@@ -647,6 +657,7 @@ impl eframe::App for App {
                                     });});
 
                                     });});
+                                    if side==0. {return;}
                                     let (rect,resp)=ui.allocate_exact_size(egui::vec2(side,112.),egui::Sense::hover());
                                     ui.painter().rect_filled(rect,8.,Color32::from_rgb(35, 39, 45));
                                     match self.previews.get(&f.path) {

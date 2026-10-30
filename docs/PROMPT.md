@@ -179,7 +179,7 @@ Verifica che i PDF rappresentino correttamente tutti gli esiti, che la GUI riman
 
 ## 10. Build, repository e consegna sul Desktop
 
-Usa Rust stabile e dipendenze mantenute; verifica licenze del codice, dei motori, dei modelli e dei runtime ridistribuiti. Motiva brevemente le scelte che incidono su peso, velocità o compatibilità. Mantieni il repository GitHub privato e non includere dati personali, report di PC reali, credenziali, percorsi privati, dump o documenti dell'ente.
+Usa Rust stabile e dipendenze mantenute; verifica licenze del codice, dei motori, dei modelli e dei runtime ridistribuiti. Motiva brevemente le scelte che incidono su peso, velocità o compatibilità. Non includere dati personali, report di PC reali, credenziali, percorsi privati, dump o documenti dell'ente.
 
 Compila nativamente per Windows e verifica il pacchetto distribuito, non solo il programma avviato dall'ambiente di sviluppo. Prova l'interfaccia reale su Windows e renderizza i PDF per controllare impaginazione e leggibilità. I test automatici/offscreen e l'avvio via SSH non sostituiscono una prova interattiva delle funzioni GUI.
 

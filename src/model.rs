@@ -256,7 +256,7 @@ impl Run {
             let kind = match file.format.to_ascii_lowercase().as_str() {
                 "pdf" => "PDF",
                 "png" | "jpeg" | "bmp" | "gif" | "tiff" | "webp" => "Immagini",
-                "office xml / zip" => "Documenti Office",
+                "office xml / zip" | "word doc" => "Documenti Office",
                 _ => "File di testo",
             };
             *formats.entry(kind).or_default() += 1;

@@ -40,7 +40,7 @@ L'esito mostra se sono state trovate possibili copie, quanti file, quali tipi (c
 
 - egui/eframe 0.37, font Titillium Web e asset del kit incorporati, palette blu notte/petrolio, firma originale realhcok, icona PE e finestra.
 - Enumerazione streaming, nessuna esclusione automatica di AppData/cestino/profili. Scelta di dischi, cartelle e volumi senza lettera; rete esclusa e rimovibili solo su selezione esplicita. Junction e collegamenti discendenti non attraversati, volumi montati da selezionare separatamente.
-- Lettura per firma, anche con estensione errata/assente; PDFium per PDF, XML/ZIP con decompressione limitata per Office, decoder immagini limitati e Tesseract 5.5.3 ita+eng. Nei PDF viene eseguito OCR anche sulle pagine che contengono testo digitale.
+- Lettura per firma, anche con estensione errata/assente; PDFium per PDF, XML/ZIP con decompressione limitata per Office, decoder immagini limitati e Tesseract 5.5.3 ita+eng. Nei PDF viene eseguito OCR anche sulle pagine che contengono testo digitale. I vecchi Word `.doc` (binario OLE) sono letti in Rust puro: testo dalla tabella dei pezzi e immagini JPEG/PNG/TIFF/DIB incorporate passate all'OCR.
 - N parser persistenti in parallelo (default core fisici - 1), ognuno processo separato con un thread OCR e il proprio Windows Job con memoria limitata, timeout/annullamento e recupero. Non e una sandbox di sicurezza e mantiene i privilegi dell'operatore.
 - Prefiltro prima dell'OCR: immagini e pagine senza zone con tratti a contrasto tipo testo non vanno all'OCR e sono dichiarate nel verbale; l'OCR gira sulla sola zona con testo. Orientamento con OSD di Tesseract quando e affidabile, altrimenti 4 rotazioni.
 - CPU x64 di base, CRT statica. Automatico: AVX2/SSE solo dopo rilevamento runtime Rust e conferma della scelta Tesseract. Solo CPU: prodotto scalare generic per confronto, stesse regole. AVX-512/GPU/NPU non implementate. Nessun target-cpu=native globale.
@@ -63,7 +63,7 @@ Sono risultati del collaudo di sviluppo su un corpus piccolo e sintetico, non st
 
 ## Limiti da conoscere
 
-AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; HEIC/HEIF, legacy DOC/XLS/PPT, archivi generici, cifrati, OLE/macro e risorse esterne non vengono analizzati (HEIC e Office protetti con estensione moderna rendono la verifica incompleta). Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
+AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; HEIC/HEIF, legacy XLS/PPT, archivi generici, cifrati, oggetti OLE/macro e risorse esterne non vengono analizzati (HEIC e Office protetti con estensione moderna rendono la verifica incompleta). Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
 
 Il parser mantiene i privilegi dell'operatore: processo separato e Windows Job **non sono una sandbox di sicurezza**. Non c'è uno snapshot coerente dell'intero disco. L'esito non garantisce l'assenza di documenti né un'approvazione o accettazione di Lepida.
 

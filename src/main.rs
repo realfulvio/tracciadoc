@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod delete;
 mod diag;
+mod doc;
 mod engine;
 mod gui;
 mod model;

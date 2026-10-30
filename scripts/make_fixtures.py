@@ -94,7 +94,14 @@ image('APPUNTI DI RIUNIONE\nAcquisto materiali\nVerifica preventivi\nProssimo in
 pdf('ordinario.pdf','Appunti di riunione. Acquisto materiali e verifica preventivi.');record('ordinario.pdf',False,'negativo','PDF')
 (DEST/'corrotto.pdf').write_bytes(b'%PDF-1.7\nBROKEN');record('corrotto.pdf',False,'problema','PDF corrotto',True)
 pdf('cifrato.pdf',TEXT['carta'],encrypted=True);record('cifrato.pdf',True,'carta','PDF cifrato',True)
-(DEST/'legacy.doc').write_bytes(bytes.fromhex('d0cf11e0a1b11ae1')+b'fixture-not-a-document');record('legacy.doc',False,'problema','DOC non supportato',True)
+(DEST/'legacy.doc').write_bytes(bytes.fromhex('d0cf11e0a1b11ae1')+b'fixture-not-a-document');record('legacy.doc',False,'problema','DOC corrotto',True)
+# Word 97-2003 veri: i .docx sintetici convertiti con LibreOffice (serve soffice; senza, i .doc gia nel corpus restano).
+import shutil,subprocess,tempfile
+if shutil.which('soffice'):
+ with tempfile.TemporaryDirectory() as tmp:
+  subprocess.run(['soffice','--headless','--convert-to','doc:MS Word 97','--outdir',tmp,str(DEST/'documento.docx'),str(DEST/'immagine.docx')],check=True)
+  for n in ['documento.doc','immagine.doc']:shutil.copy2(Path(tmp)/n,DEST/n)
+record('documento.doc',True,'carta','DOC');record('immagine.doc',True,'carta','DOC immagine')
 # Photo-like images without text (smooth upscaled noise) and a rotated document inside a larger photo.
 from PIL import ImageFilter
 import random

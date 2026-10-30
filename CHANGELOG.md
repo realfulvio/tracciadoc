@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.9 - 2026-10-30
+
+- Testi del pacchetto ripuliti dai riferimenti a enti esterni (istruzioni e fonti/licenze). Nessuna modifica al funzionamento.
+
 ## 0.2.8 - 2026-10-30
 
 - Interfaccia rifatta con una gerarchia più chiara: una schermata per fase (Aree, Scansione, Revisione, Verifica finale), titolo e sottotitolo brevi, una sola azione principale nella barra in basso a destra.

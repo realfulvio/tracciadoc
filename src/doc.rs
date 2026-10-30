@@ -100,14 +100,16 @@ impl<'a> Cfb<'a> {
         }
         for id in fat_sectors {
             let s = me.sector_bytes(id).ok_or(BAD)?;
-            me.fat.extend(s.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])));
+            me.fat.extend(s.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)));
         }
         let dir = me.chain(first_dir, None)?;
-        for chunk in dir.chunks_exact(128).take(1 << 20) {
+        for chunk in dir.as_chunks::<128>().0.iter().take(1 << 20) {
             let name_len = (u16_at(chunk, 64).unwrap_or(0) as usize).min(64);
             let units: Vec<u16> = chunk[..name_len.saturating_sub(2)]
-                .chunks_exact(2)
-                .map(|c| u16::from_le_bytes([c[0], c[1]]))
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|c| u16::from_le_bytes(*c))
                 .collect();
             me.entries.push(Entry {
                 name: String::from_utf16_lossy(&units),
@@ -126,7 +128,7 @@ impl<'a> Cfb<'a> {
         let (root_start, root_size) = (root.start, root.size);
         if n_mini > 0 && first_mini < 0xFFFF_FFFA {
             let raw = me.chain(first_mini, None)?;
-            me.mini_fat = raw.chunks_exact(4).map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]])).collect();
+            me.mini_fat = raw.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect();
         }
         if root_start < 0xFFFF_FFFA && root_size > 0 {
             me.mini_stream = me.chain(root_start, Some(root_size))?;
@@ -222,7 +224,7 @@ fn push_cp1252(text: &mut String, bytes: &[u8]) {
     }
 }
 fn push_utf16(text: &mut String, bytes: &[u8]) {
-    let units = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]]));
+    let units = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c));
     for c in char::decode_utf16(units) {
         push_char(text, c.unwrap_or('\u{fffd}'));
     }

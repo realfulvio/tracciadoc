@@ -6,7 +6,7 @@
 
 MVP Windows x64 in Rust per trovare possibili copie di documenti d'identita nei file locali e produrre un verbale PDF. Repository **privato**, sorgenti MIT. Nessuna scansione automatica, telemetria o elaborazione cloud.
 
-**[Scarica TracciaDoc 0.2.6 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.6/TracciaDoc-0.2.6-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.6) · [Changelog](CHANGELOG.md)
+**[Scarica TracciaDoc 0.2.7 per Windows x64](https://github.com/realfulvio/tracciadoc/releases/download/v0.2.7/TracciaDoc-0.2.7-windows-x64.zip)** · [Release e checksum](https://github.com/realfulvio/tracciadoc/releases/tag/v0.2.7) · [Changelog](CHANGELOG.md)
 
 ## Avvio rapido
 
@@ -40,7 +40,7 @@ L'esito mostra se sono state trovate possibili copie, quanti file, quali tipi (c
 
 - egui/eframe 0.37, font Titillium Web e asset del kit incorporati, palette blu notte/petrolio, firma originale realhcok, icona PE e finestra.
 - Enumerazione streaming, nessuna esclusione automatica di AppData/cestino/profili. Scelta di dischi, cartelle e volumi senza lettera; rete esclusa e rimovibili solo su selezione esplicita. Junction e collegamenti discendenti non attraversati, volumi montati da selezionare separatamente.
-- Lettura per firma, anche con estensione errata/assente; PDFium per PDF, XML/ZIP con decompressione limitata per Office, decoder immagini limitati e Tesseract 5.5.3 ita+eng. Nei PDF viene eseguito OCR anche sulle pagine che contengono testo digitale.
+- Lettura per firma, anche con estensione errata/assente; PDFium per PDF, XML/ZIP con decompressione limitata per Office, decoder immagini limitati e Tesseract 5.5.3 ita+eng. Nei PDF viene eseguito OCR anche sulle pagine che contengono testo digitale. I vecchi Word `.doc` (binario OLE) sono letti in Rust puro: testo dalla tabella dei pezzi e immagini JPEG/PNG/TIFF/DIB incorporate passate all'OCR.
 - N parser persistenti in parallelo (default core fisici - 1), ognuno processo separato con un thread OCR e il proprio Windows Job con memoria limitata, timeout/annullamento e recupero. Non e una sandbox di sicurezza e mantiene i privilegi dell'operatore.
 - Prefiltro prima dell'OCR: immagini e pagine senza zone con tratti a contrasto tipo testo non vanno all'OCR e sono dichiarate nel verbale; l'OCR gira sulla sola zona con testo. Orientamento con OSD di Tesseract quando e affidabile, altrimenti 4 rotazioni.
 - CPU x64 di base, CRT statica. Automatico: AVX2/SSE solo dopo rilevamento runtime Rust e conferma della scelta Tesseract. Solo CPU: prodotto scalare generic per confronto, stesse regole. AVX-512/GPU/NPU non implementate. Nessun target-cpu=native globale.
@@ -50,7 +50,8 @@ Formati e limiti esatti: [istruzioni](docs/ISTRUZIONI.txt). Componenti, licenze 
 
 ## Collaudo e prestazioni documentate
 
-- 0.2.6 sulla VM Windows 11: 11 test Rust, Clippy `-D warnings`, `validate.py` (23 positivi rilevati su 23 analizzabili, nessun falso positivo) ed `edge_tests.py` passati; corpus di stress di 3.424 file sintetici in circa 15 s con 3 worker.
+- 0.2.7 sulla VM Windows 11: 17 test Rust (6 nuovi sui `.doc`), Clippy `-D warnings`, `validate.py` (25 positivi rilevati su 25 analizzabili, inclusi `documento.doc` e `immagine.doc`, nessun falso positivo) ed `edge_tests.py` passati. Il corpus di stress da 3.424 file della 0.2.6 non è stato rieseguito.
+- 0.2.6 sulla VM: corpus di stress di 3.424 file sintetici in circa 15 s con 3 worker.
 - Corpus sintetico di **37 file**: 27 positivi analizzabili rilevati, 6 negativi senza segnalazioni e 4 casi con limiti. Fra questi ultimi c'è un ulteriore positivo cifrato non analizzato: **27 rilevati su 28 positivi noti complessivi**.
 - Stesse motivazioni sui percorsi generico e AVX2; fixture invariate dopo i controlli.
 - Prove interattive Windows di selezione, avanzamento, interruzione, apertura file/cartella, controllo manuale, PDF e scala dell'interfaccia.
@@ -63,7 +64,7 @@ Sono risultati del collaudo di sviluppo su un corpus piccolo e sintetico, non st
 
 ## Limiti da conoscere
 
-AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; HEIC/HEIF, legacy DOC/XLS/PPT, archivi generici, cifrati, OLE/macro e risorse esterne non vengono analizzati (HEIC e Office protetti con estensione moderna rendono la verifica incompleta). Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
+AVX-512, GPU e NPU non sono implementate. GIF/TIFF sono limitati alla prima immagine; HEIC/HEIF, legacy XLS/PPT, archivi generici, cifrati, oggetti OLE/macro e risorse esterne non vengono analizzati (HEIC e Office protetti con estensione moderna rendono la verifica incompleta). Errori, accessi negati e limiti raggiunti devono restare visibili come copertura incompleta.
 
 Il parser mantiene i privilegi dell'operatore: processo separato e Windows Job **non sono una sandbox di sicurezza**. Non c'è uno snapshot coerente dell'intero disco. L'esito non garantisce l'assenza di documenti né un'approvazione o accettazione di Lepida.
 

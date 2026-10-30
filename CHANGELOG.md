@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.7 - 2026-10-30
+
+- Lettura dei vecchi documenti Word `.doc` (binario OLE, Word 97-2003 e successivi, anche Word 6/95), scritta in Rust senza dipendenze nuove: il testo viene estratto dalla tabella dei pezzi (corpo, intestazioni, note, caselle di testo) e analizzato con le regole esistenti; le immagini incorporate (JPEG, PNG, TIFF, DIB, inline e mobili) vanno all'OCR come quelle dei `.docx`. Prima i `.doc` finivano in "formato non supportato".
+- Restano segnalati come verifica incompleta: `.doc` cifrati con password, immagini vettoriali EMF/WMF/PICT, oggetti OLE incorporati e macro, file corrotti. Un `.doc` che in realtà è un RTF viene letto come RTF.
+- Corpus sintetico: aggiunti `documento.doc` e `immagine.doc` (veri Word 97 generati con LibreOffice); `legacy.doc` resta il caso "DOC corrotto".
+
 ## 0.2.6 - 2026-10-30
 
 Correzioni dal collaudo sulla VM Windows 11 (corpus sintetico di stress con 3.424 file: scansioni ad alta risoluzione, file corrotti o con estensione ingannevole, Office protetto da password, HEIC, PDF lunghi, nomi Unicode, percorsi oltre 260 caratteri, migliaia di file).

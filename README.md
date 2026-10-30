@@ -101,7 +101,7 @@ Test e benchmark usano **solo il corpus sintetico** in `fixtures/`: facsimili in
 
 ## Licenze
 
-Sorgenti propri sotto [licenza MIT](LICENSE). Dipendenze, font e modelli OCR mantengono le rispettive licenze, incluse nel pacchetto. Il marchio **realhcok** è dell'autore del progetto; lo stemma comunale incluso nell'app è citato con la sua fonte in [assets/ui/FONTI-E-LICENZE.md](assets/ui/FONTI-E-LICENZE.md) e **non** è coperto dalla licenza MIT.
+Sorgenti propri sotto [licenza MIT](LICENSE). Dipendenze, font e modelli OCR mantengono le rispettive licenze, incluse nel pacchetto. Il marchio **realhcok** è dell'autore del progetto; il repository non contiene stemmi o loghi di enti; un logo proprio si aggiunge come `logo-ente.png` accanto all'EXE (vedi [assets/ui/FONTI-E-LICENZE.md](assets/ui/FONTI-E-LICENZE.md)).
 
 ---
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato
+
+- Lo stemma del Comune non è più incorporato: il logo in testa al verbale è facoltativo e si legge da `logo-ente.png` accanto all'EXE. Senza il file non compare nulla.
+
 ## 0.2.7 - 2026-10-30
 
 - Lettura dei vecchi documenti Word `.doc` (binario OLE, Word 97-2003 e successivi, anche Word 6/95), scritta in Rust senza dipendenze nuove: il testo viene estratto dalla tabella dei pezzi (corpo, intestazioni, note, caselle di testo) e analizzato con le regole esistenti; le immagini incorporate (JPEG, PNG, TIFF, DIB, inline e mobili) vanno all'OCR come quelle dei `.docx`. Prima i `.doc` finivano in "formato non supportato".

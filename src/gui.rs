@@ -200,8 +200,11 @@ fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: String, color: Option
         .inner_margin(14)
         .show(ui, |ui| {
             ui.set_width((width - 28.).max(60.));
-            ui.label(RichText::new(label).size(12.).color(DIM));
-            ui.label(RichText::new(value).font(semibold(28.)).color(color.unwrap_or(Color32::from_rgb(236, 239, 242))));
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 2.;
+                ui.label(RichText::new(label).size(12.5).color(Color32::from_rgb(120, 130, 140)));
+                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(Color32::from_rgb(236, 239, 242))));
+            });
         });
 }
 fn primary(text: &str, height: f32) -> egui::Button<'static> {
@@ -260,6 +263,7 @@ impl App {
             style.spacing.button_padding = egui::vec2(16., 10.);
             style.visuals.panel_fill = BG;
             style.visuals.window_fill = SURFACE;
+            style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1., Color32::from_rgb(96, 106, 116));
             style.visuals.extreme_bg_color = Color32::from_rgb(20, 22, 26);
             style.visuals.override_text_color = Some(Color32::from_rgb(236, 239, 242));
             style.visuals.weak_text_color = Some(Color32::from_rgb(154, 164, 173));
@@ -627,11 +631,13 @@ impl eframe::App for App {
                                     if ui.add(egui::Button::new("Annulla").min_size(egui::vec2(0., h))).clicked() { self.confirm = false; }
                                 });
                             } else {
-                                let mut all = open > 0 && selected == open;
-                                if ui.add_enabled(open > 0, egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
-                                    for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
+                                if open > 0 {
+                                    let mut all = selected == open;
+                                    if ui.add(egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
+                                        for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
+                                    }
+                                    ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
                                 }
-                                ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
                                     if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {

@@ -1,5 +1,9 @@
 # Changelog
 
+## Non rilasciato
+
+- Lo stemma del Comune non è più incorporato: il logo in testa al verbale è facoltativo e si legge da `logo-ente.png` accanto all'EXE. Senza il file non compare nulla.
+
 ## 0.2.7 - 2026-10-30
 
 - Lettura dei vecchi documenti Word `.doc` (binario OLE, Word 97-2003 e successivi, anche Word 6/95), scritta in Rust senza dipendenze nuove: il testo viene estratto dalla tabella dei pezzi (corpo, intestazioni, note, caselle di testo) e analizzato con le regole esistenti; le immagini incorporate (JPEG, PNG, TIFF, DIB, inline e mobili) vanno all'OCR come quelle dei `.docx`. Prima i `.doc` finivano in "formato non supportato".
@@ -58,7 +62,7 @@ Correzioni dal collaudo sulla VM Windows 11 (corpus sintetico di stress con 3.42
 - GUI: tema scuro fisso (con il tema chiaro di Windows il testo era illeggibile), simboli dei passi visibili, ridisegno ogni 1000 ms durante la scansione quando il rendering e su WARP.
 - Collaudo su Windows 11 Enterprise LTSC 2024 x64 (VM senza driver video, DX12 su WARP, senza Mesa): `cargo test`, Clippy `-D warnings`, `validate.py` sul corpus sintetico; GUI a schermo con prove sintetiche, eliminazione con conferma, file modificato dopo l'analisi non eliminato, ri-scansione e verbale PDF finale con riepilogo e eliminazioni non riuscite.
 - `edge_tests.py`: il caso `memory` usa un raster 5600x5600 (~94 MB decodificati) invece dell'OCR di una piccola immagine, il cui consumo dipendeva dalla macchina e restava sotto 64 MiB. Tutti i casi passano sulla VM Windows.
-- Collaudo su PC fisico (Ryzen 7 PRO 5750G, Quadro RTX 4000): test, validazione ed edge test passati; 296 file sintetici in 21,1 s con 7 worker; GUI non massimizzata su DirectX 12 con la GPU NVIDIA, non WARP. Dettagli in `docs/VALIDAZIONE.md`.
+- Collaudo su PC fisico (Ryzen 7 PRO a 8 core, GPU NVIDIA dedicata): test, validazione ed edge test passati; 296 file sintetici in 21,1 s con 7 worker; GUI non massimizzata su DirectX 12 con la GPU NVIDIA, non WARP. Dettagli in `docs/VALIDAZIONE.md`.
 - Non verificati: iGPU reali, ripiego OpenGL con finestra aperta.
 - OCR in parallelo: N worker parser/OCR, ognuno processo separato con il proprio Windows Job e limite di memoria; default core fisici - 1 (minimo 1), `--workers` e Opzioni avanzate della GUI. Segnalazioni ordinate per percorso; il verbale dichiara il numero di worker.
 - Prefiltro: niente OCR sulle immagini e pagine senza zone con tratti a contrasto tipo testo; dichiarate nel verbale come "scartate dal prefiltro", file contati come parziali. `--no-prefilter` e casella nella GUI per l'OCR su tutto. L'OCR gira solo sulla zona con tratti tipo testo piu un margine.

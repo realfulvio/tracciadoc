@@ -273,21 +273,22 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
             let mut page = doc.pages_mut().create_page_at_end(PdfPagePaperSize::a4())?;
             page.set_content_regeneration_strategy(PdfPageContentRegenerationStrategy::Manual);
             if index == 0 {
-                // Stemma on the white page: alpha flattened on white, PDF images have no transparency.
-                let stemma = image::load_from_memory(include_bytes!("../assets/ui/stemma-comune-bondeno.png"))?.to_rgba8();
-                let mut flat = image::RgbImage::from_pixel(stemma.width(), stemma.height(), image::Rgb([255, 255, 255]));
-                for (x, y, p) in stemma.enumerate_pixels() {
-                    let a = p[3] as u32;
-                    let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
-                    flat.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+                if let Some(logo) = org_logo() {
+                    // Logo on the white page: alpha flattened on white, PDF images have no transparency.
+                    let mut flat = image::RgbImage::from_pixel(logo.width(), logo.height(), image::Rgb([255, 255, 255]));
+                    for (x, y, p) in logo.enumerate_pixels() {
+                        let a = p[3] as u32;
+                        let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
+                        flat.put_pixel(x, y, image::Rgb([mix(p[0]), mix(p[1]), mix(p[2])]));
+                    }
+                    page.objects_mut().create_image_object(
+                        PdfPoints::new(470.),
+                        PdfPoints::new(715.),
+                        &image::DynamicImage::ImageRgb8(flat),
+                        Some(PdfPoints::new(80.)),
+                        Some(PdfPoints::new(80.)),
+                    )?;
                 }
-                page.objects_mut().create_image_object(
-                    PdfPoints::new(470.),
-                    PdfPoints::new(715.),
-                    &image::DynamicImage::ImageRgb8(flat),
-                    Some(PdfPoints::new(80.)),
-                    Some(PdfPoints::new(80.)),
-                )?;
             }
             let mut y = 790.;
             for (text, size) in lines {
@@ -333,6 +334,16 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
         return Err("Esiste gia un file con questo nome: il verbale non viene sovrascritto, scegli un altro nome".into());
     }
     write_pdf().map_err(|e| format!("Impossibile creare il PDF: {e}"))
+}
+
+/// Logo facoltativo dell'ente: `logo-ente.png` accanto all'EXE. Non fa parte del repository ne del pacchetto.
+pub fn org_logo() -> Option<image::RgbaImage> {
+    let path = std::env::current_exe().ok()?.parent()?.join("logo-ente.png");
+    if std::fs::metadata(&path).ok()?.len() > 2 << 20 {
+        return None;
+    }
+    let image = image::open(path).ok()?.to_rgba8();
+    (image.width() <= 2048 && image.height() <= 2048).then_some(image)
 }
 
 #[cfg(test)]

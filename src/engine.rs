@@ -319,8 +319,8 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
     state.peak_worker_bytes = state.peak_worker_bytes.max(o.peak);
     let shown = diag::shown(&o.path);
     for note in o.notes {
-        if !crate::parser::is_quiet(&note) {
-            diag::warn_file(&note, format!("{shown} · {note}"));
+        if !crate::parser::is_quiet(note) {
+            diag::warn_file(note, format!("{shown} · {note}"));
         }
         state.issue(note);
     }
@@ -442,7 +442,8 @@ fn precount(roots: Vec<PathBuf>, max_bytes: u64, max_entries: u64, stop: Arc<Ato
                 continue;
             }
             seen += 1;
-            if seen >= max_entries {
+            // La scansione esamina esattamente max_entries file.
+            if seen > max_entries {
                 break 'roots;
             }
             if crate::parser::worth_opening(entry.path(), meta.len(), max_bytes) {
@@ -537,8 +538,12 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             }
             let entry = match entry {
                 Ok(e) => e,
-                Err(_) => {
-                    state.issue(diag::noted("Enumerazione: accesso negato o voce non disponibile"));
+                Err(e) => {
+                    const DENIED: &str = "Enumerazione: accesso negato o voce non disponibile";
+                    state.issue(match e.path() {
+                        Some(p) => diag::noted_at(DENIED, p),
+                        None => diag::noted(DENIED),
+                    });
                     continue;
                 }
             };
@@ -552,7 +557,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 if entry.file_type().is_dir() {
                     entries.skip_current_dir();
                 }
-                state.issue(diag::noted("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente"));
+                state.issue(diag::noted_at("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente", path));
                 continue;
             }
             if entry.file_type().is_dir() {
@@ -572,7 +577,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 Err(_) => {
                     state.skipped += 1;
                     counts.done.fetch_add(1, Ordering::Relaxed);
-                    state.issue(diag::noted("File: metadati non leggibili"));
+                    state.issue(diag::noted_at("File: metadati non leggibili", path));
                     continue;
                 }
             };
@@ -587,7 +592,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
                 counts.done.fetch_add(1, Ordering::Relaxed);
-                state.issue(diag::noted("File reparse, offline, cloud recall o cifrato EFS non aperto"));
+                state.issue(diag::noted_at("File reparse, offline, cloud recall o cifrato EFS non aperto", path));
                 continue;
             }
             if published.elapsed() >= Duration::from_millis(100) || state.encountered == 1 {

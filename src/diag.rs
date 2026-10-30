@@ -91,9 +91,14 @@ pub fn ok(text: impl AsRef<str>) {
 pub fn warn(text: impl AsRef<str>) {
     log(Level::Warn, text);
 }
-/// Registra un avviso e lo restituisce, per usarlo direttamente come codice problema.
+/// Registra un avviso (con il tetto per tipo) e lo restituisce, per usarlo direttamente come codice problema.
 pub fn noted(text: &str) -> &str {
-    warn(text);
+    warn_file(text, text);
+    text
+}
+/// Come `noted`, con il percorso che ha causato il problema nel log.
+pub fn noted_at<'a>(text: &'a str, path: &Path) -> &'a str {
+    warn_file(text, format!("{} · {text}", shown(path)));
     text
 }
 pub fn err(text: impl AsRef<str>) {

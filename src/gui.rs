@@ -97,6 +97,8 @@ pub struct App {
     copied: Option<(String, Instant)>,
     /// Campioni (istante, file esaminati) degli ultimi secondi: velocita e tempo residuo.
     samples: Vec<(Instant, u64)>,
+    /// Zoom iniziale scelto in base alla larghezza dello schermo (una sola volta).
+    zoom_set: bool,
 }
 /// Numero con separatore delle migliaia all'italiana (12.480).
 fn it_num(n: u64) -> String {
@@ -320,6 +322,7 @@ impl App {
                 include_bytes!("../assets/ui/realhcok-kit-white-720.png"),
             ),
             zoom: 1.,
+            zoom_set: false,
             confirm: false,
             previews: HashMap::new(),
             gpu,
@@ -407,6 +410,16 @@ impl eframe::App for App {
         let running = self.handle.is_some();
         if running {
             ctx.request_repaint_after(self.repaint);
+        }
+        if !self.zoom_set {
+            self.zoom_set = true;
+            // Schermi grandi a risoluzione nativa: UI troppo piccola, parte ingrandita (resta regolabile dal menu).
+            let w = ctx.content_rect().width();
+            let z = if w >= 2400. { 1.5 } else if w >= 1900. { 1.25 } else { 1. };
+            if z > 1. {
+                self.zoom = z;
+                ctx.set_zoom_factor(z);
+            }
         }
         let screen = ctx.content_rect();
         let short = screen.height() < 700.;
@@ -663,7 +676,7 @@ impl eframe::App for App {
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 // set_max_width(1100) da solo allargava l'ui oltre il pannello nelle finestre strette.
-                ui.set_max_width(ui.available_width().min(1100.));
+                ui.set_max_width(ui.available_width().min(1700.));
                 if !self.notice.is_empty() {
                     ui.label(RichText::new(&self.notice).color(WARN));
                 }
@@ -799,9 +812,15 @@ impl eframe::App for App {
                             // Al massimo 2 decodifiche per frame: la GUI resta reattiva anche con molti risultati.
                             let mut budget = 2;
                             let running_now = running;
+                            // Schermi larghi: due colonne di schede.
+                            let ncols = if ui.available_width() >= 1250. { 2 } else { 1 };
+                            ui.columns(ncols, |cols| {
+                            let mut placed = 0;
                             for (i, f) in run.findings.iter_mut().enumerate().take(5000) {
                                 // I file eliminati escono dalla lista: restano nel conteggio, nella console e nel verbale.
                                 if f.deleted() { continue; }
+                                let ui = &mut cols[placed % ncols];
+                                placed += 1;
                                 // Finestra stretta: l'anteprima resta solo se resta spazio per il testo.
                                 let side = if ui.available_width() >= 560. { 104. } else { 0. };
                                 if side > 0. && budget > 0 && !self.previews.contains_key(&f.path) {
@@ -868,6 +887,7 @@ impl eframe::App for App {
                                     });
                                 ui.add_space(4.);
                             }
+                            });
                             ui.add_space(8.);
                             if run.finished && remaining > 0 || run.deleted_count() > 0 {
                                 ui.collapsing("Riepilogo", |ui| { for line in run.finding_summary() { ui.label(line); } });

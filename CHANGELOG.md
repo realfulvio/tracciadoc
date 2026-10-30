@@ -1,8 +1,16 @@
 # Changelog
 
-## Non rilasciato
+## 0.2.8 - 2026-10-30
 
-- Lo stemma del Comune non è più incorporato: il logo in testa al verbale è facoltativo e si legge da `logo-ente.png` accanto all'EXE. Senza il file non compare nulla.
+- Interfaccia rifatta con una gerarchia più chiara: una schermata per fase (Aree, Scansione, Revisione, Verifica finale), titolo e sottotitolo brevi, una sola azione principale nella barra in basso a destra.
+- Aree: dischi e cartelle come schede selezionabili che vanno a capo; reti escluse e volumi senza lettera con un nome leggibile; testi lunghi e opzioni avanzate nei menu comprimibili.
+- Scansione: indicatore a cerchio grande e quattro riquadri (file analizzati, sospetti, velocità, tempo residuo). Nella barra laterale, sotto il tempo residuo, le accelerazioni (SSE4.2, AVX2, AVX-512, GPU, iGPU, NPU): grigie se non usate, verdi quelle in uso; GPU, iGPU e NPU non sono ancora implementate.
+- Revisione: ogni file è una scheda con nome, tipo di documento, percorso, motivo e anteprima sfocata (nitida al passaggio del mouse); pulsanti incolonnati a destra; due colonne sugli schermi larghi. L'eliminazione definitiva si conferma nella barra delle azioni.
+- Console più alta (circa 6-8 righe), con stato, zoom dell'interfaccia e "Copia diagnostica" nella stessa barra.
+- Sugli schermi grandi l'interfaccia parte ingrandita (125% o 150%); regolabile dal menu.
+- Percorsi mascherati nelle schermate e nei messaggi; singolare e plurale corretti nei contatori.
+- Il logo del verbale è facoltativo e si legge da `logo-ente.png` accanto all'EXE; senza il file non compare nulla.
+- README rifatto con screenshot della nuova interfaccia.
 
 ## 0.2.7 - 2026-10-30
 

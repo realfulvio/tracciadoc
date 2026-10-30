@@ -1,6 +1,6 @@
 # Validazione MVP 0.1.0 - 28 ottobre 2026
 
-Verifiche effettuate nativamente su Windows 11 Pro build 26300, Rust 1.99.1 x64 MSVC. CPU AMD Ryzen 7 PRO 5750G, 8 core / 16 thread; 32 GB RAM; corpus su SSD NVMe iDsonix. GPU rilevate: NVIDIA Quadro RTX 4000, driver 32.0.16.1692, e VDGPUProxy Device 11.29.55.197. Nessun backend OCR GPU/NPU utilizzato e nessuna misura di memoria GPU dichiarata.
+Verifiche effettuate nativamente su Windows 11 Pro build 26300, Rust 1.99.1 x64 MSVC. CPU AMD Ryzen 7 PRO, 8 core / 16 thread; 32 GB RAM; corpus su SSD NVMe. GPU rilevate: una NVIDIA dedicata e un adattatore virtuale. Nessun backend OCR GPU/NPU utilizzato e nessuna misura di memoria GPU dichiarata.
 
 Rilevamento effettivo via macro Rust: SSE4.1, AVX, AVX2 e FMA disponibili; AVX512F/BW/DQ/VL/VNNI non disponibili. Il percorso numerico OCR `avx2` e stato confermato dalla variabile del motore distribuito, non dedotto dal solo inventario hardware. AVX-512 non viene selezionata. Il build Rust non impone AVX globalmente e incorpora la CRT MSVC statica.
 
@@ -62,7 +62,7 @@ Il parser mantiene i privilegi dell'operatore: Windows Job e processo separato n
 
 ## 0.2.0: OCR in parallelo, prefiltro e orientamento - 29 ottobre 2026
 
-Misure sulla VM di test `win11-test`: Windows 11 Enterprise LTSC 2024 x64 su KVM, 4 vCPU (4 core fisici rilevati), 7,9 GB RAM, scheda video virtuale QXL. **Nessuna GPU reale**: la GUI usa DirectX 12 su WARP. Rust 1.99.1 MSVC, CLI release, corpus solo sintetico, file in cache (nessuna misura a disco freddo). Default: 3 worker.
+Misure sulla VM di test: Windows 11 Enterprise LTSC 2024 x64 su KVM, 4 vCPU (4 core fisici rilevati), 7,9 GB RAM, scheda video virtuale QXL. **Nessuna GPU reale**: la GUI usa DirectX 12 su WARP. Rust 1.99.1 MSVC, CLI release, corpus solo sintetico, file in cache (nessuna misura a disco freddo). Default: 3 worker.
 
 ### Corpus di validazione (41 file)
 
@@ -105,7 +105,7 @@ GUI collaudata a schermo sulla VM (DirectX 12 su WARP, UI Automation e clic real
 
 ### PC fisico con GPU reale
 
-Collaudo sul PC di lavoro: Ryzen 7 PRO 5750G (8 core fisici, 16 logici), 32 GB RAM, NVIDIA Quadro RTX 4000 (driver 32.0.16.1692), SSD NVMe, Windows 11 Pro 26300. Pacchetto ricompilato da zero dal commit cd0214f, stessi passi del README. `cargo test --release` (7 test), Clippy `-D warnings`, `validate.py` (TP 29, TN 6, limitati 6 in generic e AVX2; scansione completa 7,9-8,0 s automatico, 9,7 s generic) e `edge_tests.py` passati. Corpus solo sintetico, file in cache.
+Collaudo su un PC fisico: Ryzen 7 PRO (8 core fisici, 16 logici), 32 GB RAM, GPU NVIDIA dedicata, SSD NVMe, Windows 11 Pro. Pacchetto ricompilato da zero dal commit cd0214f, stessi passi del README. `cargo test --release` (7 test), Clippy `-D warnings`, `validate.py` (TP 29, TN 6, limitati 6 in generic e AVX2; scansione completa 7,9-8,0 s automatico, 9,7 s generic) e `edge_tests.py` passati. Corpus solo sintetico, file in cache.
 
 | Corpus | Configurazione | Tempo | Core usati | Rilevamenti |
 |---|---|---:|---:|---:|
@@ -122,7 +122,7 @@ Collaudo sul PC di lavoro: Ryzen 7 PRO 5750G (8 core fisici, 16 logici), 32 GB R
 
 Da 1 a 7 worker 5,35x. Sul corpus a 41 file il tempo e dominato da `documento-fotografato.jpg`, per cui piu worker non aiutano. Con 7 worker l'inizializzazione dei motori OCR somma circa 3,3 s di CPU (circa 1 s con 3). Un worker su questo PC e piu lento di una vCPU della VM (112,9 s contro 96,4 s). Le 8 foto senza testo sono le due del corpus copiate 4 volte.
 
-GUI in finestra non massimizzata (1196x859): wgpu carica sia il driver NVIDIA sia WARP durante l'enumerazione, ma il processo alloca memoria dedicata (194-224 MiB) solo sulla Quadro e nulla sugli altri adattatori: rendering sulla GPU reale. Scansione delle prove sintetiche dalla GUI: 41 file, 29 rilevamenti, 7,5 s.
+GUI in finestra non massimizzata (1196x859): wgpu carica sia il driver NVIDIA sia WARP durante l'enumerazione, ma il processo alloca memoria dedicata (194-224 MiB) solo sulla GPU NVIDIA e nulla sugli altri adattatori: rendering sulla GPU reale. Scansione delle prove sintetiche dalla GUI: 41 file, 29 rilevamenti, 7,5 s.
 
 ### Non verificato
 

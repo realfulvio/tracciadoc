@@ -46,11 +46,12 @@ images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.png',images/'z.png')
 result=scan('timeout',images,['--timeout-secs','1'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
-# Deterministic memory pressure: a 5600x5600 RGB raster decodes to ~94 MB, within the 128 MiB decoder
-# limit but above a 64 MiB worker Job limit, whatever the OCR footprint of the machine.
-heavy=OUT/'memory';heavy.mkdir();Image.new('RGB',(5600,5600),'white').save(heavy/'a.png')
+# Deterministic memory pressure: a 6400x6400 RGB raster decodes to ~123 MB, within the 128 MiB decoder
+# limit but above a 96 MiB worker Job limit. 96 MiB still fit the OCR of z.png (ita+eng+osd engines,
+# ~90 MiB peak working set on the Windows VM); at 64 MiB the OCR itself no longer fits.
+heavy=OUT/'memory';heavy.mkdir();Image.new('RGB',(6400,6400),'white').save(heavy/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.png',heavy/'z.png')
-result=scan('memory',heavy,['--memory-mb','64'])
+result=scan('memory',heavy,['--memory-mb','96'])
 assert result['incomplete'] and len(result['findings'])==1,'Memory failure must recover and continue'
 assert scan('missing',OUT/'absent')['incomplete']
 

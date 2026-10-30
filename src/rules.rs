@@ -50,6 +50,12 @@ fn mrz_digit(s: &[u8]) -> u8 {
         % 10) as u8
         + b'0'
 }
+/// Etichetta all'inizio di una parola: NOME non conta dentro COGNOME, NAME non dentro SURNAME.
+fn has_label(context: &str, label: &str) -> bool {
+    context
+        .match_indices(label)
+        .any(|(i, _)| !context[..i].chars().next_back().is_some_and(char::is_alphanumeric))
+}
 pub fn detect(text: &str) -> Vec<String> {
     let upper = text.to_uppercase();
     let normalized = upper.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -99,7 +105,7 @@ pub fn detect(text: &str) -> Vec<String> {
                     "4A.",
                     "4B.",
                 ];
-                let fields = labels.iter().filter(|s| context.contains(**s)).count();
+                let fields = labels.iter().filter(|s| has_label(&context, s)).count();
                 let number = NUMBER
                     .find_iter(&context)
                     .any(|m| m.as_str().bytes().any(|b| b.is_ascii_digit()));
@@ -161,6 +167,8 @@ mod tests {
             "test@example.invalid",
             "carta di identita da allegare alla richiesta",
             "AA00000AA",
+            // Un modulo che chiede il documento: COGNOME contiene NOME, non sono due campi.
+            "Allegare copia della carta d'identita. Cognome del richiedente. Codice pratica AB12345678",
         ] {
             assert!(detect(text).is_empty());
         }

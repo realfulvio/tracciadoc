@@ -176,6 +176,27 @@ impl Drop for Ocr {
 const OSD_MIN_CONF: f32 = 2.0;
 
 pub const UNSUPPORTED: &str = "Formato non supportato o archivio non aperto";
+pub const OLE: &str = "Office cifrato o formato OLE legacy con estensione moderna: non analizzato";
+pub const HEIF: &str = "HEIC/HEIF: formato immagine non supportato, non analizzato";
+pub const MISMATCH: &str = "Contenuto corrotto o diverso dall'estensione: non analizzato";
+
+/// Firma non riconosciuta. Per i file senza estensione significativa (.dat, .tmp, ...) e solo un
+/// file non di interesse; con l'estensione di un formato cercato (foto.jpg, documento.docx) la
+/// copertura e invece incompleta e va dichiarata: es. Office protetto da password, HEIC, file corrotti.
+fn unrecognized(ext: &str, head: &[u8]) -> &'static str {
+    if !WANTED_EXT.contains(&ext) || head.is_empty() {
+        UNSUPPORTED
+    } else if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {
+        OLE
+    } else if ["heic", "heif"].contains(&ext)
+        || (head.get(4..8) == Some(b"ftyp")
+            && head.get(8..12).is_some_and(|b| [&b"heic"[..], b"heix", b"mif1", b"msf1", b"heim", b"heis", b"hevc"].contains(&b)))
+    {
+        HEIF
+    } else {
+        MISMATCH
+    }
+}
 pub const INTERRUPTED: &str = "Verifica interrotta";
 
 const WANTED_EXT: &[&str] = &[
@@ -254,6 +275,12 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
     let sy = |t: u32| if t == T { ih } else { ((t * th) as u64 * ih as u64 / h as u64) as u32 };
     Some((sx(x0), sy(y0), sx(x1), sy(y1)))
 }
+
+/// Lato massimo decodificato: un A4 a 600 dpi (4960x7016) deve entrare; la memoria resta
+/// limitata da `max_alloc`.
+pub const MAX_SIDE: u32 = 10_000;
+/// Lato massimo passato all'OCR (A4 a circa 300 dpi).
+const OCR_SIDE: u32 = 3_600;
 
 pub struct Parser {
     ocr: Option<Ocr>,
@@ -364,17 +391,22 @@ impl Parser {
             .unwrap();
         let mut limits = image::Limits::default();
         limits.max_alloc = Some(128 * 1024 * 1024);
-        limits.max_image_width = Some(7000);
-        limits.max_image_height = Some(7000);
+        limits.max_image_width = Some(MAX_SIDE);
+        limits.max_image_height = Some(MAX_SIDE);
         reader.limits(limits);
         let start = std::time::Instant::now();
         let decoded = reader.decode();
         a.timing.decode_ms += start.elapsed().as_secs_f64() * 1000.;
         match decoded {
+            // Scansioni a 600 dpi: ridotte a ~300 dpi, che basta all'OCR e ne dimezza i tempi.
+            Ok(img) if img.width().max(img.height()) > OCR_SIDE => {
+                // thumbnail: media intera senza il buffer f32 di resize(), che su 6400 px superava 300 MiB.
+                self.ocr(img.thumbnail(OCR_SIDE, OCR_SIDE), a, req)
+            }
             Ok(img) => self.ocr(img, a, req),
             Err(_) => a
                 .issues
-                .push("Immagine corrotta o limite 7000px / 128 MiB decodificati".into()),
+                .push("Immagine corrotta o limite 10000 px / 128 MiB decodificati".into()),
         }
     }
     fn pdf(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) -> Result<(), String> {
@@ -568,12 +600,14 @@ impl Parser {
                 .and_then(|s| s.to_str())
                 .unwrap_or("")
                 .to_ascii_lowercase();
-            let is_pdf = head.starts_with(b"%PDF-");
             let is_zip = head.starts_with(b"PK\x03\x04");
             let img = image::guess_format(head).ok();
+            // I lettori PDF accettano byte spuri prima dell'intestazione.
+            let is_pdf = head.starts_with(b"%PDF-")
+                || (!is_zip && img.is_none() && head.windows(5).any(|w| w == b"%PDF-"));
             let text_ext = ext == "rtf";
             if !is_pdf && !is_zip && img.is_none() && !text_ext {
-                return Err(UNSUPPORTED.into());
+                return Err(unrecognized(&ext, head).into());
             }
             let cap = if text_ext && !is_pdf && !is_zip && img.is_none() {
                 4_000_000
@@ -670,6 +704,15 @@ pub fn worker() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unrecognized_content_of_wanted_formats_is_not_ignored() {
+        assert_eq!(unrecognized("dat", b"garbage"), UNSUPPORTED);
+        assert_eq!(unrecognized("jpg", b""), UNSUPPORTED);
+        assert_eq!(unrecognized("docx", &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0]), OLE);
+        assert_eq!(unrecognized("jpg", b"\0\0\0\x18ftypheic\0\0"), HEIF);
+        assert_eq!(unrecognized("heic", b"anything"), HEIF);
+        assert_eq!(unrecognized("pdf", b"random bytes"), MISMATCH);
+    }
     #[test]
     fn office_entities_and_external_parts_are_not_silent() {
         let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub const RULES: &str = "2026.10.28-1";
+pub const RULES: &str = "2026.10.30-1";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub deep: bool,

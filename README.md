@@ -45,16 +45,19 @@ L'esito **«nessun documento rilevato»** compare solo a copertura completa: err
 ## Com'è fatto
 
 <p align="center">
+  <img src="docs/img/gui-aree.png" alt="Scelta delle aree da controllare" width="49%">
   <img src="docs/img/gui-scansione.png" alt="Scansione in corso con indicatore di avanzamento" width="49%">
-  <img src="docs/img/gui-segnalazioni.png" alt="Elenco delle segnalazioni con anteprime sfocate" width="49%">
 </p>
-<p align="center"><sub>Scansione in corso e revisione delle segnalazioni, su file sintetici di prova.</sub></p>
+<p align="center">
+  <img src="docs/img/gui-segnalazioni.png" alt="Elenco delle segnalazioni con anteprime sfocate" width="49%">
+  <img src="docs/img/gui-verbale.png" alt="Verifica finale dopo la ri-scansione" width="49%">
+</p>
+<p align="center"><sub>Scelta delle aree, scansione, revisione delle segnalazioni e verifica finale, su file sintetici di prova.</sub></p>
 
 <p align="center">
-  <img src="docs/img/gui-verbale.png" alt="Verifica finale dopo la ri-scansione" width="49%">
-  <img src="docs/img/verbale-esempio.png" alt="Pagina del verbale PDF di esempio" width="38%">
+  <img src="docs/img/verbale-esempio.png" alt="Prima pagina del verbale PDF di esempio" width="40%">
 </p>
-<p align="center"><sub>Verifica finale e prima pagina del verbale PDF (esempio dimostrativo).</sub></p>
+<p align="center"><sub>Prima pagina del verbale PDF (esempio dimostrativo).</sub></p>
 
 ## Sotto il cofano
 

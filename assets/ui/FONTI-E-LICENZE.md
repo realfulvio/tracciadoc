@@ -28,10 +28,6 @@ https://github.com/google/fonts/tree/main/ofl/titilliumweb
 
 Licenza SIL Open Font License 1.1, testo completo in `assets/fonts/OFL.txt`. Mantenere il copyright e la licenza nella distribuzione finale. Il font non deve essere installato globalmente: può essere incorporato nell'app.
 
-## Richiamo al Comune di Bondeno
-
-Riferimento visivo: https://www.comune.bondeno.fe.it/ . Dalla pagina sono stati osservati blu notte `#001A4D`, petrolio `#005E8E` e Titillium Web. Non è stato riutilizzato lo stemma comunale; il kit non implica approvazione o certificazione del Comune o di Lepida.
-
 ## Logo dell'ente (facoltativo)
 
 Il repository e il pacchetto pubblico non contengono stemmi o loghi di enti. Chi usa TracciaDoc può mettere un proprio `logo-ente.png` (PNG, al massimo 2048x2048 px e 2 MiB) accanto all'EXE: compare in testa al verbale PDF. Marchi e stemmi restano dei rispettivi titolari e vanno usati solo con la loro autorizzazione.

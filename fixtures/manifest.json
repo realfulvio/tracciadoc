@@ -192,8 +192,22 @@
     "file": "legacy.doc",
     "positive": false,
     "document_class": "problema",
-    "format": "DOC non supportato",
+    "format": "DOC corrotto",
     "limited": true
+  },
+  {
+    "file": "documento.doc",
+    "positive": true,
+    "document_class": "carta",
+    "format": "DOC",
+    "limited": false
+  },
+  {
+    "file": "immagine.doc",
+    "positive": true,
+    "document_class": "carta",
+    "format": "DOC immagine",
+    "limited": false
   },
   {
     "file": "archivio.zip",

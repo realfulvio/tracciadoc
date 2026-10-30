@@ -67,5 +67,5 @@ Collegamenti e junction non sono seguiti; i volumi montati nelle cartelle
 vanno selezionati esplicitamente. AppData/cestino/temporanei non sono esclusi.
 
 L'esito non certifica l'assenza assoluta di documenti. Una segnalazione
-richiede controllo umano. Nessuna approvazione del Comune o di Lepida;
-l'accettazione del verbale va concordata con chi lo richiede.
+richiede controllo umano. L'accettazione del verbale va concordata con chi
+lo richiede.

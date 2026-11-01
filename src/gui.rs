@@ -15,15 +15,59 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
-const ACCENT: Color32 = Color32::from_rgb(62, 207, 178);
-const PRIMARY: Color32 = Color32::from_rgb(18, 128, 111);
-const BG: Color32 = Color32::from_rgb(26, 29, 33);
-const SURFACE: Color32 = Color32::from_rgb(35, 39, 45);
-const OK: Color32 = Color32::from_rgb(126, 217, 134);
-const WARN: Color32 = Color32::from_rgb(242, 184, 75);
-const DANGER: Color32 = Color32::from_rgb(143, 59, 59);
-/// Grigio quasi invisibile: elementi non attivi.
-const DIM: Color32 = Color32::from_rgb(75, 83, 91);
+/// Tema chiaro attivo (impostato dal pulsante in console). Tavolozza scelta a ogni disegno.
+static LIGHT: AtomicBool = AtomicBool::new(false);
+fn light() -> bool {
+    LIGHT.load(Ordering::Relaxed)
+}
+fn pick(dark: (u8, u8, u8), bright: (u8, u8, u8)) -> Color32 {
+    let (r, g, b) = if light() { bright } else { dark };
+    Color32::from_rgb(r, g, b)
+}
+fn c_accent() -> Color32 { pick((47, 209, 176), (11, 91, 140)) }
+fn c_primary() -> Color32 { pick((22, 154, 130), (11, 91, 140)) }
+fn c_bg() -> Color32 { pick((18, 20, 24), (238, 242, 246)) }
+fn c_surface() -> Color32 { pick((27, 30, 36), (255, 255, 255)) }
+fn c_side() -> Color32 { pick((14, 16, 19), (223, 231, 239)) }
+fn c_bar() -> Color32 { pick((22, 25, 29), (230, 236, 243)) }
+fn c_console() -> Color32 { pick((11, 13, 16), (214, 223, 233)) }
+fn c_line() -> Color32 { pick((43, 48, 57), (211, 220, 230)) }
+fn c_text() -> Color32 { pick((233, 236, 239), (20, 32, 46)) }
+fn c_weak() -> Color32 { pick((141, 148, 159), (93, 107, 124)) }
+fn c_dim() -> Color32 { pick((75, 83, 91), (150, 162, 176)) }
+fn c_ok() -> Color32 { pick((126, 217, 134), (30, 140, 70)) }
+fn c_warn() -> Color32 { pick((244, 183, 63), (184, 106, 0)) }
+fn c_danger() -> Color32 { pick((168, 50, 58), (179, 40, 47)) }
+fn c_err() -> Color32 { pick((255, 148, 148), (179, 40, 47)) }
+fn c_sel() -> Color32 { pick((18, 51, 47), (220, 235, 245)) }
+fn c_sel_soft() -> Color32 { pick((22, 44, 43), (232, 242, 249)) }
+/// Colore del segno dentro i cerchi pieni (spunta, numero).
+fn c_ink() -> Color32 { pick((7, 32, 27), (255, 255, 255)) }
+/// Stile egui dalla tavolozza corrente; da richiamare a ogni cambio di tema.
+fn apply_style(ctx: &egui::Context) {
+    let theme = if light() { egui::Theme::Light } else { egui::Theme::Dark };
+    ctx.set_theme(theme);
+    ctx.style_mut_of(theme, |style| {
+        style.spacing.item_spacing = egui::vec2(12., 10.);
+        style.spacing.button_padding = egui::vec2(16., 10.);
+        style.visuals.panel_fill = c_bg();
+        style.visuals.window_fill = c_surface();
+        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1., pick((96, 106, 116), (160, 172, 186)));
+        style.visuals.widgets.inactive.weak_bg_fill = pick((40, 44, 52), (244, 247, 250));
+        style.visuals.extreme_bg_color = c_side();
+        style.visuals.override_text_color = Some(c_text());
+        style.visuals.weak_text_color = Some(c_weak());
+        style.visuals.selection.bg_fill = c_sel();
+        style.visuals.widgets.hovered.bg_fill = pick((18, 150, 128), (200, 222, 238));
+        style.visuals.widgets.hovered.weak_bg_fill = pick((48, 54, 64), (226, 236, 246));
+        style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1., c_accent());
+        style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2., c_accent());
+        style.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(16.));
+        style.text_styles.insert(egui::TextStyle::Button, semibold(16.));
+        style.text_styles.insert(egui::TextStyle::Heading, semibold(21.));
+        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(13.));
+    });
+}
 fn semibold(size: f32) -> egui::FontId {
     egui::FontId::new(size, egui::FontFamily::Name("Titillium SemiBold".into()))
 }
@@ -54,8 +98,8 @@ fn make_preview(ctx: &egui::Context, path: &Path, format: &str) -> Preview {
     limits.max_image_height = Some(parser::MAX_SIDE);
     limits.max_alloc = Some(128 * 1024 * 1024);
     reader.limits(limits);
-    let small = reader.decode().ok()?.thumbnail(176, 120).to_rgba8();
-    let blurred = image::imageops::blur(&small, 6.0);
+    let small = reader.decode().ok()?.thumbnail(240, 160).to_rgba8();
+    let blurred = image::imageops::blur(&small, 8.0);
     let tex = |name: &str, img: &image::RgbaImage| {
         ctx.load_texture(
             name,
@@ -99,6 +143,15 @@ pub struct App {
     samples: Vec<(Instant, u64)>,
     /// Zoom iniziale scelto in base alla larghezza dello schermo (una sola volta).
     zoom_set: bool,
+    /// Capacita e spazio libero (byte) dei volumi, per le schede delle aree.
+    space: HashMap<PathBuf, (u64, u64)>,
+    /// File mostrato nel pannello di dettaglio della revisione.
+    focus: Option<PathBuf>,
+    /// Filtro per tipo di documento nella revisione ("" = tutti).
+    filter: String,
+    /// File al secondo, un campione ogni ~2 s, per il grafico della scansione.
+    rate_hist: Vec<f32>,
+    rate_at: Instant,
 }
 /// Numero con separatore delle migliaia all'italiana (12.480).
 fn it_num(n: u64) -> String {
@@ -131,7 +184,7 @@ fn ring(ui: &mut egui::Ui, size: f32, frac: f32, text: &str) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(size, size), egui::Sense::hover());
     let (c, r, w) = (rect.center(), size / 2. - 7., 10.);
     let painter = ui.painter();
-    painter.circle_stroke(c, r, egui::Stroke::new(w, SURFACE));
+    painter.circle_stroke(c, r, egui::Stroke::new(w, c_surface()));
     let frac = frac.clamp(0., 1.);
     if frac > 0. {
         let start = -std::f32::consts::FRAC_PI_2;
@@ -141,11 +194,11 @@ fn ring(ui: &mut egui::Ui, size: f32, frac: f32, text: &str) {
             c + egui::vec2(a.cos(), a.sin()) * r
         };
         let points: Vec<egui::Pos2> = (0..=steps).map(at).collect();
-        painter.add(egui::Shape::line(points, egui::Stroke::new(w, PRIMARY)));
-        painter.circle_filled(at(0), w / 2., PRIMARY);
-        painter.circle_filled(at(steps), w / 2., PRIMARY);
+        painter.add(egui::Shape::line(points, egui::Stroke::new(w, c_accent())));
+        painter.circle_filled(at(0), w / 2., c_accent());
+        painter.circle_filled(at(steps), w / 2., c_accent());
     }
-    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(size / 4.), Color32::from_rgb(236, 239, 242));
+    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(size / 4.), c_text());
 }
 fn stat(ui: &mut egui::Ui, label: &str, value: String) {
     ui.horizontal(|ui| {
@@ -161,20 +214,20 @@ fn step_row(ui: &mut egui::Ui, n: u32, label: &str, active: u32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 38.), egui::Sense::hover());
     let painter = ui.painter();
     if n == active {
-        painter.rect_filled(rect, 8., Color32::from_rgb(24, 70, 63));
+        painter.rect_filled(rect, 8., c_sel());
     }
     let c = egui::pos2(rect.left() + 22., rect.center().y);
-    let (fill, text_color) = if n < active { (OK, Color32::from_rgb(236, 239, 242)) } else if n == active { (ACCENT, Color32::WHITE) } else { (Color32::TRANSPARENT, Color32::from_rgb(154, 164, 173)) };
+    let (fill, text_color) = if n <= active { (c_accent(), c_text()) } else { (Color32::TRANSPARENT, c_weak()) };
     painter.circle_filled(c, 11., fill);
     if n > active {
-        painter.circle_stroke(c, 11., egui::Stroke::new(1.5, Color32::from_rgb(54, 60, 68)));
+        painter.circle_stroke(c, 11., egui::Stroke::new(1.5, c_line()));
     }
     if n < active {
-        let ink = egui::Stroke::new(2.2, Color32::from_rgb(12, 42, 16));
+        let ink = egui::Stroke::new(2.2, c_ink());
         painter.line_segment([c + egui::vec2(-4.5, 0.5), c + egui::vec2(-1.5, 3.5)], ink);
         painter.line_segment([c + egui::vec2(-1.5, 3.5), c + egui::vec2(4.5, -3.5)], ink);
     } else {
-        painter.text(c, egui::Align2::CENTER_CENTER, n.to_string(), semibold(13.), if n == active { Color32::from_rgb(6, 49, 42) } else { text_color });
+        painter.text(c, egui::Align2::CENTER_CENTER, n.to_string(), semibold(13.), if n == active { c_ink() } else { text_color });
     }
     painter.text(egui::pos2(rect.left() + 44., rect.center().y), egui::Align2::LEFT_CENTER, label, semibold(17.), text_color);
 }
@@ -182,7 +235,7 @@ fn step_row(ui: &mut egui::Ui, n: u32, label: &str, active: u32) {
 fn chip(ui: &mut egui::Ui, text: &str, color: Color32, strong: bool) {
     egui::Frame::new()
         .fill(if strong { color.gamma_multiply(0.16) } else { Color32::TRANSPARENT })
-        .stroke(egui::Stroke::new(1., if strong { color.gamma_multiply(0.6) } else { Color32::from_rgb(35, 39, 45) }))
+        .stroke(egui::Stroke::new(1., if strong { color.gamma_multiply(0.6) } else { c_line() }))
         .corner_radius(99)
         .inner_margin(egui::Margin::symmetric(9, 1))
         .show(ui, |ui| {
@@ -196,40 +249,135 @@ fn heading(ui: &mut egui::Ui, title: &str, sub: &str) {
 /// Riquadro numerico della scansione: etichetta piccola, valore grande.
 fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: String, color: Option<Color32>) {
     egui::Frame::new()
-        .fill(SURFACE)
-        .stroke(egui::Stroke::new(1., Color32::from_rgb(54, 60, 68)))
+        .fill(c_surface())
+        .stroke(egui::Stroke::new(1., c_line()))
         .corner_radius(10)
         .inner_margin(14)
         .show(ui, |ui| {
             ui.set_width((width - 28.).max(60.));
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.;
-                ui.label(RichText::new(label).size(12.5).color(Color32::from_rgb(120, 130, 140)));
-                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(Color32::from_rgb(236, 239, 242))));
+                ui.label(RichText::new(label).size(12.5).color(c_weak()));
+                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(c_text())));
             });
         });
 }
 fn primary(text: &str, height: f32) -> egui::Button<'static> {
-    egui::Button::new(RichText::new(text.to_string()).font(semibold(19.)).color(Color32::WHITE)).fill(PRIMARY).min_size(egui::vec2(220., height))
+    egui::Button::new(RichText::new(text.to_string()).font(semibold(19.)).color(Color32::WHITE)).fill(c_primary()).min_size(egui::vec2(220., height))
+}
+/// Dimensione di un file in KB/MB.
+fn size_text(bytes: u64) -> String {
+    if bytes >= 1_048_576 { format!("{:.1} MB", bytes as f64 / 1_048_576.).replace('.', ",") } else { format!("{} KB", bytes.div_ceil(1024)) }
+}
+/// Dimensione in GB/TB all'italiana.
+fn it_size(bytes: u64) -> String {
+    let gb = bytes as f64 / 1_073_741_824.;
+    if gb >= 1000. { format!("{:.1} TB", gb / 1024.).replace('.', ",") } else { format!("{} GB", gb.round() as u64) }
+}
+/// Barra orizzontale piena per la frazione data.
+fn bar(ui: &mut egui::Ui, frac: f32, height: f32, color: Color32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
+    ui.painter().rect_filled(rect, height / 2., c_dim().gamma_multiply(0.35));
+    let frac = frac.clamp(0., 1.);
+    if frac > 0. {
+        let fill = egui::Rect::from_min_size(rect.min, egui::vec2((rect.width() * frac).max(height), height));
+        ui.painter().rect_filled(fill, height / 2., color);
+    }
+}
+/// Grafico a linea dei campioni (file al secondo).
+fn spark(ui: &mut egui::Ui, data: &[f32], height: f32) {
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
+    ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], egui::Stroke::new(1., c_line()));
+    if data.len() < 2 {
+        return;
+    }
+    let max = data.iter().cloned().fold(1., f32::max);
+    let n = data.len() as f32 - 1.;
+    let pts: Vec<egui::Pos2> = data.iter().enumerate().map(|(i, v)| egui::pos2(rect.left() + rect.width() * i as f32 / n, rect.bottom() - 4. - (rect.height() - 8.) * (v / max))).collect();
+    ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.5, c_accent())));
+}
+/// Giudizio sugli indizi di un file: tipo di riscontri trovati, non una probabilita statistica.
+fn level_of(f: &Finding) -> (&'static str, Color32, f32) {
+    let strong = f.reasons.iter().any(|r| r.starts_with("MRZ") || r.contains("numerazione formalmente compatibile") || r.contains("codice fiscale superato"));
+    match (strong, f.reasons.len()) {
+        (true, n) if n >= 2 => ("Indizi forti", c_accent(), 0.95),
+        (true, _) => ("Indizi buoni", c_accent(), 0.75),
+        (false, n) if n >= 2 => ("Indizi buoni", c_accent(), 0.7),
+        _ => ("Indizi parziali", c_warn(), 0.45),
+    }
+}
+/// Pulsante-filtro a pillola.
+fn pill(ui: &mut egui::Ui, text: &str, on: bool) -> egui::Response {
+    ui.add(
+        egui::Button::new(RichText::new(text).size(14.).color(if on { c_accent() } else { c_weak() }))
+            .fill(if on { c_sel() } else { Color32::TRANSPARENT })
+            .stroke(egui::Stroke::new(1., if on { c_accent() } else { c_line() }))
+            .corner_radius(99)
+            .min_size(egui::vec2(0., 30.)),
+    )
+}
+/// Anteprima del verbale: pagina disegnata con i numeri reali, non il PDF vero.
+fn paper(ui: &mut egui::Ui, width: f32, before: u64, after: u64, date: &str) {
+    let size = egui::vec2(width.min(380.), width.min(380.) * 1.36);
+    let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+    let p = ui.painter_at(rect);
+    let ink = Color32::from_rgb(26, 34, 48);
+    let mute = Color32::from_rgb(102, 110, 124);
+    let teal = Color32::from_rgb(22, 154, 130);
+    p.rect_filled(rect.translate(egui::vec2(0., 5.)), 4., Color32::from_black_alpha(60));
+    p.rect_filled(rect, 4., Color32::WHITE);
+    let k = size.x / 380.;
+    let m = 30. * k;
+    let x0 = rect.left() + m;
+    let x1 = rect.right() - m;
+    let mut y = rect.top() + m;
+    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "TracciaDoc", semibold(16. * k), ink);
+    p.text(egui::pos2(x1, y + 3. * k), egui::Align2::RIGHT_TOP, "Verbale di verifica", egui::FontId::proportional(10. * k), mute);
+    y += 28. * k;
+    p.line_segment([egui::pos2(x0, y), egui::pos2(x1, y)], egui::Stroke::new(2., teal));
+    y += 14. * k;
+    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "Verbale di verifica\ndocumenti d'identita", semibold(17. * k), ink);
+    y += 50. * k;
+    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, format!("Data {date}  ·  Operatore: ________"), egui::FontId::proportional(10. * k), mute);
+    y += 26. * k;
+    let bw = (x1 - x0 - 12. * k) / 2.;
+    for (i, (label, value, color, fill)) in [("Prima", before, Color32::from_rgb(184, 106, 0), Color32::WHITE), ("Dopo", after, teal, Color32::from_rgb(234, 248, 245))].into_iter().enumerate() {
+        let b = egui::Rect::from_min_size(egui::pos2(x0 + i as f32 * (bw + 12. * k), y), egui::vec2(bw, 62. * k));
+        p.rect_filled(b, 4., fill);
+        p.rect_stroke(b, 4., egui::Stroke::new(1., if i == 1 { teal } else { Color32::from_rgb(213, 219, 226) }), egui::StrokeKind::Inside);
+        p.text(b.min + egui::vec2(8. * k, 6. * k), egui::Align2::LEFT_TOP, label, egui::FontId::proportional(10. * k), mute);
+        p.text(b.min + egui::vec2(8. * k, 22. * k), egui::Align2::LEFT_TOP, value.to_string(), semibold(26. * k), color);
+    }
+    y += 82. * k;
+    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "Elenco dei file eliminati", semibold(11. * k), ink);
+    y += 20. * k;
+    for _ in 0..5 {
+        p.rect_filled(egui::Rect::from_min_size(egui::pos2(x0, y), egui::vec2(x1 - x0, 5. * k)), 3., Color32::from_rgb(230, 235, 240));
+        y += 15. * k;
+    }
+    y += 6. * k;
+    let note = egui::Rect::from_min_size(egui::pos2(x0, y), egui::vec2(x1 - x0, 44. * k));
+    p.rect_filled(note, 3., Color32::from_rgb(234, 248, 245));
+    p.rect_filled(egui::Rect::from_min_size(note.min, egui::vec2(3., note.height())), 0., teal);
+    p.text(note.min + egui::vec2(12. * k, 8. * k), egui::Align2::LEFT_TOP, if after == 0 { "Nessun documento rilevato\nnell'ambito esaminato." } else { "Restano segnalazioni\nda rivedere." }, egui::FontId::proportional(10. * k), Color32::from_rgb(14, 90, 76));
 }
 /// Tipo di documento dedotto dai motivi della segnalazione.
 fn kind_of(f: &Finding) -> (&'static str, Color32) {
     for (name, prefixes, color) in [
-        ("Carta d'identita", &["Carta d'identita:", "MRZ TD1:"][..], ACCENT),
-        ("Passaporto", &["Passaporto:", "MRZ TD3:"][..], ACCENT),
-        ("Patente", &["Patente:"][..], WARN),
-        ("Tessera sanitaria", &["Tessera sanitaria:"][..], ACCENT),
+        ("Carta d'identita", &["Carta d'identita:", "MRZ TD1:"][..], c_accent()),
+        ("Passaporto", &["Passaporto:", "MRZ TD3:"][..], c_accent()),
+        ("Patente", &["Patente:"][..], c_warn()),
+        ("Tessera sanitaria", &["Tessera sanitaria:"][..], c_accent()),
     ] {
         if f.reasons.iter().any(|r| prefixes.iter().any(|p| r.starts_with(p))) {
             return (name, color);
         }
     }
-    ("Da verificare", WARN)
+    ("Da verificare", c_warn())
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // Tema scuro fisso: con il tema chiaro di Windows i colori del testo restavano quelli di default su sfondo scuro.
-        cc.egui_ctx.set_theme(egui::Theme::Dark);
+        // Tema scelto dall'app (scuro all'avvio): il tema di Windows non conta, i colori del testo sono sempre espliciti.
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
             "Titillium Regular".into(),
@@ -260,32 +408,7 @@ impl App {
             .families
             .insert(egui::FontFamily::Name("Titillium SemiBold".into()), bold);
         cc.egui_ctx.set_fonts(fonts);
-        cc.egui_ctx.style_mut_of(egui::Theme::Dark, |style| {
-            style.spacing.item_spacing = egui::vec2(12., 10.);
-            style.spacing.button_padding = egui::vec2(16., 10.);
-            style.visuals.panel_fill = BG;
-            style.visuals.window_fill = SURFACE;
-            style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1., Color32::from_rgb(96, 106, 116));
-            style.visuals.extreme_bg_color = Color32::from_rgb(20, 22, 26);
-            style.visuals.override_text_color = Some(Color32::from_rgb(236, 239, 242));
-            style.visuals.weak_text_color = Some(Color32::from_rgb(154, 164, 173));
-            style.visuals.selection.bg_fill = Color32::from_rgb(24, 70, 63);
-            style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(18, 150, 128);
-            style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1., ACCENT);
-            style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2., ACCENT);
-            style
-                .text_styles
-                .insert(egui::TextStyle::Body, egui::FontId::proportional(16.));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Button, semibold(16.));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Heading, semibold(21.));
-            style
-                .text_styles
-                .insert(egui::TextStyle::Small, egui::FontId::proportional(13.));
-        });
+        apply_style(&cc.egui_ctx);
         let gpu = cc.wgpu_render_state.as_ref().map_or_else(
             || "OpenGL (glow)".to_string(),
             |rs| {
@@ -297,8 +420,12 @@ impl App {
             "TracciaDoc {} avviato · grafica {gpu}",
             env!("CARGO_PKG_VERSION")
         ));
+        let volumes = engine::volumes();
+        let space: HashMap<PathBuf, (u64, u64)> = volumes.iter().filter_map(|(p, _)| engine::disk_space(p).map(|s| (p.clone(), s))).collect();
+        // Di default tutti i dischi fissi con lettera: la scansione parte solo dal pulsante.
+        let roots: Vec<PathBuf> = volumes.iter().filter(|(p, l)| l.ends_with("locale fisso") && !p.to_string_lossy().starts_with("\\\\?\\Volume")).map(|(p, _)| p.clone()).collect();
         Self {
-            roots: vec![],
+            roots,
             path: String::new(),
             settings: Settings::default(),
             operator: String::new(),
@@ -306,7 +433,7 @@ impl App {
             shared: Arc::new(Mutex::new(Default::default())),
             stop: Arc::new(AtomicBool::new(false)),
             handle: None,
-            volumes: engine::volumes(),
+            volumes,
             notice: String::new(),
             include_paths: true,
             demo: false,
@@ -329,6 +456,11 @@ impl App {
             console_open: true,
             copied: None,
             samples: vec![],
+            space,
+            focus: None,
+            filter: String::new(),
+            rate_hist: vec![],
+            rate_at: Instant::now(),
             // Su WARP ogni frame costa CPU sottratta all'OCR: a 150 ms la scansione sintetica passava da ~12 s a ~90 s.
             repaint: if cc.wgpu_render_state.as_ref().is_some_and(|rs| {
                 rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu
@@ -372,6 +504,7 @@ impl App {
         self.confirm = false;
         self.previews.clear();
         self.samples.clear();
+        self.rate_hist.clear();
         self.shared.lock().unwrap().counts = Default::default();
         let shared = self.shared.clone();
         let stop = self.stop.clone();
@@ -383,8 +516,8 @@ impl App {
 fn card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) {
     let width = ui.available_width();
     egui::Frame::new()
-        .fill(SURFACE)
-        .stroke(egui::Stroke::new(1., Color32::from_rgb(54, 60, 68)))
+        .fill(c_surface())
+        .stroke(egui::Stroke::new(1., c_line()))
         .corner_radius(10)
         .inner_margin(16)
         .show(ui, |ui| {
@@ -454,6 +587,13 @@ impl eframe::App for App {
             }
             _ => 0.,
         };
+        if running && rate > 0. && self.rate_at.elapsed() >= Duration::from_secs(2) {
+            self.rate_at = Instant::now();
+            self.rate_hist.push(rate as f32);
+            if self.rate_hist.len() > 90 {
+                self.rate_hist.remove(0);
+            }
+        }
         let elapsed = self.started.map_or(0., |t| t.elapsed().as_secs_f64());
         let shown = running || outcome.is_some_and(|(finished, _)| finished);
         let finished_ok = !running && outcome.is_some_and(|(f, i)| f && !i);
@@ -481,7 +621,7 @@ impl eframe::App for App {
 
         // Console: barra sottile con stato, zoom e diagnostica; da aperta mostra circa sei righe.
         egui::Panel::bottom("console")
-            .frame(egui::Frame::new().fill(Color32::from_rgb(14, 16, 19)).inner_margin(egui::Margin::symmetric(16, 8)))
+            .frame(egui::Frame::new().fill(c_console()).inner_margin(egui::Margin::symmetric(16, 8)))
             .show(root, |ui| {
                 ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), 30.), egui::Layout::left_to_right(egui::Align::Center), |ui| {
                     let arrow = if self.console_open { "▾" } else { "▸" };
@@ -491,7 +631,7 @@ impl eframe::App for App {
                     let doing = if running { format!("{phase}  {}", diag::mask(&current)) } else { "In attesa".to_string() };
                     ui.add(egui::Label::new(RichText::new(doing).small().weak()).truncate());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if ui.add(egui::Button::new(RichText::new("Copia diagnostica").small().color(ACCENT)).frame(false)).on_hover_text("Copia negli appunti un report per gli sviluppatori: nessun contenuto dei documenti, nome utente mascherato").clicked(){
+                        if ui.add(egui::Button::new(RichText::new("Copia diagnostica").small().color(c_accent())).frame(false)).on_hover_text("Copia negli appunti un report per gli sviluppatori: nessun contenuto dei documenti, nome utente mascherato").clicked(){
                             let text=diag::report(&self.gpu,&phase,&current,run.as_ref());
                             let kb=text.len().div_ceil(1024);
                             // Scrittura diretta negli appunti di Windows; se fallisce ripiega su egui.
@@ -499,6 +639,10 @@ impl eframe::App for App {
                             if !direct {ctx.copy_text(text);}
                             diag::info(format!("Diagnostica copiata negli appunti ({kb} KB{})",if direct{""}else{", via egui"}));
                             self.copied=Some((format!("Diagnostica copiata negli appunti ({kb} KB): incollala nella chat"),Instant::now()));
+                        }
+                        if ui.add(egui::Button::new(RichText::new(if light() { "Tema scuro" } else { "Tema chiaro" }).small().color(c_accent())).frame(false)).clicked() {
+                            LIGHT.store(!light(), Ordering::Relaxed);
+                            apply_style(&ctx);
                         }
                         egui::ComboBox::from_id_salt("ui-scale")
                             .selected_text(format!("UI {:.0}%", self.zoom * 100.))
@@ -510,7 +654,7 @@ impl eframe::App for App {
                                 }
                             });
                         if let Some((msg, _)) = &self.copied {
-                            ui.add(egui::Label::new(RichText::new(msg).small().color(OK)).truncate());
+                            ui.add(egui::Label::new(RichText::new(msg).small().color(c_ok())).truncate());
                         }
                     });
                 });
@@ -519,10 +663,10 @@ impl eframe::App for App {
                         ui.spacing_mut().item_spacing.y = 2.;
                         for e in diag::recent(300) {
                             let color = match e.level {
-                                diag::Level::Info => Color32::from_rgb(154, 164, 173),
-                                diag::Level::Ok => OK,
-                                diag::Level::Warn => WARN,
-                                diag::Level::Err => Color32::from_rgb(255, 148, 148),
+                                diag::Level::Info => c_weak(),
+                                diag::Level::Ok => c_ok(),
+                                diag::Level::Warn => c_warn(),
+                                diag::Level::Err => c_err(),
                             };
                             ui.add(egui::Label::new(RichText::new(e.line()).monospace().size(13.).color(color)).wrap());
                         }
@@ -533,7 +677,7 @@ impl eframe::App for App {
         // Barra laterale: marchio, passi, indicatore, accelerazioni, firma.
         egui::Panel::left("steps")
             .exact_size(220.)
-            .frame(egui::Frame::new().fill(Color32::from_rgb(20, 22, 26)).inner_margin(16))
+            .frame(egui::Frame::new().fill(c_side()).inner_margin(16))
             .show(root, |ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)));
@@ -563,7 +707,7 @@ impl eframe::App for App {
                 }
                 // Accelerazioni subito sotto le statistiche: grigie se inattive, verdi se usate nella scansione.
                 ui.add_space(14.);
-                ui.label(RichText::new("ACCELERAZIONI").size(11.5).color(DIM));
+                ui.label(RichText::new("ACCELERAZIONI").size(11.5).color(c_dim()));
                 let method = engine::cpu_method(self.settings.cpu_only);
                 let items = [
                     ("SSE4.2", running && (method == "avx2" || method == "sse")),
@@ -575,7 +719,7 @@ impl eframe::App for App {
                 ];
                 egui::Grid::new("accel").spacing([6., 6.]).show(ui, |ui| {
                     for (i, (name, on)) in items.into_iter().enumerate() {
-                        chip(ui, name, if on { ACCENT } else { DIM }, on);
+                        chip(ui, name, if on { c_accent() } else { c_dim() }, on);
                         if i % 3 == 2 { ui.end_row(); }
                     }
                 });
@@ -591,7 +735,7 @@ impl eframe::App for App {
 
         // Barra delle azioni: una sola azione principale per fase, in basso a destra.
         egui::Panel::bottom("actions")
-            .frame(egui::Frame::new().fill(Color32::from_rgb(23, 26, 30)).inner_margin(egui::Margin::symmetric(28, if short { 8 } else { 14 })))
+            .frame(egui::Frame::new().fill(c_bar()).inner_margin(egui::Margin::symmetric(28, if short { 8 } else { 14 })))
             .show(root, |ui| {
                 let h = if short { 40. } else { 48. };
                 ui.horizontal(|ui| {
@@ -599,15 +743,18 @@ impl eframe::App for App {
                     match active {
                         1 => {
                             let ready = !self.roots.is_empty() && !self.operator.trim().is_empty();
-                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else { plural(self.roots.len(), "area selezionata", "aree selezionate") };
+                            let hint = if self.roots.is_empty() { "Seleziona almeno un disco o una cartella".to_string() } else if self.operator.trim().is_empty() { "Inserisci il nome dell'operatore".to_string() } else {
+                                let used: u64 = self.roots.iter().filter_map(|p| self.space.get(p)).map(|(t, f)| t.saturating_sub(*f)).sum();
+                                if used > 0 { format!("{}  ·  {} occupati", plural(self.roots.len(), "area selezionata", "aree selezionate"), it_size(used)) } else { plural(self.roots.len(), "area selezionata", "aree selezionate") }
+                            };
                             let button_w = if ui.available_width() < 560. { 170. } else { 220. };
                             let left_w = (ui.available_width() - button_w - 16.).max(60.);
                             ui.allocate_ui_with_layout(egui::vec2(left_w, h), egui::Layout::top_down(egui::Align::Min), |ui| {
                                 ui.spacing_mut().item_spacing.y = 2.;
                                 if self.ocr_present {
-                                    chip(ui, "OCR offline pronto", ACCENT, true);
+                                    chip(ui, "OCR offline pronto", c_accent(), true);
                                 } else {
-                                    chip(ui, "OCR NON DISPONIBILE", WARN, true);
+                                    chip(ui, "OCR NON DISPONIBILE", c_warn(), true);
                                 }
                                 ui.add(egui::Label::new(RichText::new(hint).weak()).truncate());
                             });
@@ -631,9 +778,9 @@ impl eframe::App for App {
                             let selected = run.findings.iter().filter(|f| f.selected && !f.deleted()).count();
                             let open = run.findings.iter().filter(|f| !f.deleted()).count();
                             if self.confirm && selected > 0 {
-                                ui.add(egui::Label::new(RichText::new(format!("Eliminare in modo definitivo {selected} file? Non vanno nel cestino e TracciaDoc non puo recuperarli.")).color(WARN)).truncate());
+                                ui.add(egui::Label::new(RichText::new(format!("Eliminare in modo definitivo {selected} file? Non vanno nel cestino e TracciaDoc non puo recuperarli.")).color(c_warn())).truncate());
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.add(egui::Button::new(RichText::new("Conferma eliminazione").font(semibold(18.)).color(Color32::WHITE)).fill(DANGER).min_size(egui::vec2(220., h))).clicked() {
+                                    if ui.add(egui::Button::new(RichText::new("Conferma eliminazione").font(semibold(18.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(220., h))).clicked() {
                                         for f in run.findings.iter_mut().filter(|f| f.selected && !f.deleted()) {
                                             match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;diag::ok(format!("ELIMINATO {}",diag::shown(&f.path)));},Err(e)=>{diag::err(format!("Eliminazione fallita {} · {e}",diag::shown(&f.path)));f.delete_error=e}}
                                         }
@@ -656,7 +803,7 @@ impl eframe::App for App {
                                     if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {
                                         rescan = Some(run.summary());
                                     }
-                                    if selected > 0 && ui.add(egui::Button::new(RichText::new(format!("Elimina definitivamente ({selected})")).font(semibold(18.)).color(Color32::WHITE)).fill(DANGER).min_size(egui::vec2(0., h))).clicked() {
+                                    if selected > 0 && ui.add(egui::Button::new(RichText::new(format!("Elimina definitivamente ({selected})")).font(semibold(18.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(0., h))).clicked() {
                                         self.confirm = true;
                                     }
                                     if run.finished {
@@ -673,43 +820,52 @@ impl eframe::App for App {
                 });
             });
 
-        egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
+        egui::CentralPanel::default().frame(egui::Frame::new().fill(c_bg()).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 // set_max_width(1100) da solo allargava l'ui oltre il pannello nelle finestre strette.
                 ui.set_max_width(ui.available_width().min(1700.));
                 if !self.notice.is_empty() {
-                    ui.label(RichText::new(&self.notice).color(WARN));
+                    ui.label(RichText::new(&self.notice).color(c_warn()));
                 }
                 match active {
                     1 => {
                         heading(ui, "Dove cerchiamo?", "Scegli i dischi o le cartelle da controllare. Tutto resta su questo computer, in sola lettura.");
                         ui.add_space(12.);
-                        ui.label(RichText::new("AREE").size(12.).color(DIM));
+                        ui.label(RichText::new("AREE").size(12.).color(c_dim()));
                         // Griglia a colonne fisse: le schede vanno a capo invece di uscire dalla finestra. Rete esclusa: add() la rifiuterebbe.
-                        let mut areas: Vec<(PathBuf, String)> = vec![];
+                        let mut areas: Vec<(PathBuf, String, String)> = vec![];
                         for (path, label) in &self.volumes {
-                            if label.contains("rete") || areas.iter().any(|(p, _)| p == path) { continue; }
+                            if label.contains("rete") || areas.iter().any(|(p, _, _)| p == path) { continue; }
                             let text = path.to_string_lossy();
                             let kind = label.rsplit("  -  ").next().unwrap_or("");
-                            let name = if text.starts_with("\\\\?\\Volume") { format!("Volume senza lettera  ·  {kind}") } else { format!("{}  ·  {kind}", text.trim_end_matches('\\')) };
-                            areas.push((path.clone(), name));
+                            let name = if text.starts_with("\\\\?\\Volume") { "Volume".to_string() } else { text.trim_end_matches('\\').to_string() };
+                            let kind = match kind { "locale fisso" => "Disco fisso".to_string(), "rimovibile" => "Rimovibile".to_string(), other => other.to_string() };
+                            areas.push((path.clone(), name, kind));
                         }
                         let usable = ui.available_width().max(240.);
                         let columns = ((usable + 12.) / 332.).floor().max(1.) as usize;
                         let card_w = ((usable - 12. * (columns as f32 - 1.)) / columns as f32).max(200.);
                         egui::Grid::new("areas").spacing([12., 12.]).show(ui, |ui| {
-                            for (n, (path, label)) in areas.into_iter().enumerate() {
+                            for (n, (path, label, kind)) in areas.into_iter().enumerate() {
                                 let on = self.roots.contains(&path);
                                 let mut v = on;
                                 egui::Frame::new()
-                                    .fill(if on { Color32::from_rgb(28, 42, 41) } else { SURFACE })
-                                    .stroke(egui::Stroke::new(1., if on { ACCENT } else { Color32::from_rgb(54, 60, 68) }))
+                                    .fill(if on { c_sel_soft() } else { c_surface() })
+                                    .stroke(egui::Stroke::new(1., if on { c_accent() } else { c_line() }))
                                     .corner_radius(10)
                                     .inner_margin(egui::Margin::symmetric(16, 12))
                                     .show(ui, |ui| {
                                         ui.set_width(card_w - 34.);
                                         ui.set_max_width(card_w - 34.);
-                                        ui.checkbox(&mut v, RichText::new(label).font(semibold(if card_w < 340. { 15. } else { 18. })));
+                                        ui.checkbox(&mut v, RichText::new(label).font(semibold(if card_w < 340. { 26. } else { 34. })));
+                                        ui.label(RichText::new(kind).size(15.).weak());
+                                        if let Some((total, free)) = self.space.get(&path) {
+                                            let used = total.saturating_sub(*free);
+                                            let frac = used as f32 / *total as f32;
+                                            ui.label(RichText::new(format!("{}  ·  {} occupati", it_size(*total), it_size(used))).size(14.).weak());
+                                            bar(ui, frac, 8., if on { c_accent() } else { c_weak() });
+                                            ui.label(RichText::new(format!("occupato {:.0} %", frac * 100.)).monospace().size(12.).weak());
+                                        }
                                     })
                                     .response
                                     .on_hover_text(diag::shown(&path));
@@ -731,7 +887,19 @@ impl eframe::App for App {
                         if ui.button("＋ Aggiungi cartella...").clicked() && let Some(p) = rfd::FileDialog::new().set_parent(&*frame).pick_folder() { self.add(p); }
                         ui.add_space(14.);
                         card(ui, |ui| {
-                            ui.label(RichText::new("DATI DEL VERBALE").size(12.).color(DIM));
+                            ui.label(RichText::new("COSA CERCA").size(12.).color(c_dim()));
+                            ui.horizontal_wrapped(|ui| {
+                                for t in ["Carta d'identita", "Patente di guida", "Tessera sanitaria", "Passaporto"] {
+                                    ui.label(RichText::new("●").size(10.).color(c_accent()));
+                                    ui.label(RichText::new(t).size(16.));
+                                    ui.add_space(14.);
+                                }
+                            });
+                            ui.label(RichText::new("Non cerca fototessere, nomi o codici fiscali isolati. Cerca in immagini, PDF, RTF e Office con immagini incorporate.").small().weak());
+                        });
+                        ui.add_space(6.);
+                        card(ui, |ui| {
+                            ui.label(RichText::new("DATI DEL VERBALE").size(12.).color(c_dim()));
                             ui.horizontal_wrapped(|ui| {
                                 ui.label("Operatore");
                                 ui.add(egui::TextEdit::singleline(&mut self.operator).hint_text("nome e cognome").desired_width(220.));
@@ -770,17 +938,54 @@ impl eframe::App for App {
                         heading(ui, "Scansione in corso", "Puoi lasciare il computer cosi: alla fine ti mostro cosa ho trovato.");
                         ui.add_space(14.);
                         let findings = run.as_ref().map_or(0, |r| r.findings.len());
-                        ui.horizontal(|ui| {
-                            ring(ui, 220., frac, &ring_text);
-                            let w = ((ui.available_width() - 12.) / 2.).max(130.);
-                            ui.vertical(|ui| {
-                                ui.horizontal(|ui| {
-                                    tile(ui, w, "FILE ANALIZZATI", files_text.clone(), None);
-                                    tile(ui, w, "SOSPETTI TROVATI", findings.to_string(), if findings > 0 { Some(WARN) } else { None });
+                        let secs = elapsed as u64;
+                        let elapsed_text = format!("{:02}:{:02}", secs / 60, secs % 60);
+                        let wide = ui.available_width() >= 900.;
+                        let ring_size = if wide { 260. } else { 200. };
+                        ui.horizontal_top(|ui| {
+                            egui::Frame::new().fill(c_surface()).stroke(egui::Stroke::new(1., c_line())).corner_radius(10).inner_margin(16).show(ui, |ui| {
+                                ui.set_width(ring_size - 32.);
+                                ui.vertical_centered(|ui| {
+                                    ring(ui, ring_size - 32., frac, &ring_text);
+                                    ui.label(RichText::new(files_text.clone()).monospace().size(13.).weak());
+                                    if total_final && rate > 0.5 && done >= 30 && elapsed >= 10. {
+                                        ui.label(RichText::new(format!("{} rimanenti", eta_text)).size(14.).color(c_accent()));
+                                    }
                                 });
+                            });
+                            ui.vertical(|ui| {
+                                let w = ((ui.available_width() - 36.) / 4.).max(110.);
                                 ui.horizontal(|ui| {
+                                    tile(ui, w, "ANALIZZATI", it_num(done), None);
+                                    tile(ui, w, "SOSPETTI", findings.to_string(), if findings > 0 { Some(c_warn()) } else { None });
                                     tile(ui, w, "VELOCITA", rate_text.clone(), None);
-                                    tile(ui, w, "TEMPO RESIDUO", eta_text.clone(), None);
+                                    tile(ui, w, "TRASCORSO", elapsed_text, None);
+                                });
+                                card(ui, |ui| {
+                                    ui.label(RichText::new("FASI").size(12.).color(c_dim()));
+                                    for (name, f, note) in [
+                                        ("Elenco file", if total_final { 1. } else { 0.4 }, format!("{}{}", it_num(total), if total_final { "" } else { "+" })),
+                                        ("Analisi testo e OCR", frac, format!("{} / {}", it_num(done), it_num(total))),
+                                    ] {
+                                        ui.horizontal(|ui| {
+                                            ui.add_sized([170., 18.], egui::Label::new(RichText::new(name).size(15.)));
+                                            ui.allocate_ui(egui::vec2((ui.available_width() - 150.).max(80.), 18.), |ui| { ui.centered_and_justified(|ui| bar(ui, f, 10., c_accent())); });
+                                            ui.label(RichText::new(note).monospace().size(12.5).weak());
+                                        });
+                                    }
+                                    if let Some(run) = &run {
+                                        if run.timing.prefilter_skipped > 0 { ui.label(RichText::new(format!("Immagini scartate dal prefiltro (senza OCR): {}", it_num(run.timing.prefilter_skipped))).small().weak()); }
+                                        if run.pages_ocr > 0 { ui.label(RichText::new(format!("Pagine e immagini passate all'OCR: {}", it_num(run.pages_ocr))).small().weak()); }
+                                    }
+                                });
+                                card(ui, |ui| {
+                                    ui.horizontal(|ui| {
+                                        ui.label(RichText::new("FILE AL SECONDO").size(12.).color(c_dim()));
+                                        if let Some(peak) = self.rate_hist.iter().cloned().reduce(f32::max) {
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.label(RichText::new(format!("picco {}", it_num(peak as u64))).monospace().size(12.).weak()); });
+                                        }
+                                    });
+                                    spark(ui, &self.rate_hist, 70.);
                                 });
                             });
                         });
@@ -789,8 +994,8 @@ impl eframe::App for App {
                             ui.horizontal(|ui| {
                                 // Niente ui.spinner(): chiede un ridisegno a ogni frame; l'indicatore avanza col ridisegno periodico.
                                 let tick = self.started.map(|s| s.elapsed().as_millis() / self.repaint.as_millis()).unwrap_or(0) as usize;
-                                ui.label(RichText::new(["◐","◓","◑","◒"][tick % 4]).color(ACCENT));
-                                ui.label(RichText::new("ORA IN ESAME").size(12.).color(DIM));
+                                ui.label(RichText::new(["◐","◓","◑","◒"][tick % 4]).color(c_accent()));
+                                ui.label(RichText::new("ORA IN ESAME").size(12.).color(c_dim()));
                                 ui.add(egui::Label::new(RichText::new(diag::mask(&current)).monospace().size(13.).weak()).truncate());
                             });
                         });
@@ -806,88 +1011,200 @@ impl eframe::App for App {
                             let remaining = run.remaining();
                             let title = if active == 4 { "Verifica finale".to_string() } else if remaining == 0 && run.deleted_count() == 0 { "Nessun file da rivedere".to_string() } else if remaining == 0 { "Tutto eliminato".to_string() } else if remaining == 1 { "1 file da rivedere".to_string() } else { format!("{remaining} file da rivedere") };
                             ui.label(RichText::new(title).font(semibold(32.)));
-                            ui.label(RichText::new(run.outcome()).font(semibold(17.)).color(if run.incomplete() { WARN } else { ACCENT }));
+                            ui.label(RichText::new(run.outcome()).font(semibold(17.)).color(if run.incomplete() { c_warn() } else { c_accent() }));
+                            if active == 4 && remaining == 0 {
+                                // Verifica finale: confronto prima/dopo e anteprima del verbale.
+                                let before = run.previous.as_ref().map_or(0, |p| p.findings);
+                                let after = run.findings.len() as u64;
+                                let date = run.start.get(..10).map(|d| d.split('-').rev().collect::<Vec<_>>().join("/")).unwrap_or_default();
+                                let wide = ui.available_width() >= 980.;
+                                ui.add_space(12.);
+                                ui.horizontal_top(|ui| {
+                                    let left = if wide { ui.available_width() - 404. } else { ui.available_width() };
+                                    ui.vertical(|ui| {
+                                        ui.set_width(left);
+                                        let w = ((left - 70.) / 2.).max(120.);
+                                        ui.horizontal(|ui| {
+                                            for (label, value, color, hot) in [("PRIMA", before, c_warn(), false), ("DOPO", after, c_accent(), true)] {
+                                                egui::Frame::new().fill(if hot { c_sel_soft() } else { c_surface() }).stroke(egui::Stroke::new(1., if hot { c_accent() } else { c_line() })).corner_radius(12).inner_margin(18).show(ui, |ui| {
+                                                    ui.set_width(w - 36.);
+                                                    ui.label(RichText::new(label).size(12.).color(c_dim()));
+                                                    ui.label(RichText::new(value.to_string()).font(semibold(64.)).color(color));
+                                                    ui.label(RichText::new("file segnalati").weak());
+                                                });
+                                                if !hot { ui.label(RichText::new("→").size(30.).weak()); }
+                                            }
+                                        });
+                                        ui.add_space(6.);
+                                        card(ui, |ui| {
+                                            ui.label(RichText::new("RIEPILOGO").size(12.).color(c_dim()));
+                                            let mut rows = vec![("Eliminati definitivamente", run.previous.as_ref().map_or(0, |p| p.deleted).to_string())];
+                                            if let Some(p) = &run.previous && p.failed > 0 { rows.push(("Eliminazioni non riuscite", p.failed.to_string())); }
+                                            rows.push(("File analizzati", it_num(run.analyzed)));
+                                            rows.push(("Durata della scansione", format!("{} min {:02} s", run.elapsed_secs as u64 / 60, run.elapsed_secs as u64 % 60)));
+                                            rows.push(("Aree", plural(run.roots.len(), "area", "aree")));
+                                            for (label, value) in rows {
+                                                ui.separator();
+                                                stat(ui, label, value);
+                                            }
+                                        });
+                                    });
+                                    if wide {
+                                        ui.add_space(12.);
+                                        paper(ui, 380., before, after, &date);
+                                    }
+                                });
+                            } else {
                             if remaining > 0 { ui.label(RichText::new("Controlla le anteprime e spunta i file da eliminare.").weak()); }
                             ui.add_space(10.);
-                            // Al massimo 2 decodifiche per frame: la GUI resta reattiva anche con molti risultati.
+                            // Filtri per tipo di documento.
+                            let kinds = ["Carta d'identita", "Passaporto", "Patente", "Tessera sanitaria", "Da verificare"];
+                            let count_of = |k: &str| run.findings.iter().filter(|f| !f.deleted() && kind_of(f).0 == k).count();
+                            if !self.filter.is_empty() && count_of(&self.filter) == 0 { self.filter.clear(); }
+                            ui.horizontal_wrapped(|ui| {
+                                if pill(ui, &format!("Tutti {remaining}"), self.filter.is_empty()).clicked() { self.filter.clear(); }
+                                for k in kinds {
+                                    let n = count_of(k);
+                                    if n > 0 && pill(ui, &format!("{k} {n}"), self.filter == k).clicked() { self.filter = k.to_string(); }
+                                }
+                            });
+                            ui.add_space(6.);
+                            let focus_path = self.focus.clone().filter(|p| run.findings.iter().any(|f| &f.path == p && !f.deleted() && (self.filter.is_empty() || kind_of(f).0 == self.filter))).or_else(|| run.findings.iter().find(|f| !f.deleted() && (self.filter.is_empty() || kind_of(f).0 == self.filter)).map(|f| f.path.clone()));
+                            self.focus = focus_path.clone();
+                            // Al massimo 2 decodifiche per frame, e solo per le righe vicine alla zona visibile.
                             let mut budget = 2;
                             let running_now = running;
-                            // Schermi larghi: due colonne di schede.
-                            let ncols = if ui.available_width() >= 1250. { 2 } else { 1 };
-                            ui.columns(ncols, |cols| {
-                            let mut placed = 0;
-                            for (i, f) in run.findings.iter_mut().enumerate().take(5000) {
-                                // I file eliminati escono dalla lista: restano nel conteggio, nella console e nel verbale.
-                                if f.deleted() { continue; }
-                                let ui = &mut cols[placed % ncols];
-                                placed += 1;
-                                // Finestra stretta: l'anteprima resta solo se resta spazio per il testo.
-                                let side = if ui.available_width() >= 560. { 104. } else { 0. };
-                                if side > 0. && budget > 0 && !self.previews.contains_key(&f.path) {
-                                    budget -= 1;
-                                    let pv = make_preview(&ctx, &f.path, &f.format);
-                                    self.previews.insert(f.path.clone(), pv);
-                                    ctx.request_repaint();
-                                }
-                                let (kind, color) = kind_of(f);
-                                egui::Frame::new()
-                                    .fill(if f.selected { Color32::from_rgb(28, 42, 41) } else { SURFACE })
-                                    .stroke(egui::Stroke::new(1., if f.selected { ACCENT } else { Color32::from_rgb(54, 60, 68) }))
-                                    .corner_radius(10)
-                                    .inner_margin(14)
-                                    .show(ui, |ui| {
-                                        ui.set_width(ui.available_width());
-                                        ui.horizontal(|ui| {
-                                            ui.add_enabled(!running_now, egui::Checkbox::without_text(&mut f.selected)).on_hover_text("Da eliminare");
-                                            if side > 0. {
-                                                let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, 72.), egui::Sense::hover());
-                                                ui.painter().rect_filled(rect, 8., BG);
-                                                match self.previews.get(&f.path) {
-                                                    Some(Some((blur, sharp))) => {
-                                                        let tex = if resp.hovered() { sharp } else { blur };
-                                                        egui::Image::from_texture(tex).fit_to_exact_size(rect.size()).paint_at(ui, rect);
+                            let wide = ui.available_width() >= 1150.;
+                            let panel_w = 400.;
+                            ui.horizontal_top(|ui| {
+                                let left = if wide { ui.available_width() - panel_w - 16. } else { ui.available_width() };
+                                ui.vertical(|ui| {
+                                    ui.set_width(left);
+                                    for (i, f) in run.findings.iter_mut().enumerate().take(5000) {
+                                        // I file eliminati escono dalla lista: restano nel conteggio, nella console e nel verbale.
+                                        if f.deleted() { continue; }
+                                        let (kind, color) = kind_of(f);
+                                        if !self.filter.is_empty() && kind != self.filter { continue; }
+                                        // Finestra stretta: l'anteprima resta solo se resta spazio per il testo.
+                                        let side = if ui.available_width() >= 560. { 96. } else { 0. };
+                                        if side > 0. && budget > 0 && !self.previews.contains_key(&f.path) && ui.clip_rect().expand(300.).contains(ui.cursor().min) {
+                                            budget -= 1;
+                                            let pv = make_preview(&ctx, &f.path, &f.format);
+                                            self.previews.insert(f.path.clone(), pv);
+                                            ctx.request_repaint();
+                                        }
+                                        let is_focus = focus_path.as_ref() == Some(&f.path);
+                                        let (level, level_color, _) = level_of(f);
+                                        egui::Frame::new()
+                                            .fill(if f.selected || is_focus { c_sel_soft() } else { c_surface() })
+                                            .stroke(egui::Stroke::new(1., if is_focus { c_accent() } else if f.selected { c_accent().gamma_multiply(0.6) } else { c_line() }))
+                                            .corner_radius(10)
+                                            .inner_margin(12)
+                                            .show(ui, |ui| {
+                                                ui.set_width(ui.available_width());
+                                                ui.horizontal(|ui| {
+                                                    ui.add_enabled(!running_now, egui::Checkbox::without_text(&mut f.selected)).on_hover_text("Da eliminare");
+                                                    if side > 0. {
+                                                        let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, 60.), egui::Sense::click());
+                                                        if resp.clicked() { self.focus = Some(f.path.clone()); }
+                                                        ui.painter().rect_filled(rect, 8., c_bg());
+                                                        match self.previews.get(&f.path) {
+                                                            Some(Some((blur, sharp))) => {
+                                                                let tex = if resp.hovered() { sharp } else { blur };
+                                                                egui::Image::from_texture(tex).fit_to_exact_size(rect.size()).paint_at(ui, rect);
+                                                            }
+                                                            _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, f.format.to_uppercase(), semibold(14.), c_weak()); }
+                                                        }
                                                     }
-                                                    _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, f.format.to_uppercase(), semibold(14.), Color32::from_rgb(154, 164, 173)); }
-                                                }
-                                                if !resp.hovered() && matches!(self.previews.get(&f.path), Some(Some(_))) {
-                                                    ui.painter().text(rect.center_bottom() - egui::vec2(0., 4.), egui::Align2::CENTER_BOTTOM, "passa sopra", egui::FontId::proportional(11.), Color32::WHITE);
-                                                }
-                                            }
-                                            let w = (ui.available_width() - 200.).max(100.);
-                                            ui.allocate_ui(egui::vec2(w, 0.), |ui| {
-                                                ui.set_width(w);
-                                                ui.vertical(|ui| {
-                                                    ui.spacing_mut().item_spacing.y = 3.;
-                                                    ui.horizontal(|ui| {
-                                                        let name = f.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| f.path.display().to_string());
-                                                        ui.add(egui::Label::new(RichText::new(name).font(semibold(19.))).truncate());
-                                                        chip(ui, kind, color, true);
+                                                    let right_w = if wide { 130. } else { 200. };
+                                                    let w = (ui.available_width() - right_w).max(100.);
+                                                    ui.allocate_ui(egui::vec2(w, 0.), |ui| {
+                                                        ui.set_width(w);
+                                                        ui.vertical(|ui| {
+                                                            ui.spacing_mut().item_spacing.y = 3.;
+                                                            ui.horizontal(|ui| {
+                                                                let name = f.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| f.path.display().to_string());
+                                                                if ui.add(egui::Label::new(RichText::new(name).font(semibold(18.))).truncate().sense(egui::Sense::click())).clicked() { self.focus = Some(f.path.clone()); }
+                                                                chip(ui, kind, color, true);
+                                                            });
+                                                            ui.add(egui::Label::new(RichText::new(diag::shown(&f.path)).monospace().size(12.).weak()).truncate());
+                                                            if !wide && let Some(reason) = f.reasons.first() {
+                                                                ui.add(egui::Label::new(RichText::new(reason).small()).truncate()).on_hover_text(f.reasons.join("\n"));
+                                                            }
+                                                            if !f.delete_error.is_empty() { ui.label(RichText::new(&f.delete_error).color(c_warn())); }
+                                                        });
                                                     });
-                                                    ui.add(egui::Label::new(RichText::new(diag::shown(&f.path)).monospace().size(12.5).weak()).truncate());
-                                                    if let Some(reason) = f.reasons.first() {
-                                                        ui.add(egui::Label::new(RichText::new(reason).small()).truncate()).on_hover_text(f.reasons.join("\n"));
-                                                    }
-                                                    if !f.delete_error.is_empty() { ui.label(RichText::new(&f.delete_error).color(WARN)); }
+                                                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                                        if wide {
+                                                            ui.vertical(|ui| {
+                                                                ui.label(RichText::new(level).font(semibold(15.)).color(level_color));
+                                                                ui.label(RichText::new(plural(f.reasons.len(), "indizio", "indizi")).small().weak());
+                                                            });
+                                                        } else {
+                                                            ui.add_enabled_ui(!running_now, |ui| {
+                                                                ui.vertical(|ui| {
+                                                                    ui.horizontal(|ui| {
+                                                                        if ui.small_button("Cartella").clicked() && let Err(e) = crate::open::folder(&f.path) { self.notice = e; }
+                                                                        if ui.small_button("Apri").clicked() && let Err(e) = crate::open::document(f) { self.notice = e; }
+                                                                    });
+                                                                    egui::ComboBox::from_id_salt(("review", i)).selected_text(f.review.label()).width(150.).show_ui(ui, |ui| {
+                                                                        for value in [Review::Pending, Review::Confirmed, Review::Discarded] { ui.selectable_value(&mut f.review, value, value.label()); }
+                                                                    });
+                                                                });
+                                                            });
+                                                        }
+                                                    });
                                                 });
                                             });
-                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                                ui.add_enabled_ui(!running_now, |ui| {
-                                                    ui.vertical(|ui| {
-                                                        ui.horizontal(|ui| {
-                                                            if ui.small_button("Cartella").clicked() && let Err(e) = crate::open::folder(&f.path) { self.notice = e; }
-                                                            if ui.small_button("Apri").clicked() && let Err(e) = crate::open::document(f) { self.notice = e; }
-                                                        });
-                                                        egui::ComboBox::from_id_salt(("review", i)).selected_text(f.review.label()).width(150.).show_ui(ui, |ui| {
-                                                            for value in [Review::Pending, Review::Confirmed, Review::Discarded] { ui.selectable_value(&mut f.review, value, value.label()); }
-                                                        });
-                                                    });
+                                        ui.add_space(4.);
+                                    }
+                                });
+                                if wide && let Some(fp) = &focus_path && let Some((i, f)) = run.findings.iter_mut().enumerate().find(|(_, f)| &f.path == fp) {
+                                    ui.add_space(16.);
+                                    egui::Frame::new().fill(c_surface()).stroke(egui::Stroke::new(1., c_line())).corner_radius(12).inner_margin(16).show(ui, |ui| {
+                                        ui.set_width(panel_w - 32.);
+                                        ui.label(RichText::new("ANTEPRIMA PROTETTA").size(12.).color(c_dim()));
+                                        let (rect, resp) = ui.allocate_exact_size(egui::vec2(panel_w - 32., 200.), egui::Sense::hover());
+                                        ui.painter().rect_filled(rect, 8., c_bg());
+                                        match self.previews.get(&f.path) {
+                                            Some(Some((blur, sharp))) => {
+                                                let tex = if resp.hovered() { sharp } else { blur };
+                                                let ts = tex.size_vec2();
+                                                let scale = (rect.width() / ts.x).min(rect.height() / ts.y);
+                                                egui::Image::from_texture(tex).paint_at(ui, egui::Rect::from_center_size(rect.center(), ts * scale));
+                                                if !resp.hovered() { ui.painter().text(rect.center_bottom() - egui::vec2(0., 6.), egui::Align2::CENTER_BOTTOM, "passa sopra per vedere nitida", egui::FontId::proportional(12.), c_weak()); }
+                                            }
+                                            _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, format!("{}  ·  nessuna anteprima", f.format.to_uppercase()), semibold(14.), c_weak()); }
+                                        }
+                                        ui.label(RichText::new(f.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default()).font(semibold(19.)));
+                                        ui.add(egui::Label::new(RichText::new(diag::shown(&f.path)).monospace().size(12.).weak()).wrap());
+                                        let (level, level_color, frac) = level_of(f);
+                                        ui.horizontal(|ui| {
+                                            ui.label(RichText::new(level).font(semibold(15.)).color(level_color));
+                                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| { ui.label(RichText::new(size_text(f.size)).small().weak()); });
+                                        });
+                                        bar(ui, frac, 7., level_color);
+                                        ui.label(RichText::new("PERCHE E SEGNALATO").size(12.).color(c_dim()));
+                                        for reason in &f.reasons {
+                                            ui.horizontal_top(|ui| {
+                                                ui.label(RichText::new("●").size(9.).color(c_accent()));
+                                                ui.add(egui::Label::new(RichText::new(reason).size(14.5)).wrap());
+                                            });
+                                        }
+                                        ui.add_space(4.);
+                                        ui.add_enabled_ui(!running_now, |ui| {
+                                            ui.horizontal(|ui| {
+                                                if ui.button("Apri").clicked() && let Err(e) = crate::open::document(f) { self.notice = e; }
+                                                if ui.button("Cartella").clicked() && let Err(e) = crate::open::folder(&f.path) { self.notice = e; }
+                                                egui::ComboBox::from_id_salt(("review-focus", i)).selected_text(f.review.label()).width(150.).show_ui(ui, |ui| {
+                                                    for value in [Review::Pending, Review::Confirmed, Review::Discarded] { ui.selectable_value(&mut f.review, value, value.label()); }
                                                 });
                                             });
                                         });
                                     });
-                                ui.add_space(4.);
-                            }
+                                }
                             });
+                            }
                             ui.add_space(8.);
                             if run.finished && remaining > 0 || run.deleted_count() > 0 {
                                 ui.collapsing("Riepilogo", |ui| { for line in run.finding_summary() { ui.label(line); } });

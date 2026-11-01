@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 - 2026-11-01
+
+Nuova grafica, dai mockup approvati. Compilata per Windows e controllata con clippy; da collaudare con la GUI vera prima della release.
+
+- Tema scuro (predefinito) e tema chiaro, con il pulsante "Tema chiaro/scuro" nella barra della console. Nuova tavolozza grafite e verde acqua.
+- Aree: schede grandi per disco con lettera, tipo, capacità e barra dello spazio occupato; i dischi fissi con lettera sono preselezionati. Riquadro "Cosa cerca" e spazio occupato totale nella barra in basso.
+- Scansione: cerchio grande, quattro riquadri (analizzati, sospetti, velocità, trascorso), barre per fase (elenco file, analisi testo e OCR), grafico dei file al secondo.
+- Revisione: filtri per tipo di documento con conteggi; righe più compatte con livello degli indizi (forti, buoni, parziali: euristica sui riscontri trovati, non una probabilità); pannello di dettaglio con anteprima protetta, motivi della segnalazione e azioni. Le anteprime si creano solo per le righe vicine alla zona visibile.
+- Verifica finale: confronto prima/dopo, riepilogo e anteprima della pagina del verbale.
+
 ## 0.2.9 - 2026-10-30
 
 - Testi del pacchetto ripuliti dai riferimenti a enti esterni (istruzioni e fonti/licenze). Nessuna modifica al funzionamento.

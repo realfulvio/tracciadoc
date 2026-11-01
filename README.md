@@ -45,14 +45,11 @@ L'esito **«nessun documento rilevato»** compare solo a copertura completa: err
 ## Com'è fatto
 
 <p align="center">
-  <img src="docs/img/gui-aree.png" alt="Scelta delle aree da controllare" width="49%">
-  <img src="docs/img/gui-scansione.png" alt="Scansione in corso con indicatore di avanzamento" width="49%">
+  <img src="docs/img/gui-aree-030.png" alt="TracciaDoc v0.3.0: nuova interfaccia con schede dei dischi, capacità e spazio occupato" width="100%">
 </p>
-<p align="center">
-  <img src="docs/img/gui-segnalazioni.png" alt="Elenco delle segnalazioni con anteprime sfocate" width="49%">
-  <img src="docs/img/gui-verbale.png" alt="Verifica finale dopo la ri-scansione" width="49%">
-</p>
-<p align="center"><sub>Scelta delle aree, scansione, revisione delle segnalazioni e verifica finale, su file sintetici di prova.</sub></p>
+<p align="center"><sub>Schermata reale della versione 0.3.0 per Windows: selezione delle aree, prima dell'avvio della scansione. Tema scuro. Nessun documento o dato personale visualizzato.</sub></p>
+
+La versione 0.3.0 introduce tema scuro e chiaro, schede dei dischi con spazio occupato, avanzamento per fasi, filtri e pannello di dettaglio nella revisione e confronto prima/dopo nella verifica finale. La schermata qui sopra mostra la selezione delle aree; le vecchie immagini della 0.2.7 sono state rimosse dalla presentazione corrente.
 
 <p align="center">
   <img src="docs/img/verbale-esempio.png" alt="Prima pagina del verbale PDF di esempio" width="40%">

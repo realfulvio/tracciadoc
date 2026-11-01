@@ -822,3 +822,12 @@ pub fn volumes() -> Vec<(PathBuf, String)> {
     }
     result
 }
+/// Capacita e spazio libero di un volume locale (byte), per le schede delle aree.
+pub fn disk_space(path: &Path) -> Option<(u64, u64)> {
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+    let wide: Vec<u16> = path.as_os_str().to_string_lossy().encode_utf16().chain(Some(0)).collect();
+    let (mut available, mut total, mut free) = (0u64, 0u64, 0u64);
+    // SAFETY: stringa terminata da zero e tre puntatori validi a u64 locali.
+    let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };
+    (ok != 0 && total > 0).then_some((total, free))
+}

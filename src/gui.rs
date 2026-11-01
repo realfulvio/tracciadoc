@@ -24,6 +24,8 @@ fn pick(dark: (u8, u8, u8), bright: (u8, u8, u8)) -> Color32 {
     let (r, g, b) = if light() { bright } else { dark };
     Color32::from_rgb(r, g, b)
 }
+/// I loghi sono bianchi per lo sfondo scuro: sul tema chiaro si tingono di blu notte.
+fn logo_tint() -> Color32 { if light() { Color32::from_rgb(20, 32, 46) } else { Color32::WHITE } }
 fn c_accent() -> Color32 { pick((47, 209, 176), (11, 91, 140)) }
 fn c_primary() -> Color32 { pick((22, 154, 130), (11, 91, 140)) }
 fn c_bg() -> Color32 { pick((18, 20, 24), (238, 242, 246)) }
@@ -680,7 +682,7 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(c_side()).inner_margin(16))
             .show(root, |ui| {
                 ui.horizontal(|ui| {
-                    ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)));
+                    ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)).tint(logo_tint()));
                     ui.vertical(|ui| {
                         ui.spacing_mut().item_spacing.y = 0.;
                         ui.label(RichText::new("TracciaDoc").font(semibold(22.)));
@@ -727,7 +729,7 @@ impl eframe::App for App {
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
                     if ui.available_height() >= 28. {
                         let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
-                        ui.add(egui::Image::from_texture(&self.signature).fit_to_exact_size(egui::vec2(112., 112. * ratio))).on_hover_text("powered by realhcok");
+                        ui.add(egui::Image::from_texture(&self.signature).fit_to_exact_size(egui::vec2(112., 112. * ratio)).tint(logo_tint())).on_hover_text("powered by realhcok");
                         ui.label(RichText::new("powered by").size(12.).weak());
                     }
                 });
@@ -854,7 +856,7 @@ impl eframe::App for App {
                                     .stroke(egui::Stroke::new(1., if on { c_accent() } else { c_line() }))
                                     .corner_radius(10)
                                     .inner_margin(egui::Margin::symmetric(16, 12))
-                                    .show(ui, |ui| {
+                                    .show(ui, |ui| ui.vertical(|ui| {
                                         ui.set_width(card_w - 34.);
                                         ui.set_max_width(card_w - 34.);
                                         ui.checkbox(&mut v, RichText::new(label).font(semibold(if card_w < 340. { 26. } else { 34. })));
@@ -866,7 +868,7 @@ impl eframe::App for App {
                                             bar(ui, frac, 8., if on { c_accent() } else { c_weak() });
                                             ui.label(RichText::new(format!("occupato {:.0} %", frac * 100.)).monospace().size(12.).weak());
                                         }
-                                    })
+                                    }))
                                     .response
                                     .on_hover_text(diag::shown(&path));
                                 if v != on {
@@ -1108,12 +1110,13 @@ impl eframe::App for App {
                                                         let (rect, resp) = ui.allocate_exact_size(egui::vec2(side, 60.), egui::Sense::click());
                                                         if resp.clicked() { self.focus = Some(f.path.clone()); }
                                                         ui.painter().rect_filled(rect, 8., c_bg());
+                                        ui.painter().rect_stroke(rect, 8., egui::Stroke::new(1., c_line()), egui::StrokeKind::Inside);
                                                         match self.previews.get(&f.path) {
                                                             Some(Some((blur, sharp))) => {
                                                                 let tex = if resp.hovered() { sharp } else { blur };
                                                                 egui::Image::from_texture(tex).fit_to_exact_size(rect.size()).paint_at(ui, rect);
                                                             }
-                                                            _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, f.format.to_uppercase(), semibold(14.), c_weak()); }
+                                                            _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, f.format.to_uppercase().split(' ').next().unwrap_or_default(), semibold(14.), c_weak()); }
                                                         }
                                                     }
                                                     let right_w = if wide { 130. } else { 200. };
@@ -1161,18 +1164,19 @@ impl eframe::App for App {
                                 });
                                 if wide && let Some(fp) = &focus_path && let Some((i, f)) = run.findings.iter_mut().enumerate().find(|(_, f)| &f.path == fp) {
                                     ui.add_space(16.);
-                                    egui::Frame::new().fill(c_surface()).stroke(egui::Stroke::new(1., c_line())).corner_radius(12).inner_margin(16).show(ui, |ui| {
+                                    egui::Frame::new().fill(c_surface()).stroke(egui::Stroke::new(1., c_line())).corner_radius(12).inner_margin(16).show(ui, |ui| ui.vertical(|ui| {
                                         ui.set_width(panel_w - 32.);
                                         ui.label(RichText::new("ANTEPRIMA PROTETTA").size(12.).color(c_dim()));
                                         let (rect, resp) = ui.allocate_exact_size(egui::vec2(panel_w - 32., 200.), egui::Sense::hover());
                                         ui.painter().rect_filled(rect, 8., c_bg());
+                                        ui.painter().rect_stroke(rect, 8., egui::Stroke::new(1., c_line()), egui::StrokeKind::Inside);
                                         match self.previews.get(&f.path) {
                                             Some(Some((blur, sharp))) => {
                                                 let tex = if resp.hovered() { sharp } else { blur };
                                                 let ts = tex.size_vec2();
                                                 let scale = (rect.width() / ts.x).min(rect.height() / ts.y);
                                                 egui::Image::from_texture(tex).paint_at(ui, egui::Rect::from_center_size(rect.center(), ts * scale));
-                                                if !resp.hovered() { ui.painter().text(rect.center_bottom() - egui::vec2(0., 6.), egui::Align2::CENTER_BOTTOM, "passa sopra per vedere nitida", egui::FontId::proportional(12.), c_weak()); }
+                                                ui.label(RichText::new("passa sopra l'anteprima per vederla nitida").size(12.).color(c_dim()));
                                             }
                                             _ => { ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, format!("{}  ·  nessuna anteprima", f.format.to_uppercase()), semibold(14.), c_weak()); }
                                         }
@@ -1201,7 +1205,7 @@ impl eframe::App for App {
                                                 });
                                             });
                                         });
-                                    });
+                                    }));
                                 }
                             });
                             }

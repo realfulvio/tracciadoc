@@ -80,6 +80,15 @@ pub struct Timing {
     /// Time spent hashing file contents for reuse.
     #[serde(default)]
     pub hash_ms: f64,
+    /// Files whose remaining pages or images were not read because a document was already found.
+    #[serde(default)]
+    pub early_stops: u64,
+    /// Images with no detection on the whole sheet, read again block by block.
+    #[serde(default)]
+    pub block_reads: u64,
+    /// Images with no detection read again in sparse-text mode.
+    #[serde(default)]
+    pub sparse_reads: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -102,6 +111,9 @@ impl Timing {
         self.upright_stops += o.upright_stops;
         self.reused += o.reused;
         self.hash_ms += o.hash_ms;
+        self.early_stops += o.early_stops;
+        self.block_reads += o.block_reads;
+        self.sparse_reads += o.sparse_reads;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

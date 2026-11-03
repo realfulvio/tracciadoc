@@ -932,7 +932,7 @@ impl eframe::App for App {
                             ui.horizontal(|ui|{ui.label("Secondi/file");ui.add(egui::DragValue::new(&mut self.settings.timeout_secs).range(1..=1800));ui.label("MiB worker");ui.add(egui::DragValue::new(&mut self.settings.memory_mb).range(256..=2048));});
                             ui.horizontal(|ui|{ui.label("Limite file");ui.add(egui::DragValue::new(&mut self.settings.max_entries).range(1..=10_000_000));});
                             ui.horizontal(|ui|{ui.label("Worker OCR in parallelo");ui.add(egui::DragValue::new(&mut self.settings.workers).range(1..=engine::physical_cores().max(1)));ui.label(format!("(core fisici: {}; ogni worker usa fino a {} MiB)",engine::physical_cores(),self.settings.memory_mb));});
-                            ui.label("Concorrenza: ogni worker e un processo separato con un thread OCR e il proprio limite di memoria. Su HDD lenti ridurre a 1. Nessuna cache; nessun temporaneo OCR su disco. Limiti di decodifica e Office descritti nel verbale.");
+                            ui.label("Concorrenza: ogni worker e un processo separato con un thread OCR e il proprio limite di memoria. Su HDD lenti ridurre a 1. I file con contenuto identico a uno gia analizzato in questa sessione riusano lo stesso esito (SHA-256); nessuna cache e nessun temporaneo OCR su disco. Limiti di decodifica e Office descritti nel verbale.");
                             ui.label(format!("Storico essenziale: {}. Solo conteggi e limiti, senza contenuti o percorsi. ACL ereditate dal profilo; nessuna protezione contro amministratori.",engine::state_dir().display()));
                         });
                     }
@@ -1005,6 +1005,7 @@ impl eframe::App for App {
                             ui.collapsing("Dettagli", |ui| {
                                 ui.label(format!("Incontrati {}    Analizzati {}    Parziali {}    Saltati {}    Ignorati per tipo {}    Tempo {:.1}s",run.encountered,run.analyzed,run.partial_files,run.skipped,run.ignored_type,elapsed));
                                 if run.timing.prefilter_skipped>0 {ui.label(format!("Immagini scartate dal prefiltro (senza OCR): {}",run.timing.prefilter_skipped));}
+                                if run.timing.reused>0 {ui.label(format!("File con esito riusato (contenuto identico gia analizzato): {}",run.timing.reused));}
                             });
                         }
                     }

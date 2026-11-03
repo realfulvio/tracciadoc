@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.4 - 2026-11-03
+
+Meno lavoro sui file già decisi e sulle foto senza testo.
+
+- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare. L'elenco dei motivi può essere più corto, il file resta rilevato.
+- JPEG da 2048 px in su: il prefiltro prova prima una decodifica ridotta (1/2-1/8, scalatura DCT) con soglie più permissive del normale. Se nemmeno così trova tratti tipo testo, l'immagine viene scartata senza decodifica completa; altrimenti passa al prefiltro normale a piena risoluzione come prima. Le immagini oltre i limiti, CMYK o non leggibili seguono sempre il percorso completo.
+- Nuova dipendenza `jpeg-decoder` 0.3 (MIT/Apache-2.0).
+
 ## 0.3.3 - 2026-11-03
 
 Riuso degli esiti per i file con contenuto identico. Il corpus sintetico da 696 file contiene molti duplicati: 336 contenuti distinti su 684 file letti. Con 4 worker su una VM Windows senza GPU la scansione passa da circa 59 s a 13 s, con gli stessi 300 rilevamenti. Con una seconda copia completa del corpus (1392 file) servono 16 s, contro i 118 s della 0.3.2. Su dischi con pochi duplicati il guadagno alla prima scansione è minore, mentre la ri-scansione dopo le eliminazioni rilegge solo i file cambiati.

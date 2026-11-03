@@ -9,6 +9,9 @@ static NUMBER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b(?:[A-Z]{2}[0-9]{5}[A-Z]{2}|[A-Z]{2} ?[0-9]{7}|[A-Z][0-9]{7}|[A-Z0-9]{10})\b")
         .unwrap()
 });
+/// Numero della carta cartacea dopo il titolo: due lettere e sette cifre, con o senza spazio.
+static PAPER_NUMBER: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"\b[A-Z]{2} ?[0-9]{7}\b").unwrap());
 pub fn valid_cf(s: &str) -> bool {
     if s.len() != 16
         || !s
@@ -148,6 +151,25 @@ pub fn detect(text: &str) -> Vec<String> {
             break;
         }
     }
+    // Copertina della carta cartacea: stemma, "REPUBBLICA ITALIANA", "COMUNE DI", titolo e
+    // numero, senza campi etichettati. I caratteri romani sono spesso letti con V al posto di U.
+    let cover = normalized.replace("REPVBBLICA", "REPUBBLICA").replace("COMVNE", "COMUNE");
+    for (pos, _) in cover
+        .match_indices("CARTA D'IDENTIT")
+        .chain(cover.match_indices("CARTA DI IDENTIT"))
+    {
+        let from = cover[..pos].char_indices().rev().nth(250).map_or(0, |(i, _)| i);
+        let to = cover[pos..].char_indices().nth(120).map_or(cover.len(), |(i, _)| pos + i);
+        let context = &cover[from..to];
+        let after = &cover[pos..to];
+        if context.contains("REPUBBLICA ITALIANA")
+            && context.contains("COMUNE DI")
+            && PAPER_NUMBER.is_match(after)
+        {
+            out.push("Carta d'identita cartacea: copertina con intestazione e numero".into());
+            break;
+        }
+    }
     let lines: Vec<String> = upper
         .lines()
         .map(|s| s.chars().filter(|c| !c.is_whitespace()).collect())
@@ -222,6 +244,13 @@ mod tests {
         // Copertina: intestazione e numero con spazio, piu nomi in campi senza etichetta no;
         // con due campi si.
         assert!(!detect("CARTA D'IDENTITA N. AV 0000000 Cognome ESEMPIO Nome PROVA").is_empty());
+    }
+    #[test]
+    fn paper_identity_card_cover() {
+        let cover = "REPVBBLICA ITALIANA COMVNE DI ESEMPIO CARTA D'IDENTITA' N. AV 0000000 DI";
+        assert!(!detect(cover).is_empty());
+        // Una lettera che cita il documento senza intestazione della Repubblica non basta.
+        assert!(detect("Comune di Esempio. Si allega carta d'identita n. AV 0000000.").is_empty());
     }
     #[test]
     fn european_health_card() {

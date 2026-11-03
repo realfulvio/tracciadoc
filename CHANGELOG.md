@@ -5,6 +5,7 @@
 Scansione più veloce, senza perdere rilevamenti.
 
 - L'orientamento delle immagini (OSD) lavora su una copia ridotta a 800 px sul lato lungo: sul corpus sintetico da 696 file (4 worker) la scansione passa da 109,7 s a 95,9 s (-12,6%), con gli stessi 300 rilevamenti.
+- L'OCR legge solo italiano (prima italiano + inglese): sullo stesso corpus la scansione passa da 91,5 s a 71,0 s (-22%) con gli stessi rilevamenti, anche sui fixture con etichette solo inglesi o bilingui. Il modello inglese resta nel pacchetto; `TRACCIADOC_OCR_LANG=ita+eng` lo riattiva (solo benchmark).
 - Se l'orientamento "sicuro" non produce testo leggibile, l'OCR prova comunque le altre rotazioni, così un orientamento sbagliato non nasconde un documento.
 - `TRACCIADOC_OSD_SIDE` cambia il lato ridotto (solo per i benchmark).
 

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.3 - 2026-11-03
+
+Riuso degli esiti per i file con contenuto identico. Il corpus sintetico da 696 file contiene molti duplicati: 336 contenuti distinti su 684 file letti. Con 4 worker su una VM Windows senza GPU la scansione passa da circa 59 s a 13 s, con gli stessi 300 rilevamenti. Con una seconda copia completa del corpus (1392 file) servono 16 s, contro i 118 s della 0.3.2. Su dischi con pochi duplicati il guadagno alla prima scansione è minore, mentre la ri-scansione dopo le eliminazioni rilegge solo i file cambiati.
+
+- Prima di analizzare un file se ne calcola lo SHA-256, insieme all'estensione, alle impostazioni che cambiano l'esito e alla versione del programma. Se un file identico è già stato analizzato nella stessa sessione, riceve lo stesso esito senza nuova lettura né OCR. Vale per i duplicati di una scansione e, nella ri-scansione dopo le eliminazioni, per i file non cambiati. Sul corpus l'hash costa meno di 1 s in tutto.
+- Si riusano solo le analisi concluse dal worker, cioè non interrotte, non andate in timeout e non finite in crash. Il file inoltre non deve essere cambiato durante l'analisi (stessa dimensione e stessa data di modifica). I file reparse, offline, cloud o EFS non vengono letti nemmeno per l'hash.
+- Ogni percorso resta elencato e contato singolarmente, e il verbale dichiara quanti file hanno un esito riusato. Niente cache su disco: chiudendo il programma si riparte da zero.
+- Il verbale indica l'OCR come solo italiano, come è dalla 0.3.1.
+
 ## 0.3.2 - 2026-11-03
 
 Scansione ancora più veloce: da 77,8 s (0.3.1) a circa 59 s (-24%) sul corpus sintetico da 696 file, 4 worker, VM Windows senza GPU (0.3.0: 109,7 s). Stessi 300 rilevamenti.

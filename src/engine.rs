@@ -1,15 +1,21 @@
 use crate::{diag, model::*};
 use chrono::Local;
+use sha2::{Digest, Sha256};
 use std::{
+    collections::HashMap,
     fs::OpenOptions,
     io::{BufRead, BufReader, Write},
-    os::windows::{fs::MetadataExt, io::AsRawHandle, process::CommandExt},
+    os::windows::{
+        fs::{MetadataExt, OpenOptionsExt},
+        io::AsRawHandle,
+        process::CommandExt,
+    },
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        mpsc,
+        OnceLock, mpsc,
     },
     thread,
     time::{Duration, Instant},
@@ -241,6 +247,86 @@ struct Outcome {
     /// The worker could not be started: stop dispatching.
     fatal: bool,
 }
+/// Results of files already analyzed in this process, keyed by SHA-256 of the bytes together
+/// with the extension, the settings that change the outcome and the program version. A file
+/// with the same key gets the same verified result without being parsed again: duplicates in
+/// one scan and unchanged files in the re-scan after deletions. Only complete analyses from a
+/// worker are stored (no timeouts, crashes or interruptions), and only when the file did not
+/// change while it was being analyzed. Nothing is written to disk.
+type CacheKey = [u8; 32];
+static REUSE: OnceLock<Mutex<HashMap<CacheKey, Analysis>>> = OnceLock::new();
+const REUSE_MAX: usize = 200_000;
+fn reuse() -> &'static Mutex<HashMap<CacheKey, Analysis>> {
+    REUSE.get_or_init(Default::default)
+}
+/// Size and modification time, to check that a file did not change during its analysis.
+fn stamp(path: &Path) -> Option<(u64, u64)> {
+    let m = std::fs::symlink_metadata(path).ok()?;
+    Some((m.len(), m.last_write_time()))
+}
+/// Content key of a file, None when it cannot be read whole within the size limit.
+fn content_key(req: &Request) -> Option<CacheKey> {
+    use std::io::Read;
+    let mut f = OpenOptions::new()
+        .read(true)
+        .custom_flags(0x00200000)
+        .open(&req.path)
+        .ok()?;
+    let limit = req.settings.max_mb * 1024 * 1024;
+    let m = f.metadata().ok()?;
+    // Never read reparse, offline, cloud-recall or EFS files: reading would recall or decrypt
+    // them. The parser refuses them the same way and they are reported as not analyzed.
+    if m.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 || m.len() > limit {
+        return None;
+    }
+    let s = &req.settings;
+    let ext = req
+        .path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let mut h = Sha256::new();
+    h.update(format!(
+        "{}|{}|{}|{}|{}|{}|{}|",
+        env!("CARGO_PKG_VERSION"),
+        ext,
+        s.deep,
+        s.cpu_only,
+        s.max_mb,
+        s.max_pages,
+        s.prefilter
+    ));
+    let mut buf = vec![0u8; 1 << 20];
+    let mut total = 0u64;
+    loop {
+        let n = f.read(&mut buf).ok()?;
+        if n == 0 {
+            break;
+        }
+        total += n as u64;
+        if total > limit {
+            return None;
+        }
+        h.update(&buf[..n]);
+    }
+    Some(h.finalize().into())
+}
+/// A stored result as it is reported for another file with the same content.
+fn reused_result(a: &Analysis) -> Analysis {
+    let mut r = a.clone();
+    // Same verified outcome as the original, including the images its prefilter discarded.
+    r.timing = Timing {
+        files: 1,
+        reused: 1,
+        prefilter_skipped: a.timing.prefilter_skipped,
+        ..Default::default()
+    };
+    r.ocr_seconds = 0.;
+    r.ocr_init_ms = 0.;
+    r.pages_ocr = 0;
+    r
+}
 /// One isolated parser process per thread, reused across files and respawned after a crash.
 fn worker_loop(
     settings: Settings,
@@ -280,6 +366,20 @@ fn worker_loop(
                     }
                 }
             }
+            let hashing = Instant::now();
+            let key = content_key(&request);
+            let before = stamp(&request.path);
+            let hash_ms = hashing.elapsed().as_secs_f64() * 1000.;
+            let hit = key.and_then(|k| reuse().lock().unwrap().get(&k).map(reused_result));
+            if let Some(mut hit) = hit {
+                hit.timing.hash_ms = hash_ms;
+                o.result = Ok(hit);
+                o.roundtrip_ms = roundtrip.elapsed().as_secs_f64() * 1000.;
+                if out.send(o).is_err() {
+                    break;
+                }
+                continue;
+            }
             if let Some((w, _)) = worker.as_mut() {
                 o.result = w.analyze(&request, &stop, &mut o.peak);
                 if o
@@ -305,6 +405,20 @@ fn worker_loop(
                 }
                 if o.result.is_err() {
                     worker = None;
+                }
+            }
+            if let Ok(a) = o.result.as_mut() {
+                a.timing.hash_ms += hash_ms;
+                // Stored only after a complete answer and when the file is unchanged meanwhile.
+                if let Some(k) = key
+                    && before.is_some()
+                    && stamp(&request.path) == before
+                    && !stop.load(Ordering::Relaxed)
+                {
+                    let mut cache = reuse().lock().unwrap();
+                    if cache.len() < REUSE_MAX {
+                        cache.insert(k, a.clone());
+                    }
                 }
             }
         }

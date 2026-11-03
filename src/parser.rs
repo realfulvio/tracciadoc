@@ -280,6 +280,13 @@ pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal pr
 /// Calibrated on the synthetic corpus: text zones >= 0.10, smooth photos 0.00. Returns the
 /// region to OCR (text-like zones plus one zone of margin) or None when no zone qualifies.
 pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
+    text_region_with(img, 32, 0.02)
+}
+/// Looser version of the prefilter, used on a reduced JPEG decode: it discards fewer images
+/// than the normal prefilter, so an image it discards would have been discarded anyway.
+const PRECHECK_EDGE: i16 = 24;
+const PRECHECK_RATIO: f64 = 0.015;
+fn text_region_with(img: &DynamicImage, edge: i16, ratio: f64) -> Option<(u32, u32, u32, u32)> {
     let (iw, ih) = (img.width(), img.height());
     let g = img.thumbnail(1024, 1024).to_luma8();
     let (w, h) = g.dimensions();
@@ -295,7 +302,7 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
             let v = g.get_pixel(x, y)[0] as i16;
             let dx = (v - g.get_pixel(x + 1, y)[0] as i16).abs();
             let dy = (v - g.get_pixel(x, y + 1)[0] as i16).abs();
-            if dx.max(dy) > 32 {
+            if dx.max(dy) > edge {
                 count[ty][(x / tw).min(T - 1) as usize] += 1;
             }
         }
@@ -303,7 +310,7 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
     let (mut x0, mut y0, mut x1, mut y1) = (T, T, 0, 0);
     for (ty, row) in count.iter().enumerate() {
         for (tx, n) in row.iter().enumerate() {
-            if *n as f64 / (tw * th) as f64 >= 0.02 {
+            if *n as f64 / (tw * th) as f64 >= ratio {
                 let (tx, ty) = (tx as u32, ty as u32);
                 (x0, y0, x1, y1) = (x0.min(tx), y0.min(ty), x1.max(tx + 1), y1.max(ty + 1));
             }
@@ -322,6 +329,33 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
 /// Lato massimo decodificato: un A4 a 600 dpi (4960x7016) deve entrare; la memoria resta
 /// limitata da `max_alloc`.
 pub const MAX_SIDE: u32 = 10_000;
+/// True only when a reduced decode of the JPEG succeeds and the looser prefilter finds no
+/// text-like strokes. Images over the decode limits, CMYK, 16 bit or unreadable are not judged
+/// here, so the full path reports them exactly as before.
+fn jpeg_precheck_blank(bytes: &[u8]) -> bool {
+    let mut d = jpeg_decoder::Decoder::new(std::io::Cursor::new(bytes));
+    if d.read_info().is_err() {
+        return false;
+    }
+    let Some(info) = d.info() else { return false };
+    let (w, h) = (info.width as u32, info.height as u32);
+    if w.max(h) > MAX_SIDE || w as u64 * h as u64 * 4 > 128 * 1024 * 1024 || w.max(h) < 2048 {
+        // Small images: a reduced decode would save little. Over the limits: full path errors.
+        return false;
+    }
+    let Ok((sw, sh)) = d.scale(1024, 1024) else { return false };
+    if (sw as u32, sh as u32) == (w, h) {
+        return false;
+    }
+    let Ok(px) = d.decode() else { return false };
+    let (sw, sh) = (sw as u32, sh as u32);
+    let img = match info.pixel_format {
+        jpeg_decoder::PixelFormat::L8 => image::GrayImage::from_raw(sw, sh, px).map(DynamicImage::ImageLuma8),
+        jpeg_decoder::PixelFormat::RGB24 => image::RgbImage::from_raw(sw, sh, px).map(DynamicImage::ImageRgb8),
+        _ => None,
+    };
+    img.is_some_and(|img| text_region_with(&img, PRECHECK_EDGE, PRECHECK_RATIO).is_none())
+}
 /// Lato massimo passato all'OCR (A4 a circa 300 dpi).
 const OCR_SIDE: u32 = 3_600;
 
@@ -448,6 +482,20 @@ impl Parser {
         }
     }
     fn image_bytes(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) {
+        // Large JPEG photos without text are most of the prefilter's work: decode them first at
+        // 1/2..1/8 scale (DCT scaling) and drop them there when even a looser prefilter finds
+        // no text. Everything else, and any doubt, goes through the full decode below.
+        if req.settings.deep && req.settings.prefilter && bytes.starts_with(&[0xFF, 0xD8]) {
+            let start = std::time::Instant::now();
+            let blank = std::panic::catch_unwind(|| jpeg_precheck_blank(bytes)).unwrap_or(false);
+            a.timing.prefilter_ms += start.elapsed().as_secs_f64() * 1000.;
+            if blank {
+                a.timing.prefilter_skipped += 1;
+                a.timing.jpeg_prechecked += 1;
+                a.issues.push(PREFILTERED.into());
+                return;
+            }
+        }
         let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
             .with_guessed_format()
             .unwrap();
@@ -489,10 +537,22 @@ impl Parser {
             if !doc.attachments().is_empty() {
                 a.issues.push("PDF: allegati incorporati non aperti".into());
             }
-            for page in doc.pages().iter().take(req.settings.max_pages) {
+            let pages = doc.pages().len() as usize;
+            for (n, page) in doc.pages().iter().take(req.settings.max_pages).enumerate() {
+                // The file already holds a document: further pages cannot change its outcome.
+                if !a.reasons.is_empty() {
+                    a.timing.early_stops += 1;
+                    break;
+                }
                 match page.text() {
                     Ok(t) => a.reasons.extend(rules::detect(&t.all())),
                     Err(_) => a.issues.push("PDF: estrazione testo fallita".into()),
+                }
+                if !a.reasons.is_empty() {
+                    if n + 1 < pages.min(req.settings.max_pages) || req.settings.deep {
+                        a.timing.early_stops += 1;
+                    }
+                    break;
                 }
                 if req.settings.deep {
                     let config = PdfRenderConfig::new()
@@ -526,6 +586,7 @@ impl Parser {
         let mut images = 0;
         let mut text = String::new();
         let mut office = false;
+        let mut stopped = false;
         for i in 0..zip.len() {
             let mut f = zip
                 .by_index(i)
@@ -617,7 +678,13 @@ impl Parser {
                 text.push('\n');
             } else if media {
                 images += 1;
-                if images <= req.settings.max_pages {
+                if !a.reasons.is_empty() {
+                    // An earlier image already holds a document: the outcome cannot change.
+                    if !stopped {
+                        stopped = true;
+                        a.timing.early_stops += 1;
+                    }
+                } else if images <= req.settings.max_pages {
                     self.image_bytes(&bytes, a, req);
                 } else {
                     a.issues.push("Office: limite immagini raggiunto".into());
@@ -635,7 +702,15 @@ impl Parser {
         let doc = crate::doc::read(bytes)?;
         a.reasons.extend(rules::detect(&doc.text));
         a.issues.extend(doc.issues);
+        if !a.reasons.is_empty() {
+            a.timing.early_stops += 1;
+            return Ok(());
+        }
         for (n, image) in doc.images.iter().enumerate() {
+            if !a.reasons.is_empty() {
+                a.timing.early_stops += 1;
+                break;
+            }
             if n >= req.settings.max_pages {
                 a.issues.push("Office: limite immagini raggiunto".into());
                 break;

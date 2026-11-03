@@ -80,6 +80,12 @@ pub struct Timing {
     /// Time spent hashing file contents for reuse.
     #[serde(default)]
     pub hash_ms: f64,
+    /// Files whose remaining pages or images were not read because a document was already found.
+    #[serde(default)]
+    pub early_stops: u64,
+    /// JPEG images discarded by the prefilter on a reduced decode, without full decoding.
+    #[serde(default)]
+    pub jpeg_prechecked: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -102,6 +108,8 @@ impl Timing {
         self.upright_stops += o.upright_stops;
         self.reused += o.reused;
         self.hash_ms += o.hash_ms;
+        self.early_stops += o.early_stops;
+        self.jpeg_prechecked += o.jpeg_prechecked;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

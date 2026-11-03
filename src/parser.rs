@@ -121,6 +121,16 @@ impl Ocr {
     /// Clockwise rotation of the text detected by OSD and whether it is confident.
     fn orientation(&self, img: &DynamicImage) -> Option<(i32, bool)> {
         let (api, detect) = self.osd?;
+        // OSD only needs the dominant text direction: a reduced copy is much cheaper than the
+        // full page and a doubtful answer falls back to the 4-rotation search anyway.
+        let side = osd_side();
+        let reduced;
+        let img = if img.width().max(img.height()) > side {
+            reduced = img.thumbnail(side, side);
+            &reduced
+        } else {
+            img
+        };
         let rgb = img.to_rgb8();
         unsafe {
             (self.image)(
@@ -171,6 +181,15 @@ impl Drop for Ocr {
             (self.delete)(self.api)
         }
     }
+}
+/// Longest side handed to OSD. TRACCIADOC_OSD_SIDE overrides it for benchmarks only.
+const OSD_SIDE: u32 = 1_600;
+fn osd_side() -> u32 {
+    std::env::var("TRACCIADOC_OSD_SIDE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| (256..=10_000).contains(v))
+        .unwrap_or(OSD_SIDE)
 }
 /// Below this OSD confidence the 4-rotation search is kept.
 const OSD_MIN_CONF: f32 = 2.0;

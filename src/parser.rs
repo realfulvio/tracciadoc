@@ -200,7 +200,7 @@ fn osd_side() -> u32 {
         .unwrap_or(OSD_SIDE)
 }
 /// Below this OSD confidence the 4-rotation search is kept.
-const OSD_MIN_CONF: f32 = 2.0;
+const OSD_MIN_CONF: f32 = 4.0;
 
 pub const UNSUPPORTED: &str = "Formato non supportato o archivio non aperto";
 pub const OLE: &str = "Office cifrato o formato OLE legacy con estensione moderna: non analizzato";

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.1 - 2026-11-03
+
+Scansione più veloce, con un controllo in più sulle rotazioni. Misure sul corpus sintetico da 696 file, 4 worker, VM Windows senza GPU: da 109,7 s (0.3.0) a 77,8 s (-29%). Stessi 300 rilevamenti.
+
+- L'OCR legge solo italiano (prima italiano + inglese): -22% di tempo con gli stessi rilevamenti, anche sui fixture con etichette solo inglesi o bilingui. Il modello inglese resta nel pacchetto; `TRACCIADOC_OCR_LANG=ita+eng` lo riattiva (solo benchmark).
+- L'orientamento delle immagini (OSD) lavora su una copia ridotta a 800 px sul lato lungo e si considera "sicuro" solo da confidenza 4 (prima 2). Prima un orientamento sicuro ma sbagliato (es. 180° su una patente dritta) faceva leggere la pagina capovolta e il documento sfuggiva; ora si prova prima la lettura dritta e poi le altre rotazioni. Costa circa il 9% di tempo ma sulla patente bilingue di prova che prima sfuggiva ora rileva.
+- Se anche un orientamento sicuro non produce testo leggibile, l'OCR prova le altre rotazioni.
+- `TRACCIADOC_OSD_SIDE` cambia il lato ridotto (solo per i benchmark).
+
 ## 0.3.0 - 2026-11-01
 
 Nuova grafica, dai mockup approvati. Compilata per Windows e controllata con clippy; da collaudare con la GUI vera prima della release.

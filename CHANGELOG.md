@@ -1,12 +1,12 @@
 # Changelog
 
-## Non rilasciato
+## 0.3.1 - 2026-11-03
 
-Scansione più veloce, senza perdere rilevamenti.
+Scansione più veloce, con un controllo in più sulle rotazioni. Misure sul corpus sintetico da 696 file, 4 worker, VM Windows senza GPU: da 109,7 s (0.3.0) a 77,8 s (-29%), con 8 worker 56,8 s (ultima misura prima della soglia OSD a 4: ~62 s attesi). Stessi 300 rilevamenti.
 
-- L'orientamento delle immagini (OSD) lavora su una copia ridotta a 800 px sul lato lungo: sul corpus sintetico da 696 file (4 worker) la scansione passa da 109,7 s a 95,9 s (-12,6%), con gli stessi 300 rilevamenti.
-- L'OCR legge solo italiano (prima italiano + inglese): sullo stesso corpus la scansione passa da 91,5 s a 71,0 s (-22%) con gli stessi rilevamenti, anche sui fixture con etichette solo inglesi o bilingui. Il modello inglese resta nel pacchetto; `TRACCIADOC_OCR_LANG=ita+eng` lo riattiva (solo benchmark).
-- Se l'orientamento "sicuro" non produce testo leggibile, l'OCR prova comunque le altre rotazioni, così un orientamento sbagliato non nasconde un documento.
+- L'OCR legge solo italiano (prima italiano + inglese): -22% di tempo con gli stessi rilevamenti, anche sui fixture con etichette solo inglesi o bilingui. Il modello inglese resta nel pacchetto; `TRACCIADOC_OCR_LANG=ita+eng` lo riattiva (solo benchmark).
+- L'orientamento delle immagini (OSD) lavora su una copia ridotta a 800 px sul lato lungo e si considera "sicuro" solo da confidenza 4 (prima 2). Prima un orientamento sicuro ma sbagliato (es. 180° su una patente dritta) faceva leggere la pagina capovolta e il documento sfuggiva; ora si prova prima la lettura dritta e poi le altre rotazioni. Costa circa il 9% di tempo ma sulla patente bilingue di prova che prima sfuggiva ora rileva.
+- Se anche un orientamento sicuro non produce testo leggibile, l'OCR prova le altre rotazioni.
 - `TRACCIADOC_OSD_SIDE` cambia il lato ridotto (solo per i benchmark).
 
 ## 0.3.0 - 2026-11-01

@@ -1,5 +1,13 @@
 # Changelog
 
+## Non rilasciato
+
+Scansione più veloce, senza perdere rilevamenti.
+
+- L'orientamento delle immagini (OSD) lavora su una copia ridotta a 800 px sul lato lungo: sul corpus sintetico da 696 file (4 worker) la scansione passa da 109,7 s a 95,9 s (-12,6%), con gli stessi 300 rilevamenti.
+- Se l'orientamento "sicuro" non produce testo leggibile, l'OCR prova comunque le altre rotazioni, così un orientamento sbagliato non nasconde un documento.
+- `TRACCIADOC_OSD_SIDE` cambia il lato ridotto (solo per i benchmark).
+
 ## 0.3.0 - 2026-11-01
 
 Nuova grafica, dai mockup approvati. Compilata per Windows e controllata con clippy; da collaudare con la GUI vera prima della release.

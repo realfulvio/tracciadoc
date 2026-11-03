@@ -6,6 +6,7 @@ Più rilevamenti sulle fotocopie con più documenti nello stesso foglio. Una pro
 
 - Se un'immagine o pagina non rileva nulla, viene riletta a blocchi: le parti separate da bande bianche (per esempio le due facciate di una carta e una tessera sotto) sono lette una per una e poi insieme. Se ancora nulla, si fa una lettura in modalità "testo sparso" (Tesseract PSM 11), che ritrova le etichette che l'analisi automatica del layout perde. Solo dopo si passa alle rotazioni come prima. Costa tempo sulle immagini con testo che non sono documenti.
 - Nuova regola per l'interno della carta d'identità cartacea, che non riporta l'intestazione: almeno due connotati (statura, capelli, occhi, segni particolari, "connotati e contrassegni salienti") e almeno due dati anagrafici (cognome, nome, cittadinanza, residenza, stato civile, professione) nello stesso tratto.
+- Nuova regola per la copertina della carta cartacea: "Repubblica Italiana", "Comune di", "carta d'identità" e numero (due lettere e sette cifre) vicini; i caratteri romani letti con V al posto di U sono accettati.
 - Numero della carta cartacea anche con lo spazio ("AV 1234567"). Tessera sanitaria riconosciuta anche da "Tessera europea di assicurazione malattia", "Carta regionale dei servizi" e "Carta nazionale dei servizi".
 - Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare.
 - Provato e scartato: un prefiltro JPEG su decodifica ridotta, senza guadagno misurabile.

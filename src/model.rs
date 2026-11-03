@@ -70,6 +70,9 @@ pub struct Timing {
     /// Images reduced to their text-like region before OCR.
     #[serde(default)]
     pub prefilter_cropped: u64,
+    /// Images read once upright with good text confidence: no OSD, no rotations.
+    #[serde(default)]
+    pub upright_stops: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -89,6 +92,7 @@ impl Timing {
         self.osd_ms += o.osd_ms;
         self.osd_hits += o.osd_hits;
         self.prefilter_cropped += o.prefilter_cropped;
+        self.upright_stops += o.upright_stops;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

@@ -26,6 +26,7 @@ type GetText = unsafe extern "C" fn(*mut c_void) -> *mut c_char;
 type DeleteText = unsafe extern "C" fn(*const c_char);
 type Delete = unsafe extern "C" fn(*mut c_void);
 type SetVariable = unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int;
+type MeanConf = unsafe extern "C" fn(*mut c_void) -> c_int;
 type DetectOrientation =
     unsafe extern "C" fn(*mut c_void, *mut c_int, *mut f32, *mut *const c_char, *mut f32) -> c_int;
 
@@ -37,6 +38,8 @@ struct Ocr {
     text: GetText,
     free: DeleteText,
     delete: Delete,
+    /// Mean word confidence (0-100) of the last recognition; None when the symbol is missing.
+    mean_conf: Option<MeanConf>,
     backend: String,
     /// Separate engine with osd.traineddata; None when the model is missing or fails to load.
     osd: Option<(*mut c_void, DetectOrientation)>,
@@ -64,6 +67,7 @@ impl Ocr {
             let free = *lib
                 .get(b"TessDeleteText\0")
                 .map_err(|_| "OCR: API assente")?;
+            let mean_conf: Option<MeanConf> = lib.get(b"TessBaseAPIMeanTextConf\0").ok().map(|s| *s);
             let set: SetVariable = *lib
                 .get(b"TessBaseAPISetVariable\0")
                 .map_err(|_| "OCR: API assente")?;
@@ -112,7 +116,7 @@ impl Ocr {
             })();
             let backend = format!(
                 "CPU / Tesseract 5.5.3 LSTM ita; dotproduct effettivo: {method}; orientamento: {}; nessuna GPU",
-                if osd.is_some() { "OSD, 4 rotazioni se incerto" } else { "4 rotazioni" }
+                if osd.is_some() { "lettura dritta, poi OSD e rotazioni se incerta" } else { "lettura dritta, poi 4 rotazioni" }
             );
             Ok(Self {
                 _lib: lib,
@@ -121,13 +125,14 @@ impl Ocr {
                 text,
                 free,
                 delete,
+                mean_conf,
                 backend,
                 osd,
             })
         }
     }
-    /// Clockwise rotation of the text detected by OSD and whether it is confident.
-    fn orientation(&self, img: &DynamicImage) -> Option<(i32, bool)> {
+    /// Clockwise rotation of the text suggested by OSD (a hint: it is never trusted alone).
+    fn orientation(&self, img: &DynamicImage) -> Option<i32> {
         let (api, detect) = self.osd?;
         // OSD only needs the dominant text direction: a reduced copy is much cheaper than the
         // full page and a doubtful answer falls back to the 4-rotation search anyway.
@@ -153,10 +158,12 @@ impl Ocr {
             if detect(api, &mut deg, &mut conf, &mut script, &mut script_conf) == 0 {
                 return None;
             }
-            Some((deg, conf >= OSD_MIN_CONF))
+            let _ = conf;
+            Some(deg)
         }
     }
-    fn recognize(&self, img: &DynamicImage) -> Result<String, String> {
+    /// Recognized text and Tesseract's mean confidence (0-100, -1 when unavailable).
+    fn recognize(&self, img: &DynamicImage) -> Result<(String, i32), String> {
         let rgb = img.to_rgb8();
         unsafe {
             (self.image)(
@@ -176,7 +183,8 @@ impl Ocr {
             if s.len() > 4_000_000 {
                 return Err("OCR: limite testo superato".into());
             }
-            Ok(s)
+            let conf = self.mean_conf.map_or(-1, |f| f(self.api));
+            Ok((s, conf))
         }
     }
 }
@@ -199,8 +207,16 @@ fn osd_side() -> u32 {
         .filter(|v| (256..=10_000).contains(v))
         .unwrap_or(OSD_SIDE)
 }
-/// Below this OSD confidence the 4-rotation search is kept.
-const OSD_MIN_CONF: f32 = 4.0;
+/// Mean Tesseract confidence (0-100) above which an upright read with text needs no rotated reads.
+/// TRACCIADOC_UPRIGHT_CONF overrides it (0 disables the shortcut): benchmarks only.
+const UPRIGHT_CONF: i32 = 60;
+fn upright_conf() -> i32 {
+    std::env::var("TRACCIADOC_UPRIGHT_CONF")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| (0..=100).contains(v))
+        .unwrap_or(UPRIGHT_CONF)
+}
 
 pub const UNSUPPORTED: &str = "Formato non supportato o archivio non aperto";
 pub const OLE: &str = "Office cifrato o formato OLE legacy con estensione moderna: non analizzato";
@@ -359,64 +375,73 @@ impl Parser {
             }
         }
         // TRACCIADOC_OCR_SIDE caps the longest side read by OCR (benchmarks only).
-        if let Some(side) = std::env::var("TRACCIADOC_OCR_SIDE")
+        let side = std::env::var("TRACCIADOC_OCR_SIDE")
             .ok()
             .and_then(|v| v.parse::<u32>().ok())
-            .filter(|v| (400..=10_000).contains(v))
-        {
-            if img.width().max(img.height()) > side {
-                img = img.thumbnail(side, side);
-            }
+            .filter(|v| (400..=10_000).contains(v));
+        if let Some(side) = side.filter(|s| img.width().max(img.height()) > *s) {
+            img = img.thumbnail(side, side);
         }
         a.backend = ocr.backend.clone();
         let start = std::time::Instant::now();
-        let osd = std::time::Instant::now();
-        let detected = ocr.orientation(&img);
-        a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
-        // OSD reports the clockwise rotation of the text. Confident: undo it and read once.
-        // Otherwise all 4 corrections stay: upright first, then the suggested one.
-        let (deg, mut confident) = detected.unwrap_or((0, false));
-        let mut order = vec![if confident { deg } else { 0 }];
-        if !confident {
-            for d in [deg, 90, 180, 270] {
-                if !order.contains(&d) {
+        // Upright first: most images are upright, and a good read there settles the orientation
+        // question without OSD or rotated reads. A poor read (garbage or little text) means the
+        // page may be rotated: OSD only orders the remaining 90/180/270 candidates.
+        let min_conf = upright_conf();
+        let mut useful = false;
+        let mut settled = false;
+        a.timing.ocr_calls += 1;
+        match ocr.recognize(&img) {
+            Ok((s, conf)) => {
+                useful = s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
+                let reasons = rules::detect(&s);
+                if !reasons.is_empty() {
+                    a.reasons.extend(reasons);
+                    settled = true;
+                } else if min_conf > 0 && useful && conf >= min_conf {
+                    a.timing.upright_stops += 1;
+                    settled = true;
+                }
+            }
+            Err(e) => {
+                a.issues.push(e);
+                settled = true;
+            }
+        }
+        if !settled {
+            let osd = std::time::Instant::now();
+            let hint = ocr.orientation(&img);
+            a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
+            let mut order: Vec<i32> = vec![];
+            for d in [hint.unwrap_or(0), 90, 180, 270] {
+                if d != 0 && !order.contains(&d) {
                     order.push(d);
                 }
             }
-        }
-        if confident {
-            a.timing.osd_hits += 1;
-        }
-        let mut useful = false;
-        let mut tried = vec![];
-        let mut order = std::collections::VecDeque::from(order);
-        while let Some(deg) = order.pop_front() {
-            tried.push(deg);
-            let current = match deg {
-                90 => img.rotate270(),
-                180 => img.rotate180(),
-                270 => img.rotate90(),
-                _ => img.clone(),
-            };
-            a.timing.ocr_calls += 1;
-            match ocr.recognize(&current) {
-                Ok(s) => {
-                    useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
-                    let reasons = rules::detect(&s);
-                    let found = !reasons.is_empty();
-                    a.reasons.extend(reasons);
-                    if found {
+            if hint.is_some_and(|d| d != 0) {
+                a.timing.osd_hits += 1;
+            }
+            for deg in order {
+                let current = match deg {
+                    90 => img.rotate270(),
+                    180 => img.rotate180(),
+                    _ => img.rotate90(),
+                };
+                a.timing.ocr_calls += 1;
+                match ocr.recognize(&current) {
+                    Ok((s, _)) => {
+                        useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
+                        let reasons = rules::detect(&s);
+                        let found = !reasons.is_empty();
+                        a.reasons.extend(reasons);
+                        if found {
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        a.issues.push(e);
                         break;
                     }
-                    // A confident but wrong orientation yields no text: never trust it alone.
-                    if order.is_empty() && !useful && confident {
-                        order.extend([0, 90, 180, 270].into_iter().filter(|d| !tried.contains(d)));
-                        confident = false;
-                    }
-                }
-                Err(e) => {
-                    a.issues.push(e);
-                    break;
                 }
             }
         }

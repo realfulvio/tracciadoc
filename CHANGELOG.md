@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5 - 2026-11-03
+
+Rifiniture grafiche emerse dal collaudo della 0.3.0.
+
+- Aree e Revisione: la barra di scorrimento non copre più il bordo destro di schede e pulsanti (ora occupa il suo spazio).
+- Con schermo basso o UI al 200% la barra laterale scorre: le accelerazioni non spariscono più; la firma resta solo se c'è posto.
+- Grafico "File al secondo": un campione al secondo e un messaggio finché non ci sono dati.
+
 ## 0.3.4 - 2026-11-03
 
 Più rilevamenti sulle fotocopie con più documenti nello stesso foglio. Una prova reale non veniva rilevata: una pagina con l'interno di una carta d'identità cartacea e una tessera sanitaria fotocopiate insieme, e una seconda pagina con la copertina della carta e il retro della tessera. Non dipendeva dalle ottimizzazioni della 0.3.1-0.3.3: lo stesso foglio sfuggiva anche con OCR italiano + inglese e tutte le rotazioni come nella 0.3.0.

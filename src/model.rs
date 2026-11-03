@@ -73,6 +73,13 @@ pub struct Timing {
     /// Images read once upright with good text confidence: no OSD, no rotations.
     #[serde(default)]
     pub upright_stops: u64,
+    /// Files whose bytes (SHA-256) matched a file already analyzed with the same settings:
+    /// the verified result is reused, nothing is read twice by the parser or OCR.
+    #[serde(default)]
+    pub reused: u64,
+    /// Time spent hashing file contents for reuse.
+    #[serde(default)]
+    pub hash_ms: f64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -93,6 +100,8 @@ impl Timing {
         self.osd_hits += o.osd_hits;
         self.prefilter_cropped += o.prefilter_cropped;
         self.upright_stops += o.upright_stops;
+        self.reused += o.reused;
+        self.hash_ms += o.hash_ms;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

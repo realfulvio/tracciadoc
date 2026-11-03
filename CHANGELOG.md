@@ -2,8 +2,13 @@
 
 ## 0.3.4 - 2026-11-03
 
-- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare. L'elenco dei motivi può essere più corto, il file resta rilevato. Sul corpus sintetico cambia poco (34 letture OCR invece di 39, stessi rilevamenti su corpus, validazione, ruotati, inglesi e degradati); conta sui PDF scansionati di più pagine.
-- Provato e scartato: un prefiltro JPEG su decodifica ridotta (scalatura DCT). Corretto ma senza guadagno misurabile: la decodifica ridotta costa quanto quella completa che risparmia.
+Più rilevamenti sulle fotocopie con più documenti nello stesso foglio. Una prova reale non veniva rilevata: una pagina con l'interno di una carta d'identità cartacea e una tessera sanitaria fotocopiate insieme, e una seconda pagina con la copertina della carta e il retro della tessera. Non dipendeva dalle ottimizzazioni della 0.3.1-0.3.3: lo stesso foglio sfuggiva anche con OCR italiano + inglese e tutte le rotazioni come nella 0.3.0.
+
+- Se un'immagine o pagina non rileva nulla, viene riletta a blocchi: le parti separate da bande bianche (per esempio le due facciate di una carta e una tessera sotto) sono lette una per una e poi insieme. Se ancora nulla, si fa una lettura in modalità "testo sparso" (Tesseract PSM 11), che ritrova le etichette che l'analisi automatica del layout perde. Solo dopo si passa alle rotazioni come prima. Costa tempo sulle immagini con testo che non sono documenti.
+- Nuova regola per l'interno della carta d'identità cartacea, che non riporta l'intestazione: almeno due connotati (statura, capelli, occhi, segni particolari, "connotati e contrassegni salienti") e almeno due dati anagrafici (cognome, nome, cittadinanza, residenza, stato civile, professione) nello stesso tratto.
+- Numero della carta cartacea anche con lo spazio ("AV 1234567"). Tessera sanitaria riconosciuta anche da "Tessera europea di assicurazione malattia", "Carta regionale dei servizi" e "Carta nazionale dei servizi".
+- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare.
+- Provato e scartato: un prefiltro JPEG su decodifica ridotta, senza guadagno misurabile.
 
 ## 0.3.3 - 2026-11-03
 

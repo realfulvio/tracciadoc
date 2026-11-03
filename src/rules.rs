@@ -5,7 +5,8 @@ static CF: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"\b[A-Z]{6}[0-9LMNPQRSTUV]{2}[ABCDEHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]\b").unwrap()
 });
 static NUMBER: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"\b(?:[A-Z]{2}[0-9]{5}[A-Z]{2}|[A-Z]{2}[0-9]{7}|[A-Z][0-9]{7}|[A-Z0-9]{10})\b")
+    // Le carte d'identita cartacee stampano il numero con uno spazio: "AV 1234567".
+    Regex::new(r"\b(?:[A-Z]{2}[0-9]{5}[A-Z]{2}|[A-Z]{2} ?[0-9]{7}|[A-Z][0-9]{7}|[A-Z0-9]{10})\b")
         .unwrap()
 });
 pub fn valid_cf(s: &str) -> bool {
@@ -73,7 +74,13 @@ pub fn detect(text: &str) -> Vec<String> {
         ),
         (
             "Tessera sanitaria",
-            &["TESSERA SANITARIA", "HEALTH INSURANCE CARD"][..],
+            &[
+                "TESSERA SANITARIA",
+                "HEALTH INSURANCE CARD",
+                "TESSERA EUROPEA DI ASSICURAZIONE MALATTIA",
+                "CARTA REGIONALE DEI SERVIZI",
+                "CARTA NAZIONALE DEI SERVIZI",
+            ][..],
         ),
     ] {
         for term in terms {
@@ -123,6 +130,22 @@ pub fn detect(text: &str) -> Vec<String> {
                     ));
                 }
             }
+        }
+    }
+    // Interno della carta d'identita cartacea: non riporta l'intestazione, ma i connotati
+    // (statura, capelli, occhi, segni particolari) insieme ai dati anagrafici sono tipici solo
+    // di quel documento. Servono almeno due connotati e altri due campi, nello stesso tratto.
+    const TRAITS: [&str; 5] = ["CONNOTATI", "STATURA", "CAPELLI", "OCCHI", "SEGNI PARTICOLARI"];
+    const CIVIL: [&str; 6] = ["COGNOME", "NOME", "CITTADINANZA", "RESIDENZA", "STATO CIVILE", "PROFESSIONE"];
+    for (pos, _) in normalized.match_indices("STATURA").chain(normalized.match_indices("CONNOTATI")) {
+        let from = normalized[..pos].char_indices().rev().nth(600).map_or(0, |(i, _)| i);
+        let to = normalized[pos..].char_indices().nth(400).map_or(normalized.len(), |(i, _)| pos + i);
+        let context = &normalized[from..to];
+        let traits = TRAITS.iter().filter(|s| has_label(context, s)).count();
+        let civil = CIVIL.iter().filter(|s| has_label(context, s)).count();
+        if traits >= 2 && civil >= 2 {
+            out.push("Carta d'identita cartacea: connotati e dati anagrafici coerenti".into());
+            break;
         }
     }
     let lines: Vec<String> = upper
@@ -187,6 +210,22 @@ mod tests {
             assert!(!found.is_empty(), "{title}");
             assert!(!found.join(" ").contains("AA00000AA"));
         }
+    }
+    #[test]
+    fn paper_identity_card_inside() {
+        let inside = "Cognome ESEMPIO Nome PROVA nato il 01/01/2000 Cittadinanza ITALIANA \
+            Residenza ESEMPIO Stato civile Professione CONNOTATI E CONTRASSEGNI SALIENTI \
+            Statura 1,70 Capelli CASTANI Occhi CASTANI Segni particolari NESSUNO";
+        assert!(!detect(inside).is_empty());
+        // Una scheda medica con statura e occhi ma senza dati anagrafici non basta.
+        assert!(detect("Visita oculistica: statura 1,70, occhi arrossati").is_empty());
+        // Copertina: intestazione e numero con spazio, piu nomi in campi senza etichetta no;
+        // con due campi si.
+        assert!(!detect("CARTA D'IDENTITA N. AV 0000000 Cognome ESEMPIO Nome PROVA").is_empty());
+    }
+    #[test]
+    fn european_health_card() {
+        assert!(!detect("TESSERA EUROPEA DI ASSICURAZIONE MALATTIA Cognome ESEMPIO Nome PROVA Data di nascita 01/01/2000").is_empty());
     }
     #[test]
     fn checked_mrz() {

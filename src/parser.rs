@@ -27,6 +27,7 @@ type DeleteText = unsafe extern "C" fn(*const c_char);
 type Delete = unsafe extern "C" fn(*mut c_void);
 type SetVariable = unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int;
 type MeanConf = unsafe extern "C" fn(*mut c_void) -> c_int;
+type SetPageSegMode = unsafe extern "C" fn(*mut c_void, c_int);
 type DetectOrientation =
     unsafe extern "C" fn(*mut c_void, *mut c_int, *mut f32, *mut *const c_char, *mut f32) -> c_int;
 
@@ -40,6 +41,8 @@ struct Ocr {
     delete: Delete,
     /// Mean word confidence (0-100) of the last recognition; None when the symbol is missing.
     mean_conf: Option<MeanConf>,
+    /// Page segmentation mode setter; None when the symbol is missing (sparse reads skipped).
+    seg_mode: Option<SetPageSegMode>,
     backend: String,
     /// Separate engine with osd.traineddata; None when the model is missing or fails to load.
     osd: Option<(*mut c_void, DetectOrientation)>,
@@ -68,6 +71,8 @@ impl Ocr {
                 .get(b"TessDeleteText\0")
                 .map_err(|_| "OCR: API assente")?;
             let mean_conf: Option<MeanConf> = lib.get(b"TessBaseAPIMeanTextConf\0").ok().map(|s| *s);
+            let seg_mode: Option<SetPageSegMode> =
+                lib.get(b"TessBaseAPISetPageSegMode\0").ok().map(|s| *s);
             let set: SetVariable = *lib
                 .get(b"TessBaseAPISetVariable\0")
                 .map_err(|_| "OCR: API assente")?;
@@ -126,6 +131,7 @@ impl Ocr {
                 free,
                 delete,
                 mean_conf,
+                seg_mode,
                 backend,
                 osd,
             })
@@ -161,6 +167,15 @@ impl Ocr {
             let _ = conf;
             Some(deg)
         }
+    }
+    /// Sparse-text read (PSM 11): finds labels and values scattered over a sheet that the
+    /// automatic layout analysis merges or drops. None when the mode cannot be set.
+    fn recognize_sparse(&self, img: &DynamicImage) -> Option<Result<(String, i32), String>> {
+        let set = self.seg_mode?;
+        unsafe { set(self.api, 11) };
+        let r = self.recognize(img);
+        unsafe { set(self.api, 3) };
+        Some(r)
     }
     /// Recognized text and Tesseract's mean confidence (0-100, -1 when unavailable).
     fn recognize(&self, img: &DynamicImage) -> Result<(String, i32), String> {
@@ -322,6 +337,78 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
 /// Lato massimo decodificato: un A4 a 600 dpi (4960x7016) deve entrare; la memoria resta
 /// limitata da `max_alloc`.
 pub const MAX_SIDE: u32 = 10_000;
+/// Separate blocks of a page divided by blank bands (XY-cut, two levels): a photocopy with an
+/// identity card and a health card on the same sheet. Tesseract's layout analysis on the whole
+/// sheet can miss the labels of each card, while each card read alone is found. Returns the
+/// blocks in image coordinates, or an empty list when the page is a single block.
+pub fn split_blocks(img: &DynamicImage) -> Vec<(u32, u32, u32, u32)> {
+    let (iw, ih) = (img.width(), img.height());
+    let g = img.thumbnail(1024, 1024).to_luma8();
+    let (w, h) = g.dimensions();
+    if w < 64 || h < 64 {
+        return vec![];
+    }
+    fn cuts(ink: &[bool], min_run: usize) -> Vec<usize> {
+        // Cut in the middle of each blank run between inked parts (not the outer margins).
+        let mut out = vec![];
+        let (mut run, mut seen) = (0, false);
+        for (i, &v) in ink.iter().enumerate() {
+            if v {
+                if seen && run >= min_run {
+                    out.push(i - run / 2);
+                }
+                seen = true;
+                run = 0;
+            } else {
+                run += 1;
+            }
+        }
+        out
+    }
+    fn split(g: &image::GrayImage, x0: u32, y0: u32, x1: u32, y1: u32, depth: u32, out: &mut Vec<(u32, u32, u32, u32)>) {
+        let (w, h) = (x1 - x0, y1 - y0);
+        let dark = |x: u32, y: u32| g.get_pixel(x, y)[0] < 200;
+        let rows: Vec<bool> = (y0..y1)
+            .map(|y| (x0..x1).step_by(2).filter(|&x| dark(x, y)).count() as f64 > w as f64 * 0.002)
+            .collect();
+        let cols: Vec<bool> = (x0..x1)
+            .map(|x| (y0..y1).step_by(2).filter(|&y| dark(x, y)).count() as f64 > h as f64 * 0.002)
+            .collect();
+        let rc = cuts(&rows, (h as usize / 60).max(6));
+        let cc = cuts(&cols, (w as usize / 60).max(6));
+        if depth >= 2 || (rc.is_empty() && cc.is_empty()) {
+            out.push((x0, y0, x1, y1));
+            return;
+        }
+        if !rc.is_empty() {
+            let mut ys = vec![y0];
+            ys.extend(rc.iter().map(|&c| y0 + c as u32));
+            ys.push(y1);
+            for p in ys.windows(2) {
+                split(g, x0, p[0], x1, p[1], depth + 1, out);
+            }
+        } else {
+            let mut xs = vec![x0];
+            xs.extend(cc.iter().map(|&c| x0 + c as u32));
+            xs.push(x1);
+            for p in xs.windows(2) {
+                split(g, p[0], y0, p[1], y1, depth + 1, out);
+            }
+        }
+    }
+    let mut blocks = vec![];
+    split(&g, 0, 0, w, h, 0, &mut blocks);
+    blocks.retain(|&(x0, y0, x1, y1)| (x1 - x0) * 10 > w && (y1 - y0) * 20 > h);
+    if blocks.len() < 2 {
+        return vec![];
+    }
+    let sx = |v: u32| if v == w { iw } else { (v as u64 * iw as u64 / w as u64) as u32 };
+    let sy = |v: u32| if v == h { ih } else { (v as u64 * ih as u64 / h as u64) as u32 };
+    blocks
+        .into_iter()
+        .map(|(x0, y0, x1, y1)| (sx(x0), sy(y0), sx(x1), sy(y1)))
+        .collect()
+}
 /// Lato massimo passato all'OCR (A4 a circa 300 dpi).
 const OCR_SIDE: u32 = 3_600;
 
@@ -382,6 +469,7 @@ impl Parser {
         let min_conf = upright_conf();
         let mut useful = false;
         let mut settled = false;
+        let mut failed = false;
         a.timing.ocr_calls += 1;
         match ocr.recognize(&img) {
             Ok((s, conf)) => {
@@ -397,6 +485,45 @@ impl Parser {
             }
             Err(e) => {
                 a.issues.push(e);
+                failed = true;
+                settled = true;
+            }
+        }
+        // Nothing found on the whole sheet: several documents side by side can confuse the
+        // layout analysis. Each block separated by blank bands is read on its own, and the
+        // blocks together, before any rotation. This runs also after a confident read.
+        if a.reasons.is_empty() && !failed {
+            let blocks = split_blocks(&img);
+            if !blocks.is_empty() {
+                a.timing.block_reads += 1;
+                let mut all = String::new();
+                for (x0, y0, x1, y1) in blocks {
+                    let block = img.crop_imm(x0, y0, x1 - x0, y1 - y0);
+                    a.timing.ocr_calls += 1;
+                    if let Ok((s, _)) = ocr.recognize(&block) {
+                        useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
+                        a.reasons.extend(rules::detect(&s));
+                        all.push_str(&s);
+                        all.push('\n');
+                    }
+                }
+                a.reasons.extend(rules::detect(&all));
+            }
+            // Sparse read of the whole sheet: on a photocopy of an old paper identity card the
+            // automatic layout loses the field labels that this mode still reads.
+            if a.reasons.is_empty()
+                && let Some(read) = ocr.recognize_sparse(&img)
+            {
+                a.timing.ocr_calls += 1;
+                a.timing.sparse_reads += 1;
+                if let Ok((s, _)) = read {
+                    useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
+                    a.reasons.extend(rules::detect(&s));
+                }
+            }
+            a.reasons.sort();
+            a.reasons.dedup();
+            if !a.reasons.is_empty() {
                 settled = true;
             }
         }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.2 - 2026-11-03
+
+Scansione ancora più veloce: da 77,8 s (0.3.1) a circa 59 s (-24%) sul corpus sintetico da 696 file, 4 worker, VM Windows senza GPU (0.3.0: 109,7 s). Stessi 300 rilevamenti.
+
+- Ogni immagine o pagina si legge prima dritta. Se Tesseract è sicuro di quanto ha letto (confidenza media almeno 70 su 100, con testo utile) non servono né l'orientamento (OSD) né le letture ruotate; prima un'immagine con testo ma senza rilevamenti veniva riletta fino a 4 volte. Se la lettura dritta è incerta o non rileva nulla, si prova OSD e poi le altre rotazioni come prima.
+- Controllato su validazione (27/27), 48 file ruotati (90/180/270, 3° e 183°), 16 immagini inglese/bilingue e 65 immagini degradate (JPEG scadente, sfocate, ridotte, inclinate, documento piccolo nella pagina): nessun caso perso rispetto alla 0.3.1. La confidenza di un testo ruotato non supera 54 nelle prove, quella di un documento dritto ha mediana 94; la soglia 50 invece perdeva 6 file ruotati ed è esclusa.
+- `TRACCIADOC_UPRIGHT_CONF` (0-100, 0 = sempre tutte le rotazioni) cambia la soglia, solo per benchmark.
+
 ## 0.3.1 - 2026-11-03
 
 Scansione più veloce, con un controllo in più sulle rotazioni. Misure sul corpus sintetico da 696 file, 4 worker, VM Windows senza GPU: da 109,7 s (0.3.0) a 77,8 s (-29%). Stessi 300 rilevamenti.

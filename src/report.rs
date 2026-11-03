@@ -110,7 +110,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     );
     add(
         format!(
-            "PDFium 158.0.8125.0; OCR Tesseract CPU ita+eng se effettivamente usato. Pagine/immagini OCR: {}. Avvio OCR differito; nessun modello o provider scaricato. GPU/NPU non implementate; nessun fallback GPU dichiarato.",
+            "PDFium 158.0.8125.0; OCR Tesseract CPU italiano se effettivamente usato. Pagine/immagini OCR: {}. Avvio OCR differito; nessun modello o provider scaricato. GPU/NPU non implementate; nessun fallback GPU dichiarato.",
             run.pages_ocr
         ),
         9.,
@@ -118,13 +118,14 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP; GIF/TIFF solo prima immagine (limite segnalato). DOCX/XLSX/PPTX e ODT/ODS/ODP: XML e immagini raster incorporate. RTF solo testo grezzo. I file di solo testo (TXT, CSV, LOG, MD) non vengono analizzati: non contengono copie di documenti. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR.".into(),9.);
     add(
         format!(
-            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 10000 px/lato e 128 MiB decodificati, OCR a 3600 px/lato al massimo. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Nessuna cache; duplicati rianalizzati, percorsi conservati.",
+            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF max 1700x2400, immagini max 10000 px/lato e 128 MiB decodificati, OCR a 3600 px/lato al massimo. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Riuso esiti: un file con contenuto identico (SHA-256) a uno gia analizzato in questa sessione (analisi conclusa, non interrotta, file invariato durante la lettura), con stessa estensione, impostazioni e versione, riceve lo stesso esito verificato senza nuova lettura; file con esito riusato: {}. Ogni percorso e elencato e contato singolarmente. Nessuna cache su disco.",
             run.settings.max_mb,
             run.settings.max_pages,
             run.settings.timeout_secs,
             run.settings.memory_mb,
             run.settings.max_entries,
-            run.settings.workers
+            run.settings.workers,
+            run.timing.reused
         ),
         9.,
     );

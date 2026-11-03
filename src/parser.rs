@@ -358,6 +358,16 @@ impl Parser {
                 _ => {}
             }
         }
+        // TRACCIADOC_OCR_SIDE caps the longest side read by OCR (benchmarks only).
+        if let Some(side) = std::env::var("TRACCIADOC_OCR_SIDE")
+            .ok()
+            .and_then(|v| v.parse::<u32>().ok())
+            .filter(|v| (400..=10_000).contains(v))
+        {
+            if img.width().max(img.height()) > side {
+                img = img.thumbnail(side, side);
+            }
+        }
         a.backend = ocr.backend.clone();
         let start = std::time::Instant::now();
         let osd = std::time::Instant::now();

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.4 - 2026-11-03
+
+Più rilevamenti sulle fotocopie con più documenti nello stesso foglio. Una prova reale non veniva rilevata: una pagina con l'interno di una carta d'identità cartacea e una tessera sanitaria fotocopiate insieme, e una seconda pagina con la copertina della carta e il retro della tessera. Non dipendeva dalle ottimizzazioni della 0.3.1-0.3.3: lo stesso foglio sfuggiva anche con OCR italiano + inglese e tutte le rotazioni come nella 0.3.0.
+
+- Se un'immagine o pagina non rileva nulla, viene riletta a blocchi: le parti separate da bande bianche (per esempio le due facciate di una carta e una tessera sotto) sono lette una per una e poi insieme. Se ancora nulla, si fa una lettura in modalità "testo sparso" (Tesseract PSM 11), che ritrova le etichette che l'analisi automatica del layout perde. Solo dopo si passa alle rotazioni come prima. Costa tempo sulle immagini con testo che non sono documenti.
+- Nuova regola per l'interno della carta d'identità cartacea, che non riporta l'intestazione: almeno due connotati (statura, capelli, occhi, segni particolari, "connotati e contrassegni salienti") e almeno due dati anagrafici (cognome, nome, cittadinanza, residenza, stato civile, professione) nello stesso tratto.
+- Nuova regola per la copertina della carta cartacea: "Repubblica Italiana", "Comune di", "carta d'identità" e numero (due lettere e sette cifre) vicini; i caratteri romani letti con V al posto di U sono accettati.
+- Numero della carta cartacea anche con lo spazio ("AV 1234567"). Tessera sanitaria riconosciuta anche da "Tessera europea di assicurazione malattia", "Carta regionale dei servizi" e "Carta nazionale dei servizi".
+- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare.
+- Provato e scartato: un prefiltro JPEG su decodifica ridotta, senza guadagno misurabile.
+
 ## 0.3.3 - 2026-11-03
 
 Riuso degli esiti per i file con contenuto identico. Il corpus sintetico da 696 file contiene molti duplicati: 336 contenuti distinti su 684 file letti. Con 4 worker su una VM Windows senza GPU la scansione passa da circa 59 s a 13 s, con gli stessi 300 rilevamenti. Con una seconda copia completa del corpus (1392 file) servono 16 s, contro i 118 s della 0.3.2. Su dischi con pochi duplicati il guadagno alla prima scansione è minore, mentre la ri-scansione dopo le eliminazioni rilegge solo i file cambiati.

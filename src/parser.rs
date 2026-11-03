@@ -76,9 +76,15 @@ impl Ocr {
             }
             let data = CString::new(runtime().join("ocr/tessdata").to_string_lossy().as_bytes())
                 .map_err(|_| "OCR: percorso non valido")?;
-            if init(api, data.as_ptr(), c"ita+eng".as_ptr()) != 0 {
+            // TRACCIADOC_OCR_LANG (ita, eng, ita+eng) is read for benchmarks only.
+            let lang = match std::env::var("TRACCIADOC_OCR_LANG").as_deref() {
+                Ok("ita") => c"ita",
+                Ok("eng") => c"eng",
+                _ => c"ita+eng",
+            };
+            if init(api, data.as_ptr(), lang.as_ptr()) != 0 {
                 delete(api);
-                return Err("OCR: modelli ita+eng non disponibili".into());
+                return Err("OCR: modelli lingua non disponibili".into());
             }
             set(api, c"user_defined_dpi".as_ptr(), c"200".as_ptr());
             // CPU-only forbids GPU providers, not safe SIMD internal to the CPU OCR build.

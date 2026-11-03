@@ -146,7 +146,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
     add(
         if run.settings.prefilter {
             format!(
-                "Prefiltro immagini attivo: immagini o pagine scartate dal prefiltro, senza OCR: {}. Sono quelle prive di tratti a contrasto tipo testo in ogni zona; i file che le contengono sono contati come parziali. Sui JPEG da 2048 px in su il primo controllo usa una decodifica ridotta e soglie piu permissive; le immagini che lo superano passano al controllo normale a piena risoluzione.",
+                "Prefiltro immagini attivo: immagini o pagine scartate dal prefiltro, senza OCR: {}. Sono quelle prive di tratti a contrasto tipo testo in ogni zona; i file che le contengono sono contati come parziali.",
                 run.timing.prefilter_skipped
             )
         } else {

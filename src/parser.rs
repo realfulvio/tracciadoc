@@ -28,6 +28,7 @@ type Delete = unsafe extern "C" fn(*mut c_void);
 type SetVariable = unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char) -> c_int;
 type MeanConf = unsafe extern "C" fn(*mut c_void) -> c_int;
 type SetPageSegMode = unsafe extern "C" fn(*mut c_void, c_int);
+type GetPageSegMode = unsafe extern "C" fn(*mut c_void) -> c_int;
 type DetectOrientation =
     unsafe extern "C" fn(*mut c_void, *mut c_int, *mut f32, *mut *const c_char, *mut f32) -> c_int;
 
@@ -42,7 +43,7 @@ struct Ocr {
     /// Mean word confidence (0-100) of the last recognition; None when the symbol is missing.
     mean_conf: Option<MeanConf>,
     /// Page segmentation mode setter; None when the symbol is missing (sparse reads skipped).
-    seg_mode: Option<SetPageSegMode>,
+    seg_mode: Option<(SetPageSegMode, GetPageSegMode)>,
     backend: String,
     /// Separate engine with osd.traineddata; None when the model is missing or fails to load.
     osd: Option<(*mut c_void, DetectOrientation)>,
@@ -71,8 +72,13 @@ impl Ocr {
                 .get(b"TessDeleteText\0")
                 .map_err(|_| "OCR: API assente")?;
             let mean_conf: Option<MeanConf> = lib.get(b"TessBaseAPIMeanTextConf\0").ok().map(|s| *s);
-            let seg_mode: Option<SetPageSegMode> =
-                lib.get(b"TessBaseAPISetPageSegMode\0").ok().map(|s| *s);
+            let seg_mode = match (
+                lib.get::<SetPageSegMode>(b"TessBaseAPISetPageSegMode\0"),
+                lib.get::<GetPageSegMode>(b"TessBaseAPIGetPageSegMode\0"),
+            ) {
+                (Ok(s), Ok(g)) => Some((*s, *g)),
+                _ => None,
+            };
             let set: SetVariable = *lib
                 .get(b"TessBaseAPISetVariable\0")
                 .map_err(|_| "OCR: API assente")?;
@@ -171,10 +177,13 @@ impl Ocr {
     /// Sparse-text read (PSM 11): finds labels and values scattered over a sheet that the
     /// automatic layout analysis merges or drops. None when the mode cannot be set.
     fn recognize_sparse(&self, img: &DynamicImage) -> Option<Result<(String, i32), String>> {
-        let set = self.seg_mode?;
+        let (set, get) = self.seg_mode?;
+        // The API default is PSM 6 (single block), not the CLI's 3: restore whatever it was,
+        // so every other read keeps the validated mode.
+        let before = unsafe { get(self.api) };
         unsafe { set(self.api, 11) };
         let r = self.recognize(img);
-        unsafe { set(self.api, 3) };
+        unsafe { set(self.api, before) };
         Some(r)
     }
     /// Recognized text and Tesseract's mean confidence (0-100, -1 when unavailable).

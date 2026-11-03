@@ -2,11 +2,8 @@
 
 ## 0.3.4 - 2026-11-03
 
-Meno lavoro sui file già decisi e sulle foto senza testo.
-
-- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare. L'elenco dei motivi può essere più corto, il file resta rilevato.
-- JPEG da 2048 px in su: il prefiltro prova prima una decodifica ridotta (1/2-1/8, scalatura DCT) con soglie più permissive del normale. Se nemmeno così trova tratti tipo testo, l'immagine viene scartata senza decodifica completa; altrimenti passa al prefiltro normale a piena risoluzione come prima. Le immagini oltre i limiti, CMYK o non leggibili seguono sempre il percorso completo.
-- Nuova dipendenza `jpeg-decoder` 0.3 (MIT/Apache-2.0).
+- Appena una pagina o un'immagine rileva un documento, il resto dello stesso file (PDF, Office, Word 97-2003) non viene più letto: l'esito del file non può cambiare. L'elenco dei motivi può essere più corto, il file resta rilevato. Sul corpus sintetico cambia poco (34 letture OCR invece di 39, stessi rilevamenti su corpus, validazione, ruotati, inglesi e degradati); conta sui PDF scansionati di più pagine.
+- Provato e scartato: un prefiltro JPEG su decodifica ridotta (scalatura DCT). Corretto ma senza guadagno misurabile: la decodifica ridotta costa quanto quella completa che risparmia.
 
 ## 0.3.3 - 2026-11-03
 

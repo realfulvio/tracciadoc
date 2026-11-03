@@ -183,7 +183,7 @@ impl Drop for Ocr {
     }
 }
 /// Longest side handed to OSD. TRACCIADOC_OSD_SIDE overrides it for benchmarks only.
-const OSD_SIDE: u32 = 1_600;
+const OSD_SIDE: u32 = 800;
 fn osd_side() -> u32 {
     std::env::var("TRACCIADOC_OSD_SIDE")
         .ok()
@@ -357,7 +357,7 @@ impl Parser {
         a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
         // OSD reports the clockwise rotation of the text. Confident: undo it and read once.
         // Otherwise all 4 corrections stay: upright first, then the suggested one.
-        let (deg, confident) = detected.unwrap_or((0, false));
+        let (deg, mut confident) = detected.unwrap_or((0, false));
         let mut order = vec![if confident { deg } else { 0 }];
         if !confident {
             for d in [deg, 90, 180, 270] {
@@ -370,7 +370,10 @@ impl Parser {
             a.timing.osd_hits += 1;
         }
         let mut useful = false;
-        for deg in order {
+        let mut tried = vec![];
+        let mut order = std::collections::VecDeque::from(order);
+        while let Some(deg) = order.pop_front() {
+            tried.push(deg);
             let current = match deg {
                 90 => img.rotate270(),
                 180 => img.rotate180(),
@@ -386,6 +389,11 @@ impl Parser {
                     a.reasons.extend(reasons);
                     if found {
                         break;
+                    }
+                    // A confident but wrong orientation yields no text: never trust it alone.
+                    if order.is_empty() && !useful && confident {
+                        order.extend([0, 90, 180, 270].into_iter().filter(|d| !tried.contains(d)));
+                        confident = false;
                     }
                 }
                 Err(e) => {

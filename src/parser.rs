@@ -209,7 +209,7 @@ fn osd_side() -> u32 {
 }
 /// Mean Tesseract confidence (0-100) above which an upright read with text needs no rotated reads.
 /// TRACCIADOC_UPRIGHT_CONF overrides it (0 disables the shortcut): benchmarks only.
-const UPRIGHT_CONF: i32 = 60;
+const UPRIGHT_CONF: i32 = 70;
 fn upright_conf() -> i32 {
     std::env::var("TRACCIADOC_UPRIGHT_CONF")
         .ok()

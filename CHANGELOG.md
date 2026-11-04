@@ -10,6 +10,17 @@ Le fototessere vanno cercate, non escluse. Fino alla 0.3.4 il programma non le c
 - Nuova opzione "Fototessere" nelle opzioni avanzate (`--no-photo-id` da riga di comando), attiva di default. Entra nella chiave di riuso degli esiti.
 - Limiti noti: una foto piccola dentro una pagina (per esempio la foto di un curriculum), i volti di profilo, le foto di gruppo e i fogli con più fototessere non sono segnalati. Nessuna prova su fototessere reali: solo ritratti disegnati e un'immagine di pubblico dominio provata a mano.
 - Rimossa dall'interfaccia e dalla documentazione la frase "non cerca fototessere".
+- La verifica non risulta più "INCOMPLETA" per limiti solo informativi (immagini scartate dal prefiltro, collegamenti esterni nei documenti Office, RTF, TIFF/GIF prima pagina): restano elencati nel verbale, ma non sono lacune di copertura. Timeout, crash, file illeggibili o cifrati la rendono incompleta come prima.
+- Gli apostrofi tipografici (’ ‘ ´ `) sono trattati come l'apostrofo ASCII: "Carta d’identità" in Word o in un PDF con testo viene riconosciuta.
+- Analizzate anche le varianti Office .docm .xlsm .pptm .dotx .dotm .xltx .xltm .potx .potm .ppsx .ppsm, i modelli OpenDocument .ott .ots .otp e i .jpe.
+
+## 0.3.5 - 2026-11-03
+
+Rifiniture grafiche emerse dal collaudo della 0.3.0.
+
+- Aree e Revisione: la barra di scorrimento non copre più il bordo destro di schede e pulsanti (ora occupa il suo spazio).
+- Con schermo basso o UI al 200% la barra laterale scorre: le accelerazioni non spariscono più; la firma resta solo se c'è posto.
+- Grafico "File al secondo": un campione al secondo e un messaggio finché non ci sono dati.
 
 ## 0.3.4 - 2026-11-03
 

@@ -11,12 +11,15 @@ fn safe_extension(f: &Finding) -> bool {
     match f.format.to_ascii_lowercase().as_str() {
         "pdf" => ext == "pdf",
         "png" => ext == "png",
-        "jpeg" => ["jpg", "jpeg", "jfif"].contains(&ext.as_str()),
+        "jpeg" => ["jpg", "jpeg", "jfif", "jpe"].contains(&ext.as_str()),
         "bmp" => ext == "bmp",
         "webp" => ext == "webp",
         "gif" => ext == "gif",
         "tiff" => ["tif", "tiff"].contains(&ext.as_str()),
-        "office xml / zip" => ["docx", "xlsx", "pptx", "odt", "ods", "odp"].contains(&ext.as_str()),
+        "office xml / zip" => [
+            "docx", "xlsx", "pptx", "odt", "ods", "odp", "docm", "dotx", "dotm", "xlsm", "xltx", "xltm",
+            "pptm", "potx", "potm", "ppsx", "ppsm", "ott", "ots", "otp",
+        ].contains(&ext.as_str()),
         "word doc" => ext == "doc",
         "testo utf-8" => ["txt", "csv", "tsv", "log", "md", "rtf", "doc"].contains(&ext.as_str()),
         _ => false,

@@ -35,7 +35,7 @@ Per rimuovere lo storico, chiudi l'app e rimuovi quella cartella.
 Nessuna cache persistente e nessun temporaneo OCR su disco.
 I PDF esportati restano nelle cartelle scelte dall'operatore.
 
-Formati: PDF, PNG/JPEG/BMP/WebP, GIF/TIFF (solo prima immagine),
+Formati: PDF, PNG/JPEG/BMP/WebP, TIFF (tutte le pagine), GIF (solo primo fotogramma),
 DOCX/XLSX/PPTX, ODT/ODS/ODP, RTF (solo testo grezzo).
 I file di solo testo (TXT, CSV, TSV, LOG, MD) non vengono analizzati.
 Office: XML e immagini raster incorporate.

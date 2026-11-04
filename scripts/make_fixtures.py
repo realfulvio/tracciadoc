@@ -18,11 +18,12 @@ TEXT={
 }
 def record(name,positive,cls,fmt,limited=False):
  manifest.append(dict(file=name,positive=positive,document_class=cls,format=fmt,limited=limited))
-def image(text,low=False):
+FONT='C:/Windows/Fonts/arial.ttf' if Path('C:/Windows/Fonts/arial.ttf').exists() else '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
+def image(text,low=False,size=38):
  im=Image.new('RGB',(1500,1000),'white');d=ImageDraw.Draw(im)
- font=ImageFont.truetype('C:/Windows/Fonts/arial.ttf',38)
+ font=ImageFont.truetype(FONT,size)
  d.text((60,50),'FACSIMILE SINTETICO - NON VALIDO',fill='black',font=font)
- d.multiline_text((60,170),text,fill=(170,170,170) if low else 'black',font=font,spacing=22)
+ d.multiline_text((60,170),text,fill=(170,170,170) if low else 'black',font=ImageFont.truetype(FONT,size) if size!=38 else font,spacing=22)
  return im
 def pdf(name,text=None,img=None,encrypted=False):
  stream=io.BytesIO();c=Canvas(stream,pagesize=(595,842),encrypt=StandardEncryption('synthetic-only') if encrypted else None)
@@ -114,6 +115,17 @@ for i,(w,h) in enumerate([(1600,1200),(2400,1800)],1):
 image(TEXT['carta']).rotate(90,expand=True).save(DEST/'carta-ruotata-90.png');record('carta-ruotata-90.png',True,'carta','PNG ruotato')
 scene=photo(2400,1800);doc=image(TEXT['patente']).resize((900,600)).rotate(270,expand=True);scene.paste(doc,(1200,500))
 scene.save(DEST/'documento-fotografato.jpg',quality=90);record('documento-fotografato.jpg',True,'patente','JPEG foto con documento')
+# TIFF multipagina da scanner di rete: il documento e solo alla seconda pagina.
+bw=[image('APPUNTI DI RIUNIONE\nAcquisto materiali\nVerifica preventivi').convert('1'),image(TEXT['carta']).convert('1')]
+bw[0].save(DEST/'multipagina-g4.tif',save_all=True,append_images=bw[1:],compression='group4',dpi=(200,200))
+record('multipagina-g4.tif',True,'carta','TIFF G4 multipagina')
+rgb=[photo(1500,1000),image(TEXT['patente'])]
+rgb[0].save(DEST/'multipagina.tif',save_all=True,append_images=rgb[1:],compression='jpeg',quality=90,dpi=(200,200))
+record('multipagina.tif',True,'patente','TIFF multipagina')
+# Fotocopia A4 con la carta a grandezza reale (85,6 mm) ed etichette piccole come sul documento vero.
+card=image(TEXT['sanitaria'],size=24).resize((1011,674),Image.LANCZOS)
+stream=io.BytesIO();c=Canvas(stream,pagesize=(595,842));c.drawImage(ImageReader(card),60,560,width=242.6,height=161.7);c.save()
+(DEST/'carta-a4-grandezza-reale.pdf').write_bytes(stream.getvalue());record('carta-a4-grandezza-reale.pdf',True,'sanitaria','PDF raster carta piccola')
 with zipfile.ZipFile(DEST/'archivio.zip','w') as z:z.writestr('../../outside.txt','synthetic')
 record('archivio.zip',False,'problema','ZIP non aperto',True)
 (ROOT/'fixtures'/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')

@@ -80,7 +80,7 @@ TracciaDoc è uno strumento di aiuto, non una garanzia.
 
 - Il riconoscimento è euristico: possibili falsi positivi e falsi negativi. Le segnalazioni vanno viste da una persona.
 - Il verbale documenta l'ambito effettivamente controllato e **non certifica l'assenza assoluta** di documenti, né implica l'approvazione di terzi.
-- Non sono letti: HEIC/HEIF, XLS e PPT legacy, archivi generici, file cifrati, oggetti OLE e macro (quelli con estensione moderna rendono la verifica incompleta). GIF e TIFF solo la prima immagine.
+- Non sono letti: HEIC/HEIF, XLS e PPT legacy, archivi generici, file cifrati, oggetti OLE e macro (quelli con estensione moderna rendono la verifica incompleta). GIF solo il primo fotogramma (i TIFF multipagina sono letti tutti).
 - Il parser gira con i privilegi dell'operatore: processo separato e Windows Job non sono una sandbox di sicurezza. Non c'è uno snapshot coerente dell'intero disco.
 - Il PDF può contenere percorsi e giudizi manuali: va conservato in una cartella riservata, oppure si omettono i percorsi in esportazione.
 

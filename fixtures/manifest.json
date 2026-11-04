@@ -210,6 +210,27 @@
     "limited": false
   },
   {
+    "file": "multipagina-g4.tif",
+    "positive": true,
+    "document_class": "carta",
+    "format": "TIFF G4 multipagina",
+    "limited": false
+  },
+  {
+    "file": "multipagina.tif",
+    "positive": true,
+    "document_class": "patente",
+    "format": "TIFF multipagina",
+    "limited": false
+  },
+  {
+    "file": "carta-a4-grandezza-reale.pdf",
+    "positive": true,
+    "document_class": "sanitaria",
+    "format": "PDF raster carta piccola",
+    "limited": false
+  },
+  {
     "file": "archivio.zip",
     "positive": false,
     "document_class": "problema",

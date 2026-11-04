@@ -258,7 +258,9 @@ impl Run {
         }
     }
     pub fn incomplete(&self) -> bool {
-        !self.finished || self.interrupted || !self.issues.is_empty()
+        !self.finished
+            || self.interrupted
+            || self.issues.keys().any(|k| !crate::parser::is_informational(k))
     }
     pub fn outcome(&self) -> String {
         let result = if self.findings.is_empty() {
@@ -367,6 +369,16 @@ impl Run {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn informational_notes_do_not_make_the_run_incomplete() {
+        let mut r = crate::engine::new_run(vec![], Default::default(), "t".into(), "t".into());
+        r.finished = true;
+        r.issue(crate::parser::PREFILTERED);
+        r.issue("Office: risorse esterne non aperte");
+        assert!(!r.incomplete());
+        r.issue("Timeout parser/OCR; processo recuperato");
+        assert!(r.incomplete());
+    }
     #[test]
     fn summary_counts_follow_deletions() {
         let mut r = crate::engine::new_run(vec![], Default::default(), "t".into(), "t".into());

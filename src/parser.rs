@@ -469,7 +469,9 @@ fn tiff_page<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>
         (C::CMYK(8), D::U8(v)) if v.len() >= n * 4 => DynamicImage::ImageRgb8(ImageBuffer::from_raw(
             w,
             h,
-            v.chunks_exact(4)
+            v.as_chunks::<4>()
+                .0
+                .iter()
                 .take(n)
                 .flat_map(|p| {
                     let k = 255 - p[3] as u16;

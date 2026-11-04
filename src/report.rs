@@ -154,6 +154,17 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         },
         9.,
     );
+    add(
+        if run.settings.photo_id {
+            format!(
+                "Fototessere: rilevatore di volti offline attivo; immagini controllate: {}, segnalate come fototessera: {}. Sono indizi da verificare: un volto frontale unico, grande, su sfondo uniforme. Una foto piccola dentro una pagina o un volto di profilo non e segnalato.",
+                run.timing.photo_checks, run.timing.photo_found
+            )
+        } else {
+            "Fototessere: ricerca disattivata dall'operatore.".into()
+        },
+        9.,
+    );
     if !run.issues.is_empty() {
         add("ERRORI, ESCLUSIONI E LIMITI INCONTRATI".into(), 12.);
         for (issue, n) in &run.issues {

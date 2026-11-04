@@ -295,7 +295,7 @@ pub fn is_quiet(note: &str) -> bool {
     note == PREFILTERED
         || note == UNSUPPORTED
         || note == INTERRUPTED
-        || note.starts_with("TIFF/GIF: solo prima pagina")
+        || note == GIF_FIRST
         || note.starts_with("RTF: solo testo grezzo")
         || note.starts_with("Archivio generico non aperto")
         || note.starts_with("Codifica testo non UTF-8")
@@ -307,7 +307,7 @@ pub fn is_quiet(note: &str) -> bool {
 pub fn is_informational(note: &str) -> bool {
     note == PREFILTERED
         || note == UNSUPPORTED
-        || note.starts_with("TIFF/GIF: solo prima pagina")
+        || note == GIF_FIRST
         || note.starts_with("RTF: solo testo grezzo")
         || note.starts_with("Archivio generico non aperto")
         || note.starts_with("Codifica testo non UTF-8")
@@ -437,6 +437,69 @@ pub fn split_blocks(img: &DynamicImage) -> Vec<(u32, u32, u32, u32)> {
 }
 /// Lato massimo passato all'OCR (A4 a circa 300 dpi).
 const OCR_SIDE: u32 = 3_600;
+/// Risoluzione delle pagine PDF rasterizzate. TRACCIADOC_PDF_DPI la cambia solo per i benchmark.
+const PDF_DPI: u32 = 300;
+pub fn pdf_dpi() -> u32 {
+    std::env::var("TRACCIADOC_PDF_DPI")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|v| (72..=600).contains(v))
+        .unwrap_or(PDF_DPI)
+}
+pub const GIF_FIRST: &str = "GIF: solo primo fotogramma";
+/// One TIFF page as an image for the OCR, None when its layout is not converted here.
+fn tiff_page<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -> Option<DynamicImage> {
+    use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
+    use tiff::{ColorType as C, decoder::DecodingResult as D};
+    let (w, h) = d.dimensions().ok()?;
+    if w == 0 || h == 0 || w > MAX_SIDE || h > MAX_SIDE {
+        return None;
+    }
+    let color = d.colortype().ok()?;
+    let data = d.read_image().ok()?;
+    let n = (w as usize).checked_mul(h as usize)?;
+    Some(match (color, data) {
+        (C::Gray(8), D::U8(v)) => DynamicImage::ImageLuma8(ImageBuffer::<Luma<u8>, _>::from_raw(w, h, v)?),
+        (C::Gray(16), D::U16(v)) => DynamicImage::ImageLuma16(ImageBuffer::<Luma<u16>, _>::from_raw(w, h, v)?),
+        (C::GrayA(8), D::U8(v)) => DynamicImage::ImageLumaA8(ImageBuffer::<LumaA<u8>, _>::from_raw(w, h, v)?),
+        (C::RGB(8), D::U8(v)) => DynamicImage::ImageRgb8(ImageBuffer::<Rgb<u8>, _>::from_raw(w, h, v)?),
+        (C::RGB(16), D::U16(v)) => DynamicImage::ImageRgb16(ImageBuffer::<Rgb<u16>, _>::from_raw(w, h, v)?),
+        (C::RGBA(8), D::U8(v)) => DynamicImage::ImageRgba8(ImageBuffer::<Rgba<u8>, _>::from_raw(w, h, v)?),
+        (C::RGBA(16), D::U16(v)) => DynamicImage::ImageRgba16(ImageBuffer::<Rgba<u16>, _>::from_raw(w, h, v)?),
+        (C::CMYK(8), D::U8(v)) if v.len() >= n * 4 => DynamicImage::ImageRgb8(ImageBuffer::from_raw(
+            w,
+            h,
+            v.as_chunks::<4>()
+                .0
+                .iter()
+                .take(n)
+                .flat_map(|p| {
+                    let k = 255 - p[3] as u16;
+                    [0, 1, 2].map(|i| ((255 - p[i] as u16) * k / 255) as u8)
+                })
+                .collect(),
+        )?),
+        // Bilevel and 2/4-bit gray: packed rows, 0 = black after the decoder's WhiteIsZero fix.
+        (C::Gray(bits @ (1 | 2 | 4)), D::U8(v)) => {
+            let bits = bits as usize;
+            let stride = (w as usize * bits).div_ceil(8);
+            if v.len() < stride * h as usize {
+                return None;
+            }
+            let max = (1u16 << bits) - 1;
+            let mut out = Vec::with_capacity(n);
+            for row in v.chunks_exact(stride).take(h as usize) {
+                for x in 0..w as usize {
+                    let bit = x * bits;
+                    let value = (row[bit / 8] >> (8 - bits - bit % 8)) as u16 & max;
+                    out.push((value * 255 / max) as u8);
+                }
+            }
+            DynamicImage::ImageLuma8(ImageBuffer::from_raw(w, h, out)?)
+        }
+        _ => return None,
+    })
+}
 
 pub struct Parser {
     ocr: Option<Ocr>,
@@ -643,6 +706,50 @@ impl Parser {
                 .push("Immagine corrotta o limite 10000 px / 128 MiB decodificati".into()),
         }
     }
+    /// Every page of a TIFF (network scanners save multi-page TIFFs, often CCITT G4 bilevel).
+    /// The `image` crate reads only the first page: the pages are walked with `tiff` directly.
+    /// A page in a layout not converted here falls back to `image` for the first page only and
+    /// is declared as not analyzed for the others.
+    fn tiff(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) {
+        let mut limits = tiff::decoder::Limits::default();
+        limits.decoding_buffer_size = 128 * 1024 * 1024;
+        let decoder = tiff::decoder::Decoder::new(std::io::Cursor::new(bytes))
+            .map(|d| d.with_limits(limits));
+        let Ok(mut decoder) = decoder else {
+            self.image_bytes(bytes, a, req);
+            return;
+        };
+        let mut page = 0usize;
+        loop {
+            if !a.reasons.is_empty() {
+                if decoder.more_images() {
+                    a.timing.early_stops += 1;
+                }
+                break;
+            }
+            if page >= req.settings.max_pages {
+                a.issues.push("TIFF: limite pagine raggiunto".into());
+                break;
+            }
+            let start = std::time::Instant::now();
+            let image = tiff_page(&mut decoder);
+            a.timing.decode_ms += start.elapsed().as_secs_f64() * 1000.;
+            match image {
+                Some(img) if img.width().max(img.height()) > OCR_SIDE => {
+                    self.ocr(img.thumbnail(OCR_SIDE, OCR_SIDE), a, req)
+                }
+                Some(img) => self.ocr(img, a, req),
+                None if page == 0 => self.image_bytes(bytes, a, req),
+                None => a
+                    .issues
+                    .push("TIFF: pagina in formato non supportato, non analizzata".into()),
+            }
+            page += 1;
+            if !decoder.more_images() || decoder.next_image().is_err() {
+                break;
+            }
+        }
+    }
     fn pdf(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) -> Result<(), String> {
         if self.pdf.is_none() {
             let bindings = Pdfium::bind_to_library(runtime().join("bin/pdfium.dll"))
@@ -679,9 +786,12 @@ impl Parser {
                     break;
                 }
                 if req.settings.deep {
+                    // Card labels are ~5 pt: render like the image files (~300 dpi), capped at the
+                    // OCR side so an A3 or a huge page does not explode memory or time.
                     let config = PdfRenderConfig::new()
-                        .set_target_width(1700)
-                        .set_maximum_height(2400)
+                        .scale_page_by_factor(pdf_dpi() as f32 / 72.)
+                        .set_maximum_width(OCR_SIDE as i32)
+                        .set_maximum_height(OCR_SIDE as i32)
                         .render_form_data(true);
                     let start = std::time::Instant::now();
                     let rendered = page.render_with_config(&config).map(|b| b.as_image());
@@ -915,13 +1025,13 @@ impl Parser {
             } else if let Some(image_format) = img {
                 a.supported = true;
                 a.format = format!("{image_format:?}");
-                self.image_bytes(&bytes, &mut a, req);
-                if matches!(
-                    img,
-                    Some(image::ImageFormat::Tiff | image::ImageFormat::Gif)
-                ) {
-                    a.issues
-                        .push("TIFF/GIF: solo prima pagina o fotogramma".into());
+                if image_format == image::ImageFormat::Tiff {
+                    self.tiff(&bytes, &mut a, req);
+                } else {
+                    self.image_bytes(&bytes, &mut a, req);
+                }
+                if image_format == image::ImageFormat::Gif {
+                    a.issues.push(GIF_FIRST.into());
                 }
             } else if text_ext {
                 a.supported = true;
@@ -994,6 +1104,22 @@ mod tests {
         assert_eq!(unrecognized("jpg", b"\0\0\0\x18ftypheic\0\0"), HEIF);
         assert_eq!(unrecognized("heic", b"anything"), HEIF);
         assert_eq!(unrecognized("pdf", b"random bytes"), MISMATCH);
+    }
+    #[test]
+    fn tiff_pages_after_the_first_are_read() {
+        use tiff::encoder::{TiffEncoder, colortype::Gray8};
+        let mut buf = std::io::Cursor::new(Vec::new());
+        let mut enc = TiffEncoder::new(&mut buf).unwrap();
+        enc.write_image::<Gray8>(4, 2, &[0u8; 8]).unwrap();
+        enc.write_image::<Gray8>(3, 5, &[200u8; 15]).unwrap();
+        let mut d = tiff::decoder::Decoder::new(std::io::Cursor::new(buf.into_inner())).unwrap();
+        assert_eq!(tiff_page(&mut d).map(|i| (i.width(), i.height())), Some((4, 2)));
+        assert!(d.more_images());
+        d.next_image().unwrap();
+        let second = tiff_page(&mut d).unwrap();
+        assert_eq!((second.width(), second.height()), (3, 5));
+        assert_eq!(second.to_luma8().get_pixel(2, 4)[0], 200);
+        assert!(!d.more_images());
     }
     #[test]
     fn office_entities_and_external_parts_are_not_silent() {

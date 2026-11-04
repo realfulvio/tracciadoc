@@ -215,5 +215,19 @@
     "document_class": "problema",
     "format": "ZIP non aperto",
     "limited": true
+  },
+  {
+    "file": "fototessera-sintetica.png",
+    "positive": true,
+    "document_class": "fototessera",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "ritratto-sfondo-vario.png",
+    "positive": false,
+    "document_class": "ritratto",
+    "format": "PNG",
+    "limited": false
   }
 ]

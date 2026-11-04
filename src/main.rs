@@ -3,6 +3,7 @@ mod delete;
 mod diag;
 mod doc;
 mod engine;
+mod face;
 mod gui;
 mod model;
 mod open;
@@ -40,6 +41,7 @@ fn main() {
                 deep: true,
                 cpu_only: args.contains(&"--cpu".into()),
                 prefilter: !args.contains(&"--no-prefilter".into()),
+                photo_id: !args.contains(&"--no-photo-id".into()),
                 ..Default::default()
             };
             for (flag, min, max, field) in [

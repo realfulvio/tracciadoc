@@ -151,7 +151,7 @@ pub struct App {
     focus: Option<PathBuf>,
     /// Filtro per tipo di documento nella revisione ("" = tutti).
     filter: String,
-    /// File al secondo, un campione ogni ~2 s, per il grafico della scansione.
+    /// File al secondo, un campione ogni ~1 s, per il grafico della scansione.
     rate_hist: Vec<f32>,
     rate_at: Instant,
 }
@@ -291,6 +291,7 @@ fn spark(ui: &mut egui::Ui, data: &[f32], height: f32) {
     let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
     ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], egui::Stroke::new(1., c_line()));
     if data.len() < 2 {
+        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "il grafico compare dopo qualche secondo di scansione", egui::FontId::proportional(13.), c_weak());
         return;
     }
     let max = data.iter().cloned().fold(1., f32::max);
@@ -593,7 +594,7 @@ impl eframe::App for App {
             }
             _ => 0.,
         };
-        if running && rate > 0. && self.rate_at.elapsed() >= Duration::from_secs(2) {
+        if running && rate > 0. && self.rate_at.elapsed() >= Duration::from_secs(1) {
             self.rate_at = Instant::now();
             self.rate_hist.push(rate as f32);
             if self.rate_hist.len() > 90 {
@@ -685,6 +686,7 @@ impl eframe::App for App {
             .exact_size(220.)
             .frame(egui::Frame::new().fill(c_side()).inner_margin(16))
             .show(root, |ui| {
+                let content = |ui: &mut egui::Ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)).tint(logo_tint()));
                     ui.vertical(|ui| {
@@ -729,14 +731,21 @@ impl eframe::App for App {
                         if i % 3 == 2 { ui.end_row(); }
                     }
                 });
+                };
+                // Schermo basso o UI ingrandita: la barra scorre invece di tagliare le accelerazioni; la firma resta solo se c'e posto.
+                if short {
+                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| content(ui));
+                } else {
+                    content(ui);
                 // Firma in basso.
                 ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-                    if ui.available_height() >= 28. {
+                    if !short && ui.available_height() >= 28. {
                         let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
                         ui.add(egui::Image::from_texture(&self.signature).fit_to_exact_size(egui::vec2(112., 112. * ratio)).tint(logo_tint())).on_hover_text("powered by realhcok");
                         ui.label(RichText::new("powered by").size(12.).weak());
                     }
                 });
+                }
             });
 
         // Barra delle azioni: una sola azione principale per fase, in basso a destra.
@@ -827,6 +836,8 @@ impl eframe::App for App {
             });
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(c_bg()).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
+            // Barra di scorrimento fissa: quella a comparsa copriva i bordi destri di schede e pulsanti.
+            ui.style_mut().spacing.scroll = egui::style::ScrollStyle::solid();
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 // set_max_width(1100) da solo allargava l'ui oltre il pannello nelle finestre strette.
                 ui.set_max_width(ui.available_width().min(1700.));

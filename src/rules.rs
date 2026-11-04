@@ -61,7 +61,10 @@ fn has_label(context: &str, label: &str) -> bool {
         .any(|(i, _)| !context[..i].chars().next_back().is_some_and(char::is_alphanumeric))
 }
 pub fn detect(text: &str) -> Vec<String> {
-    let upper = text.to_uppercase();
+    // Apostrofi tipografici (Word, testo dei PDF, OCR) come l'apostrofo ASCII delle regole.
+    let upper = text
+        .to_uppercase()
+        .replace(['\u{2019}', '\u{2018}', '\u{02BC}', '\u{00B4}', '`'], "'");
     let normalized = upper.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut out = vec![];
     // A contextual cluster is evaluated in a bounded neighbourhood, not across an entire workbook.
@@ -251,6 +254,13 @@ mod tests {
         assert!(!detect(cover).is_empty());
         // Una lettera che cita il documento senza intestazione della Repubblica non basta.
         assert!(detect("Comune di Esempio. Si allega carta d'identita n. AV 0000000.").is_empty());
+    }
+    #[test]
+    fn typographic_apostrophe() {
+        let t = "CARTA D\u{2019}IDENTIT\u{c0} Cognome ESEMPIO Nome PROVA Data di nascita 01/01/2000";
+        assert!(!detect(t).is_empty());
+        let cover = "REPVBBLICA ITALIANA COMVNE DI ESEMPIO CARTA D\u{b4}IDENTITA N. AV 0000000 DI";
+        assert!(!detect(cover).is_empty());
     }
     #[test]
     fn european_health_card() {

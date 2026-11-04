@@ -1,5 +1,11 @@
 # Changelog
 
+## Non rilasciato
+
+- La verifica non risulta più "INCOMPLETA" per limiti solo informativi (immagini scartate dal prefiltro, collegamenti esterni nei documenti Office, RTF, TIFF/GIF prima pagina): restano elencati nel verbale, ma non sono lacune di copertura. Timeout, crash, file illeggibili o cifrati la rendono incompleta come prima.
+- Gli apostrofi tipografici (’ ‘ ´ `) sono trattati come l'apostrofo ASCII: "Carta d’identità" in Word o in un PDF con testo viene riconosciuta.
+- Analizzate anche le varianti Office .docm .xlsm .pptm .dotx .dotm .xltx .xltm .potx .potm .ppsx .ppsm, i modelli OpenDocument .ott .ots .otp e i .jpe.
+
 ## 0.3.5 - 2026-11-03
 
 Rifiniture grafiche emerse dal collaudo della 0.3.0.

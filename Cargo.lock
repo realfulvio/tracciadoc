@@ -3659,6 +3659,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "tiff",
  "tract-onnx",
  "walkdir",
  "windows-sys 0.61.2",

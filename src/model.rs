@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
-pub const RULES: &str = "2026.10.30-1";
+pub const RULES: &str = "2026.11.04-1";
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub deep: bool,
@@ -17,9 +17,15 @@ pub struct Settings {
     /// Skip OCR of images without text-like strokes (declared in the report).
     #[serde(default)]
     pub prefilter: bool,
+    /// Look for passport-style photographs (one frontal face on a plain background).
+    #[serde(default = "yes")]
+    pub photo_id: bool,
 }
 fn one() -> usize {
     1
+}
+fn yes() -> bool {
+    true
 }
 impl Default for Settings {
     fn default() -> Self {
@@ -33,6 +39,7 @@ impl Default for Settings {
             memory_mb: 768,
             workers: crate::engine::default_workers(),
             prefilter: true,
+            photo_id: true,
         }
     }
 }
@@ -89,6 +96,13 @@ pub struct Timing {
     /// Images with no detection read again in sparse-text mode.
     #[serde(default)]
     pub sparse_reads: u64,
+    /// Images checked for a passport-style photograph, time spent, and photographs found.
+    #[serde(default)]
+    pub photo_checks: u64,
+    #[serde(default)]
+    pub photo_ms: f64,
+    #[serde(default)]
+    pub photo_found: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -114,6 +128,9 @@ impl Timing {
         self.early_stops += o.early_stops;
         self.block_reads += o.block_reads;
         self.sparse_reads += o.sparse_reads;
+        self.photo_checks += o.photo_checks;
+        self.photo_ms += o.photo_ms;
+        self.photo_found += o.photo_found;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -290,6 +307,7 @@ impl Run {
                 ("Passaporti", &["Passaporto:", "MRZ TD3:"][..]),
                 ("Patenti", &["Patente:"][..]),
                 ("Tessere sanitarie", &["Tessera sanitaria:"][..]),
+                ("Fototessere", &["Fototessera:"][..]),
             ] {
                 if file
                     .reasons

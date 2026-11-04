@@ -288,14 +288,15 @@ fn content_key(req: &Request) -> Option<CacheKey> {
         .to_ascii_lowercase();
     let mut h = Sha256::new();
     h.update(format!(
-        "{}|{}|{}|{}|{}|{}|{}|",
+        "{}|{}|{}|{}|{}|{}|{}|{}|",
         env!("CARGO_PKG_VERSION"),
         ext,
         s.deep,
         s.cpu_only,
         s.max_mb,
         s.max_pages,
-        s.prefilter
+        s.prefilter,
+        s.photo_id
     ));
     let mut buf = vec![0u8; 1 << 20];
     let mut total = 0u64;

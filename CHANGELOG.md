@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 - 2026-11-04
+
+Le fototessere vanno cercate, non escluse. Fino alla 0.3.4 il programma non le cercava: erano fuori ambito per scelta iniziale, mentre l'obiettivo è attestare che non restano copie di documenti d'identità né foto identificative.
+
+- Nuovo rilevatore di volti offline: YuNet (OpenCV Zoo, licenza MIT, 227 KB) in formato ONNX, incorporato nell'eseguibile ed eseguito con tract (puro Rust, solo CPU, nessuna DLL in più). Il modello originale è a 640x640; qui è portato a 320x320 (`scripts/prepare_face_model.py`), circa 4 volte più veloce.
+- Criteri di fototessera sopra il rilevatore: un solo volto (nessun altro di dimensione paragonabile), volto frontale (occhi in orizzontale, naso tra gli occhi), alto almeno il 30% dell'immagine, al centro, immagine in formato verticale o quasi quadrato. Con sfondo uniforme ai lati la segnalazione è "probabile"; senza sfondo uniforme serve un volto alto almeno il 45% e la segnalazione è "possibile".
+- Nuova classe "Fototessera" nell'elenco, nei filtri, nel riepilogo e nel verbale, che dichiara quante immagini sono state controllate e quante segnalate. Il controllo avviene prima del prefiltro del testo, che scarterebbe le immagini senza testo.
+- Nuova opzione "Fototessere" nelle opzioni avanzate (`--no-photo-id` da riga di comando), attiva di default. Entra nella chiave di riuso degli esiti.
+- Limiti noti: una foto piccola dentro una pagina (per esempio la foto di un curriculum), i volti di profilo, le foto di gruppo e i fogli con più fototessere non sono segnalati. Nessuna prova su fototessere reali: solo ritratti disegnati e un'immagine di pubblico dominio provata a mano.
+- Rimossa dall'interfaccia e dalla documentazione la frase "non cerca fototessere".
+
 ## 0.3.4 - 2026-11-03
 
 Più rilevamenti sulle fotocopie con più documenti nello stesso foglio. Una prova reale non veniva rilevata: una pagina con l'interno di una carta d'identità cartacea e una tessera sanitaria fotocopiate insieme, e una seconda pagina con la copertina della carta e il retro della tessera. Non dipendeva dalle ottimizzazioni della 0.3.1-0.3.3: lo stesso foglio sfuggiva anche con OCR italiano + inglese e tutte le rotazioni come nella 0.3.0.

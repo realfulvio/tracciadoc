@@ -301,7 +301,10 @@ fn spark(ui: &mut egui::Ui, data: &[f32], height: f32) {
 /// Giudizio sugli indizi di un file: tipo di riscontri trovati, non una probabilita statistica.
 fn level_of(f: &Finding) -> (&'static str, Color32, f32) {
     let strong = f.reasons.iter().any(|r| r.starts_with("MRZ") || r.contains("numerazione formalmente compatibile") || r.contains("codice fiscale superato"));
+    // Fototessera "probabile": volto frontale unico su sfondo uniforme, un buon indizio ma senza testo.
+    let photo = f.reasons.iter().any(|r| r.starts_with("Fototessera:") && r.contains("(probabile)"));
     match (strong, f.reasons.len()) {
+        (false, 1) if photo => ("Indizi buoni", c_accent(), 0.7),
         (true, n) if n >= 2 => ("Indizi forti", c_accent(), 0.95),
         (true, _) => ("Indizi buoni", c_accent(), 0.75),
         (false, n) if n >= 2 => ("Indizi buoni", c_accent(), 0.7),
@@ -370,6 +373,7 @@ fn kind_of(f: &Finding) -> (&'static str, Color32) {
         ("Passaporto", &["Passaporto:", "MRZ TD3:"][..], c_accent()),
         ("Patente", &["Patente:"][..], c_warn()),
         ("Tessera sanitaria", &["Tessera sanitaria:"][..], c_accent()),
+        ("Fototessera", &["Fototessera:"][..], c_warn()),
     ] {
         if f.reasons.iter().any(|r| prefixes.iter().any(|p| r.starts_with(p))) {
             return (name, color);
@@ -891,13 +895,13 @@ impl eframe::App for App {
                         card(ui, |ui| {
                             ui.label(RichText::new("COSA CERCA").size(12.).color(c_dim()));
                             ui.horizontal_wrapped(|ui| {
-                                for t in ["Carta d'identita", "Patente di guida", "Tessera sanitaria", "Passaporto"] {
+                                for t in ["Carta d'identita", "Patente di guida", "Tessera sanitaria", "Passaporto", "Fototessera"] {
                                     ui.label(RichText::new("●").size(10.).color(c_accent()));
                                     ui.label(RichText::new(t).size(16.));
                                     ui.add_space(14.);
                                 }
                             });
-                            ui.label(RichText::new("Non cerca fototessere, nomi o codici fiscali isolati. Cerca in immagini, PDF, RTF e Office con immagini incorporate.").small().weak());
+                            ui.label(RichText::new("Le fototessere sono segnalate come indizio da verificare (volto frontale unico su sfondo uniforme). Nomi o codici fiscali isolati non vengono cercati. Cerca in immagini, PDF, RTF e Office con immagini incorporate.").small().weak());
                         });
                         ui.add_space(6.);
                         card(ui, |ui| {
@@ -926,6 +930,7 @@ impl eframe::App for App {
                             ui.label("Incluse tutte le sottocartelle accessibili: profili, AppData, temporanei e cestino. Nessuna estensione esclusa silenziosamente.");
                             ui.label("Esclusi percorsi esterni, rete, collegamenti e junction. I volumi montati discendenti vanno selezionati separatamente. File cloud offline, EFS, negati, formati non supportati e limiti rendono la verifica incompleta.");
                             ui.horizontal_wrapped(|ui| {ui.selectable_value(&mut self.settings.cpu_only,false,"Automatico");ui.selectable_value(&mut self.settings.cpu_only,true,"Solo CPU");});
+                            ui.checkbox(&mut self.settings.photo_id,"Fototessere: cerca anche le foto formato tessera (rilevatore di volti offline, indizio da verificare)");
                             ui.checkbox(&mut self.settings.prefilter,"Prefiltro: salta l'OCR delle immagini senza tratti tipo testo (dichiarate nel verbale come scartate)");
                             ui.label(format!("Disponibile: CPU. Automatico: {} rilevato a runtime; Solo CPU: prodotto scalare generico per confronto. GPU/NPU non implementate. Nessun requisito AVX globale; AVX-512 non selezionata.",engine::cpu_method(false)));
                             ui.horizontal(|ui|{ui.label("MiB/file");ui.add(egui::DragValue::new(&mut self.settings.max_mb).range(1..=256));ui.label("Pagine/immagini");ui.add(egui::DragValue::new(&mut self.settings.max_pages).range(1..=500));});
@@ -1061,7 +1066,7 @@ impl eframe::App for App {
                             if remaining > 0 { ui.label(RichText::new("Controlla le anteprime e spunta i file da eliminare.").weak()); }
                             ui.add_space(10.);
                             // Filtri per tipo di documento.
-                            let kinds = ["Carta d'identita", "Passaporto", "Patente", "Tessera sanitaria", "Da verificare"];
+                            let kinds = ["Carta d'identita", "Passaporto", "Patente", "Tessera sanitaria", "Fototessera", "Da verificare"];
                             let count_of = |k: &str| run.findings.iter().filter(|f| !f.deleted() && kind_of(f).0 == k).count();
                             if !self.filter.is_empty() && count_of(&self.filter) == 0 { self.filter.clear(); }
                             ui.horizontal_wrapped(|ui| {

@@ -11,7 +11,7 @@
 
 ## Cos'è
 
-**TracciaDoc** è un'app per Windows 10/11 che cerca sui dischi di un PC le **copie di documenti d'identità** rimaste lì per sbaglio: scansioni, foto e PDF di carta d'identità, passaporto, patente e tessera sanitaria. Quando un ente rilascia documenti o gestisce pratiche, quelle copie finiscono facilmente in Download, Documenti o sul Desktop e ci restano.
+**TracciaDoc** è un'app per Windows 10/11 che cerca sui dischi di un PC le **copie di documenti d'identità** rimaste lì per sbaglio: scansioni, foto e PDF di carta d'identità, passaporto, patente e tessera sanitaria, e le **fototessere**. Quando un ente rilascia documenti o gestisce pratiche, quelle copie finiscono facilmente in Download, Documenti o sul Desktop e ci restano.
 
 Con TracciaDoc l'operatore le trova, le guarda, le elimina e produce un **verbale PDF** che documenta cosa è stato controllato e cosa è stato rimosso.
 
@@ -27,7 +27,7 @@ Tutto avviene **in locale**: niente cloud, niente telemetria, nessun file lascia
 - **Pulizia guidata**: l'elenco delle segnalazioni, con anteprima sfocata, si controlla a occhio prima di cancellare qualsiasi cosa.
 - **Prova documentata**: il verbale riporta ambito, esiti, limiti, eliminazioni e la ri-scansione finale.
 
-Le fototessere e i semplici dati anagrafici sparsi nei file (un nome, un codice fiscale) non sono l'obiettivo e non vengono segnalati da soli.
+**Fototessere.** Un rilevatore di volti offline (YuNet, solo CPU, incorporato nel programma) segnala le immagini con un solo volto frontale, grande, su sfondo uniforme: la foto formato tessera. È sempre un *indizio da verificare*: dice "probabile" se lo sfondo è uniforme e "possibile" per un ritratto molto ravvicinato su sfondo non uniforme. Restano fuori un volto piccolo dentro una pagina, i volti di profilo, le foto di gruppo e i fogli con più fototessere. Costa circa 70-130 ms per immagine su CPU e si disattiva dalle opzioni avanzate. I semplici dati anagrafici sparsi nei file (un nome, un codice fiscale) non sono l'obiettivo e non vengono segnalati da soli.
 
 <p align="center">
   <img src="docs/img/caratteristiche.png" alt="Offline, leggero, sotto controllo, verbale PDF" width="100%">

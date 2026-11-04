@@ -1,4 +1,5 @@
 use crate::{
+    face,
     model::{Analysis, Request},
     rules,
 };
@@ -448,6 +449,23 @@ impl Parser {
             }
             a.ocr_init_ms += init.elapsed().as_secs_f64() * 1000.;
         }
+        // Passport-style photographs have no text: they are looked for before the text prefilter,
+        // which would discard them. A photograph found settles the image unless it also has text.
+        let before = a.reasons.len();
+        if req.settings.photo_id {
+            let start = std::time::Instant::now();
+            a.timing.photo_checks += 1;
+            match face::photo_id(&img) {
+                Ok(Some(reason)) => {
+                    a.timing.photo_found += 1;
+                    a.reasons.push(reason);
+                }
+                Ok(None) => {}
+                Err(e) => a.issues.push(e),
+            }
+            a.timing.photo_ms += start.elapsed().as_secs_f64() * 1000.;
+        }
+        let photo = a.reasons.len() > before;
         let Some(ocr) = &self.ocr else {
             a.issues.push(self.ocr_error.clone().unwrap_or_default());
             return;
@@ -460,7 +478,9 @@ impl Parser {
             match region {
                 None => {
                     a.timing.prefilter_skipped += 1;
-                    a.issues.push(PREFILTERED.into());
+                    if !photo {
+                        a.issues.push(PREFILTERED.into());
+                    }
                     return;
                 }
                 Some((x0, y0, x1, y1)) if (x1 - x0, y1 - y0) != (img.width(), img.height()) => {

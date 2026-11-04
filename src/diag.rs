@@ -290,10 +290,11 @@ pub fn report(gpu: &str, phase: &str, current: &str, run: Option<&Run>) -> Strin
         None => line("Fase: nessuna verifica avviata".into()),
         Some(r) => {
             line(format!(
-                "OCR: ita · worker {} · solo CPU {} · prefiltro {} · backend {}",
+                "OCR: ita · worker {} · solo CPU {} · prefiltro {} · fototessere {} · backend {}",
                 r.settings.workers,
                 r.settings.cpu_only,
                 r.settings.prefilter,
+                r.settings.photo_id,
                 if r.backend.is_empty() {
                     "-"
                 } else {

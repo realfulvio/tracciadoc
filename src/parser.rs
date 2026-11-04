@@ -269,6 +269,9 @@ pub const INTERRUPTED: &str = "Verifica interrotta";
 const WANTED_EXT: &[&str] = &[
     "jpg", "jpeg", "jfif", "png", "bmp", "tif", "tiff", "gif", "webp", "heic", "heif", "pdf",
     "doc", "docx", "xlsx", "pptx", "odt", "ods", "odp", "rtf",
+    // Stessi contenitori zip/XML dei precedenti: macro, modelli e presentazioni a scorrimento.
+    "docm", "dotx", "dotm", "xlsm", "xltx", "xltm", "pptm", "potx", "potm", "ppsx", "ppsm", "ott",
+    "ots", "otp", "jpe",
 ];
 /// Extensions of files that are often renamed scans or have no type at all: only these are sniffed.
 const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp"];
@@ -295,6 +298,19 @@ pub fn is_quiet(note: &str) -> bool {
         || note.starts_with("RTF: solo testo grezzo")
         || note.starts_with("Archivio generico non aperto")
         || note.starts_with("Codifica testo non UTF-8")
+}
+
+/// Limiti dichiarati nel verbale che non sono lacune di copertura: restano elencati tra gli
+/// "errori e limiti" ma non rendono incompleta la verifica (altrimenti basterebbe un collegamento
+/// ipertestuale in un docx o una foto senza testo per avere sempre "VERIFICA INCOMPLETA").
+pub fn is_informational(note: &str) -> bool {
+    note == PREFILTERED
+        || note == UNSUPPORTED
+        || note.starts_with("TIFF/GIF: solo prima pagina")
+        || note.starts_with("RTF: solo testo grezzo")
+        || note.starts_with("Archivio generico non aperto")
+        || note.starts_with("Codifica testo non UTF-8")
+        || note == "Office: risorse esterne non aperte"
 }
 
 pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";

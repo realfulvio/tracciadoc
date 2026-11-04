@@ -1,6 +1,6 @@
 # Changelog
 
-## Non rilasciato
+## 0.4.1 - 2026-11-04
 
 - TIFF multipagina: tutte le pagine sono lette (prima solo la prima), compresi i TIFF bianco e nero CCITT G4 e quelli con compressione JPEG dei scanner di rete. Le pagine in formati non convertiti (per esempio a tavolozza) sono dichiarate come non analizzate.
 - PDF scansionati rasterizzati a 300 dpi (massimo 3600 px per lato) invece di 1700x2400 (circa 200 dpi): le etichette delle carte, alte circa 5 punti, restano leggibili anche su una fotocopia A4 con la carta a grandezza reale.

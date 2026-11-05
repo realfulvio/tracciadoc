@@ -56,9 +56,29 @@ La versione 0.3.0 introduce tema scuro e chiaro, schede dei dischi con spazio oc
 </p>
 <p align="center"><sub>Prima pagina del verbale PDF (esempio dimostrativo).</sub></p>
 
+## Installazione e scansioni pianificate
+
+Facoltative: TracciaDoc continua a funzionare anche solo come cartella portatile.
+
+- **Installa** dalla sezione *Pianificazione* (o con `TracciaDoc.exe --install` da amministratore): il programma va in `Program Files\TracciaDoc`, l'icona compare vicino all'orologio a ogni accesso e TracciaDoc risulta in App installate. Si disinstalla da lì o con `--uninstall`.
+- **Pianifica** quando eseguire la scansione: una volta, ogni giorno, ogni settimana o ogni mese, con orario e date. Parte anche senza utente collegato, a priorità bassa, e se il PC era spento appena viene acceso. Salva il verbale e **non cancella mai nulla da sola**: se trova documenti lo segnala e la revisione si fa aprendo TracciaDoc.
+- **Arresta il PC a fine scansione** (attivo di default): solo dopo aver salvato il verbale (anche con verifica incompleta, che il verbale dichiara), mai se la scansione è interrotta, dopo 60 secondi di avviso annullabili dall'icona.
+- **Si aggiorna da solo** dalle release di questo repository, con verifica SHA-256 e mai durante una scansione. Si può passare a "solo avviso" o disattivare.
+
+| Comando | Cosa fa |
+|---|---|
+| `--install` / `--uninstall` | installa o rimuove (amministratore) |
+| `--scheduled` | scansione pianificata senza finestra (la lancia l'Utilità di pianificazione) |
+| `--tray` | icona nell'area di notifica (avviata all'accesso) |
+| `--update` | cerca e installa l'ultima versione (amministratore) |
+| `--update-from <zip>` | aggiorna da uno zip già scaricato, con `SHA256SUMS.txt` accanto (PC senza Internet) |
+| `--version` | stampa la versione |
+
+Configurazione, stato e verbali delle scansioni pianificate sono in `%ProgramData%\TracciaDoc`.
+
 ## Sotto il cofano
 
-- **Rust**, eseguibile portatile con GUI nativa (egui) su DirectX 12; con PC senza driver video usa l'adattatore software WARP, con OpenGL come ripiego. Nessuna installazione, nessun Python, nessun Internet.
+- **Rust**, eseguibile portatile con GUI nativa (egui) su DirectX 12; con PC senza driver video usa l'adattatore software WARP, con OpenGL come ripiego. Portatile oppure installabile; nessun Python. Internet serve solo per l'aggiornamento automatico, disattivabile.
 - **OCR Tesseract 5 offline** e PDFium incorporati. Più worker in parallelo (default: core fisici − 1), ognuno in un processo separato con Windows Job, limite di memoria e timeout.
 - **Prefiltro** che scarta le immagini senza zone di testo e **orientamento automatico** delle scansioni ruotate: l'OCR lavora solo dove serve.
 - **AVX2/SSE** scelti a runtime con ripiego su CPU generica. L'uso di GPU/iGPU/NPU è valutato solo se un benchmark dimostra un vantaggio reale.

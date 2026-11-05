@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.0 - 2026-11-05
+
+Installazione sulla postazione, scansioni pianificate, icona nell'area di notifica e aggiornamento automatico. La modalità portatile resta: niente cambia se non si installa.
+
+- **Installazione** (`--install`, o pulsante nella nuova sezione Pianificazione): copia il programma in `Program Files\TracciaDoc`, avvia l'icona a ogni accesso, aggiunge la voce in App installate e nel menu Start. `--uninstall` toglie programma, icona e attività; verbali e storico restano in `%ProgramData%\TracciaDoc`. Serve l'amministratore (richiesta UAC).
+- **Pianificazione** nella GUI: una volta, ogni giorno, ogni settimana (giorni a scelta) o ogni mese, con orario, data di inizio e di fine. Diventa un'attività dell'Utilità di pianificazione (`TracciaDoc\Scansione pianificata`) eseguita con l'account di sistema, anche senza utente collegato, a priorità bassa, e recuperata appena possibile se il PC era spento. Elenco delle prossime e delle ultime esecuzioni.
+- **Scansione pianificata** (`--scheduled`): tutti i dischi fissi, verbale PDF salvato e consegnato alla cartella condivisa configurata. Non cancella mai nulla: se trova documenti, l'icona diventa arancione e alla successiva apertura TracciaDoc propone la revisione con l'esito già pronto.
+- **Arresta il PC a fine scansione**, attivo di default nella pianificazione: solo dopo aver salvato il verbale (anche se la verifica risulta incompleta, come succede quasi sempre su C: per i file di sistema illeggibili), mai se la scansione è interrotta, dopo un avviso di 60 secondi annullabile dall'icona. I programmi aperti non vengono chiusi a forza. Disponibile anche per la scansione manuale (solo se non trova documenti).
+- **Icona nell'area di notifica** (`--tray`): processo separato e leggero (niente GUI, OCR o modelli caricati). Pallino di stato: nessuno pronto, verde scansione in corso, arancione documenti da rivedere (anche se la verifica è incompleta), blu aggiornamento disponibile, rosso errore. Una verifica incompleta senza documenti trovati non colora l'icona: lo dice il suggerimento. A riposo usa circa 3 MB di memoria privata e nessuna CPU. Menu: Apri, Scansiona ora, Pianificazione, Cartella verbali, Aggiornamenti, Annulla spegnimento.
+- **Aggiornamento automatico** (`--update`): controlla l'ultima release pubblica su GitHub con `curl.exe` di Windows, verifica lo SHA-256 da `SHA256SUMS.txt`, controlla che l'EXE scaricato dichiari la versione attesa e sostituisce i file solo quando non c'è una scansione in corso, con ripristino se qualcosa va storto. Modalità automatica (default, attività di sistema giornaliera e all'avvio), solo avviso o disattivato. Dal PC esce solo la richiesta dell'elenco release. Senza firma digitale lo SHA-256 protegge da download corrotti, non da un account di pubblicazione compromesso.
+
 ## 0.4.1 - 2026-11-04
 
 - TIFF multipagina: tutte le pagine sono lette (prima solo la prima), compresi i TIFF bianco e nero CCITT G4 e quelli con compressione JPEG dei scanner di rete. Le pagine in formati non convertiti (per esempio a tavolozza) sono dichiarate come non analizzate.

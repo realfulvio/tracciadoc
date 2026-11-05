@@ -56,9 +56,12 @@ fn mrz_digit(s: &[u8]) -> u8 {
 }
 /// Etichetta all'inizio di una parola: NOME non conta dentro COGNOME, NAME non dentro SURNAME.
 fn has_label(context: &str, label: &str) -> bool {
-    context
-        .match_indices(label)
-        .any(|(i, _)| !context[..i].chars().next_back().is_some_and(char::is_alphanumeric))
+    context.match_indices(label).any(|(i, _)| {
+        !context[..i]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+    })
 }
 pub fn detect(text: &str) -> Vec<String> {
     // Apostrofi tipografici (Word, testo dei PDF, OCR) come l'apostrofo ASCII delle regole.
@@ -141,11 +144,34 @@ pub fn detect(text: &str) -> Vec<String> {
     // Interno della carta d'identita cartacea: non riporta l'intestazione, ma i connotati
     // (statura, capelli, occhi, segni particolari) insieme ai dati anagrafici sono tipici solo
     // di quel documento. Servono almeno due connotati e altri due campi, nello stesso tratto.
-    const TRAITS: [&str; 5] = ["CONNOTATI", "STATURA", "CAPELLI", "OCCHI", "SEGNI PARTICOLARI"];
-    const CIVIL: [&str; 6] = ["COGNOME", "NOME", "CITTADINANZA", "RESIDENZA", "STATO CIVILE", "PROFESSIONE"];
-    for (pos, _) in normalized.match_indices("STATURA").chain(normalized.match_indices("CONNOTATI")) {
-        let from = normalized[..pos].char_indices().rev().nth(600).map_or(0, |(i, _)| i);
-        let to = normalized[pos..].char_indices().nth(400).map_or(normalized.len(), |(i, _)| pos + i);
+    const TRAITS: [&str; 5] = [
+        "CONNOTATI",
+        "STATURA",
+        "CAPELLI",
+        "OCCHI",
+        "SEGNI PARTICOLARI",
+    ];
+    const CIVIL: [&str; 6] = [
+        "COGNOME",
+        "NOME",
+        "CITTADINANZA",
+        "RESIDENZA",
+        "STATO CIVILE",
+        "PROFESSIONE",
+    ];
+    for (pos, _) in normalized
+        .match_indices("STATURA")
+        .chain(normalized.match_indices("CONNOTATI"))
+    {
+        let from = normalized[..pos]
+            .char_indices()
+            .rev()
+            .nth(600)
+            .map_or(0, |(i, _)| i);
+        let to = normalized[pos..]
+            .char_indices()
+            .nth(400)
+            .map_or(normalized.len(), |(i, _)| pos + i);
         let context = &normalized[from..to];
         let traits = TRAITS.iter().filter(|s| has_label(context, s)).count();
         let civil = CIVIL.iter().filter(|s| has_label(context, s)).count();
@@ -156,13 +182,22 @@ pub fn detect(text: &str) -> Vec<String> {
     }
     // Copertina della carta cartacea: stemma, "REPUBBLICA ITALIANA", "COMUNE DI", titolo e
     // numero, senza campi etichettati. I caratteri romani sono spesso letti con V al posto di U.
-    let cover = normalized.replace("REPVBBLICA", "REPUBBLICA").replace("COMVNE", "COMUNE");
+    let cover = normalized
+        .replace("REPVBBLICA", "REPUBBLICA")
+        .replace("COMVNE", "COMUNE");
     for (pos, _) in cover
         .match_indices("CARTA D'IDENTIT")
         .chain(cover.match_indices("CARTA DI IDENTIT"))
     {
-        let from = cover[..pos].char_indices().rev().nth(250).map_or(0, |(i, _)| i);
-        let to = cover[pos..].char_indices().nth(120).map_or(cover.len(), |(i, _)| pos + i);
+        let from = cover[..pos]
+            .char_indices()
+            .rev()
+            .nth(250)
+            .map_or(0, |(i, _)| i);
+        let to = cover[pos..]
+            .char_indices()
+            .nth(120)
+            .map_or(cover.len(), |(i, _)| pos + i);
         let context = &cover[from..to];
         let after = &cover[pos..to];
         if context.contains("REPUBBLICA ITALIANA")
@@ -257,7 +292,8 @@ mod tests {
     }
     #[test]
     fn typographic_apostrophe() {
-        let t = "CARTA D\u{2019}IDENTIT\u{c0} Cognome ESEMPIO Nome PROVA Data di nascita 01/01/2000";
+        let t =
+            "CARTA D\u{2019}IDENTIT\u{c0} Cognome ESEMPIO Nome PROVA Data di nascita 01/01/2000";
         assert!(!detect(t).is_empty());
         let cover = "REPVBBLICA ITALIANA COMVNE DI ESEMPIO CARTA D\u{b4}IDENTITA N. AV 0000000 DI";
         assert!(!detect(cover).is_empty());

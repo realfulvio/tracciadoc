@@ -1,6 +1,7 @@
 use crate::{
     diag,
     engine::{self, Shared},
+    install, sched,
     model::{Finding, Previous, Review, Settings},
     parser,
 };
@@ -155,6 +156,23 @@ pub struct App {
     /// File al secondo, un campione ogni ~1 s, per il grafico della scansione.
     rate_hist: Vec<f32>,
     rate_at: Instant,
+    /// Pagina "Pianificazione" aperta al posto del flusso di verifica.
+    plan_page: bool,
+    /// Configurazione salvata in ProgramData e bozza in modifica.
+    cfg: sched::Config,
+    draft: sched::Plan,
+    plan_on: bool,
+    update_mode: sched::UpdateMode,
+    plan_msg: String,
+    /// Comando eseguito come amministratore (UAC) in un thread: esito "OK ..."/"ERR ...".
+    job: Option<Arc<Mutex<Option<String>>>>,
+    /// Arresta il PC al termine se la scansione non trova documenti (verbale salvato prima).
+    shutdown_after: bool,
+    shutdown_at: Option<Instant>,
+    /// Tenuto durante la scansione: l'aggiornamento automatico aspetta.
+    scan_lock: Option<sched::ScanLock>,
+    /// Esito di una scansione pianificata con documenti non ancora rivisti.
+    pending_review: Option<crate::model::Run>,
 }
 /// Numero con separatore delle migliaia all'italiana (12.480).
 fn it_num(n: u64) -> String {
@@ -442,6 +460,7 @@ impl App {
         let space: HashMap<PathBuf, (u64, u64)> = volumes.iter().filter_map(|(p, _)| engine::disk_space(p).map(|s| (p.clone(), s))).collect();
         // Di default tutti i dischi fissi con lettera: la scansione parte solo dal pulsante.
         let roots: Vec<PathBuf> = volumes.iter().filter(|(p, l)| l.ends_with("locale fisso") && !p.to_string_lossy().starts_with("\\\\?\\Volume")).map(|(p, _)| p.clone()).collect();
+        let cfg = sched::load_config();
         Self {
             roots,
             path: String::new(),
@@ -480,6 +499,25 @@ impl App {
             filter: String::new(),
             rate_hist: vec![],
             rate_at: Instant::now(),
+            plan_page: std::env::args().any(|a| a == "--pianificazione"),
+            draft: {
+                let mut d = cfg.plan.clone().unwrap_or_default();
+                if let Some(day) = sched::parse_date(&d.start) { d.start = day.format("%d/%m/%Y").to_string(); }
+                if let Some(day) = sched::parse_date(&d.end) { d.end = day.format("%d/%m/%Y").to_string(); }
+                d
+            },
+            plan_on: cfg.plan.is_some(),
+            update_mode: cfg.update,
+            cfg,
+            plan_msg: String::new(),
+            job: None,
+            shutdown_after: false,
+            shutdown_at: None,
+            scan_lock: None,
+            pending_review: std::fs::read(sched::last_run_path())
+                .ok()
+                .and_then(|b| serde_json::from_slice::<crate::model::Run>(&b).ok())
+                .filter(|r| r.remaining() > 0 && !sched::seen(&r.id)),
             // Su WARP ogni frame costa CPU sottratta all'OCR: a 150 ms la scansione sintetica passava da ~12 s a ~90 s.
             repaint: if cc.wgpu_render_state.as_ref().is_some_and(|rs| {
                 rs.adapter.get_info().device_type == eframe::wgpu::DeviceType::Cpu
@@ -528,8 +566,297 @@ impl App {
         let shared = self.shared.clone();
         let stop = self.stop.clone();
         self.started = Some(Instant::now());
+        self.scan_lock = sched::scan_lock();
         self.handle = Some(thread::spawn(move || engine::run(shared, stop)));
         self.notice.clear();
+    }
+}
+/// Voce "Pianificazione" della barra laterale: orologio disegnato, cliccabile se non c'è una scansione.
+fn plan_row(ui: &mut egui::Ui, on: bool, disabled: bool) -> egui::Response {
+    let sense = if disabled { egui::Sense::hover() } else { egui::Sense::click() };
+    let (rect, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 38.), sense);
+    let painter = ui.painter();
+    if on {
+        painter.rect_filled(rect, 8., c_sel());
+    } else if resp.hovered() {
+        painter.rect_filled(rect, 8., c_sel_soft());
+    }
+    let c = egui::pos2(rect.left() + 22., rect.center().y);
+    let color = if disabled { c_dim() } else if on { c_accent() } else { c_weak() };
+    painter.circle_stroke(c, 10., egui::Stroke::new(1.8, color));
+    painter.line_segment([c, c + egui::vec2(0., -6.)], egui::Stroke::new(1.8, color));
+    painter.line_segment([c, c + egui::vec2(4.5, 2.)], egui::Stroke::new(1.8, color));
+    painter.text(egui::pos2(rect.left() + 44., rect.center().y), egui::Align2::LEFT_CENTER, "Pianificazione", semibold(17.), if on { c_text() } else { color });
+    if disabled { resp.on_hover_text("Disponibile al termine della scansione") } else { resp.on_hover_cursor(egui::CursorIcon::PointingHand) }
+}
+fn label_dim(ui: &mut egui::Ui, text: &str) {
+    ui.label(RichText::new(text).size(12.).color(c_dim()));
+}
+impl App {
+    /// Fine scansione con "Arresta il PC": verbale nella cartella dei verbali, poi conto alla rovescia.
+    fn after_scan(&mut self) {
+        if !self.shutdown_after {
+            return;
+        }
+        let Some(run) = self.shared.lock().unwrap().run.clone() else { return };
+        if run.interrupted || !run.findings.is_empty() {
+            self.notice = "Spegnimento non eseguito: la scansione ha trovato documenti o è stata interrotta. Rivedi i risultati.".into();
+            diag::warn("Spegnimento non eseguito: documenti trovati o scansione interrotta");
+            return;
+        }
+        match sched::save_report(&run) {
+            Ok(path) => {
+                diag::ok(format!("Verbale PDF salvato: {}", diag::shown(&path)));
+                let _ = engine::audit(&run, "pdf-export");
+                self.notice = format!("Verbale salvato: {}", diag::shown(&path));
+                self.shutdown_at = Some(Instant::now() + Duration::from_secs(sched::SHUTDOWN_DELAY));
+            }
+            Err(e) => {
+                diag::err(format!("Verbale PDF non scritto, spegnimento annullato: {e}"));
+                self.notice = format!("Verbale non salvato ({e}): il PC resta acceso.");
+            }
+        }
+    }
+    /// Lancia questo EXE come amministratore (UAC) in un thread; l'esito arriva da un file.
+    fn elevate(&mut self, exe: PathBuf, args: String) {
+        let slot = Arc::new(Mutex::new(None));
+        self.job = Some(slot.clone());
+        self.plan_msg = "In attesa dell'autorizzazione di amministratore...".into();
+        thread::spawn(move || {
+            let _ = std::fs::create_dir_all(engine::state_dir());
+            let out = engine::state_dir().join(format!("esito-{}.txt", std::process::id()));
+            let _ = std::fs::remove_file(&out);
+            let text = match install::run_elevated(&exe, &format!("{args} --result \"{}\"", out.display())) {
+                Ok(code) => std::fs::read_to_string(&out).unwrap_or_else(|_| if code == 0 { "OK Fatto".into() } else { format!("ERR Codice di uscita {code}") }),
+                Err(e) => format!("ERR {e}"),
+            };
+            let _ = std::fs::remove_file(&out);
+            *slot.lock().unwrap() = Some(text);
+        });
+    }
+    fn poll_job(&mut self, ctx: &egui::Context) {
+        let Some(slot) = &self.job else { return };
+        let done = slot.lock().unwrap().take();
+        match done {
+            None => ctx.request_repaint_after(Duration::from_millis(300)),
+            Some(text) => {
+                self.job = None;
+                self.plan_msg = text.strip_prefix("OK ").map_or_else(|| text.strip_prefix("ERR ").unwrap_or(&text).to_string(), |m| format!("✓ {m}"));
+                if text.starts_with("OK") { diag::ok(&self.plan_msg) } else { diag::warn(&self.plan_msg) }
+                self.cfg = sched::load_config();
+                // Dopo l'installazione l'icona parte subito, senza attendere il prossimo accesso
+                // (non elevata: è questa GUI a lanciarla; un'istanza già attiva esce da sola).
+                if text.starts_with("OK") && install::is_installed() {
+                    let _ = std::process::Command::new(install::installed_exe()).arg("--tray").spawn();
+                }
+            }
+        }
+    }
+    /// Configurazione dalla bozza (date normalizzate AAAA-MM-GG).
+    fn draft_config(&self) -> Result<sched::Config, String> {
+        let plan = if self.plan_on {
+            let mut p = self.draft.clone();
+            p.validate()?;
+            p.start = sched::parse_date(&p.start).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or(p.start);
+            p.end = if p.end.trim().is_empty() || p.repeat == sched::Repeat::Once { String::new() } else { sched::parse_date(&p.end).map(|d| d.format("%Y-%m-%d").to_string()).unwrap_or(p.end) };
+            Some(p)
+        } else {
+            None
+        };
+        Ok(sched::Config { plan, update: self.update_mode })
+    }
+    fn plan_actions(&mut self, ui: &mut egui::Ui, h: f32) {
+        let installed = install::is_installed();
+        let draft = self.draft_config();
+        let changed = draft.as_ref().is_ok_and(|c| *c != self.cfg);
+        let hint = match (&draft, installed) {
+            (_, false) => "Installa TracciaDoc per attivare la pianificazione".to_string(),
+            (Err(e), _) => e.clone(),
+            (Ok(c), _) => match &c.plan { Some(p) => format!("Scansione {}", p.summary()), None => "Nessuna scansione pianificata".into() },
+        };
+        ui.add(egui::Label::new(RichText::new(hint).weak()).truncate());
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            let ready = installed && changed && self.job.is_none();
+            if ui.add_enabled(ready, primary("Salva pianificazione", h)).clicked()
+                && let Ok(cfg) = draft
+            {
+                let path = engine::state_dir().join("pianificazione-da-applicare.json");
+                let _ = std::fs::create_dir_all(engine::state_dir());
+                match std::fs::write(&path, serde_json::to_vec_pretty(&cfg).unwrap_or_default()) {
+                    Ok(()) => {
+                        let exe = std::env::current_exe().unwrap_or_else(|_| install::installed_exe());
+                        self.elevate(exe, format!("--apply-config \"{}\"", path.display()));
+                    }
+                    Err(e) => self.plan_msg = format!("Configurazione non scritta: {e}"),
+                }
+            }
+            if ui.add(egui::Button::new("Torna alla verifica").min_size(egui::vec2(0., h))).clicked() {
+                self.plan_page = false;
+            }
+        });
+    }
+    fn plan_ui(&mut self, ui: &mut egui::Ui) {
+        heading(ui, "Quando scansioniamo?", "La scansione parte da sola all'orario scelto, anche senza utente collegato, e salva il verbale. Non cancella mai nulla.");
+        ui.add_space(12.);
+        if !self.plan_msg.is_empty() {
+            let ok = self.plan_msg.starts_with('✓');
+            ui.label(RichText::new(&self.plan_msg).color(if ok { c_ok() } else { c_warn() }));
+            ui.add_space(6.);
+        }
+        let busy = self.job.is_some();
+        card(ui, |ui| {
+            label_dim(ui, "INSTALLAZIONE");
+            if install::is_installed() {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new("✓ Installato su questa postazione").font(semibold(17.)).color(c_ok()));
+                    ui.label(RichText::new(diag::shown(&install::install_dir())).small().weak());
+                    if ui.add_enabled(!busy, egui::Button::new("Disinstalla...")).on_hover_text("Toglie programma, icona e attività pianificate. Verbali e storico restano.").clicked() {
+                        self.elevate(install::installed_exe(), "--uninstall".into());
+                    }
+                });
+                if !install::running_installed() {
+                    ui.label(RichText::new("Stai usando una copia portatile: le scansioni pianificate usano la copia installata. \"Reinstalla\" la aggiorna con questa versione.").small().weak());
+                    if ui.add_enabled(!busy, egui::Button::new("Reinstalla con questa versione")).clicked() {
+                        self.elevate(std::env::current_exe().unwrap_or_default(), "--install".into());
+                    }
+                }
+            } else {
+                ui.label("Per pianificare le scansioni TracciaDoc va installato su questa postazione (Program Files, serve l'amministratore). Aggiunge l'icona vicino all'orologio, avviata a ogni accesso.");
+                if ui.add_enabled(!busy, primary("Installa su questa postazione", 42.)).clicked() {
+                    self.elevate(std::env::current_exe().unwrap_or_default(), "--install".into());
+                }
+            }
+        });
+        ui.add_space(8.);
+        let wide_layout = ui.available_width() >= 900.;
+        let left_w = if wide_layout { ui.available_width() * 0.6 } else { ui.available_width() };
+        let body = |ui: &mut egui::Ui, this: &mut Self| {
+            card(ui, |ui| {
+                ui.checkbox(&mut this.plan_on, RichText::new("Scansioni pianificate attive").font(semibold(17.)));
+                if !this.plan_on {
+                    ui.label(RichText::new("Nessuna scansione automatica: TracciaDoc parte solo a mano.").weak());
+                    return;
+                }
+                let d = &mut this.draft;
+                ui.add_space(4.);
+                label_dim(ui, "RIPETIZIONE");
+                ui.horizontal_wrapped(|ui| {
+                    for r in [sched::Repeat::Once, sched::Repeat::Daily, sched::Repeat::Weekly, sched::Repeat::Monthly] {
+                        if pill(ui, r.label(), d.repeat == r).clicked() {
+                            d.repeat = r;
+                        }
+                    }
+                });
+                if d.repeat == sched::Repeat::Weekly {
+                    label_dim(ui, "GIORNI");
+                    ui.horizontal_wrapped(|ui| {
+                        for (i, name) in sched::DAYS.iter().enumerate() {
+                            if pill(ui, name, d.days[i]).clicked() {
+                                d.days[i] = !d.days[i];
+                            }
+                        }
+                    });
+                }
+                label_dim(ui, "ORARIO E DATE");
+                ui.horizontal_wrapped(|ui| {
+                    if d.repeat == sched::Repeat::Monthly {
+                        ui.label("giorno");
+                        ui.add(egui::DragValue::new(&mut d.day_of_month).range(1..=31));
+                    }
+                    ui.label("alle");
+                    ui.add(egui::DragValue::new(&mut d.hour).range(0..=23).custom_formatter(|v, _| format!("{v:02}")));
+                    ui.label(":");
+                    ui.add(egui::DragValue::new(&mut d.minute).range(0..=59).speed(0.3).custom_formatter(|v, _| format!("{v:02}")));
+                    ui.add_space(12.);
+                    ui.label(if d.repeat == sched::Repeat::Once { "il" } else { "dal" });
+                    ui.add(egui::TextEdit::singleline(&mut d.start).hint_text("GG/MM/AAAA").desired_width(110.));
+                    if d.repeat != sched::Repeat::Once {
+                        ui.label("al");
+                        ui.add(egui::TextEdit::singleline(&mut d.end).hint_text("senza scadenza").desired_width(130.));
+                    }
+                });
+                ui.add_space(4.);
+                ui.checkbox(&mut d.shutdown, RichText::new("Arresta il PC a fine scansione").font(semibold(16.)));
+                ui.label(RichText::new("Solo dopo aver salvato il verbale (anche se la verifica risulta incompleta), mai se la scansione viene interrotta. Avviso di 60 secondi, annullabile dall'icona; i programmi aperti non vengono chiusi a forza.").small().weak());
+                ui.label(RichText::new("Se il PC è spento all'orario, la scansione parte appena viene acceso. Parte anche senza utente collegato (account di sistema), a priorità bassa, su tutti i dischi fissi.").small().weak());
+                if let Err(e) = d.validate() {
+                    ui.label(RichText::new(e).color(c_warn()));
+                }
+            });
+            ui.add_space(8.);
+            card(ui, |ui| {
+                label_dim(ui, "AGGIORNAMENTI");
+                ui.horizontal_wrapped(|ui| {
+                    for m in [sched::UpdateMode::Auto, sched::UpdateMode::Notify, sched::UpdateMode::Off] {
+                        if pill(ui, m.label(), this.update_mode == m).clicked() {
+                            this.update_mode = m;
+                        }
+                    }
+                });
+                ui.label(RichText::new(match this.update_mode {
+                    sched::UpdateMode::Auto => "Controlla le release pubbliche ogni giorno, verifica lo SHA-256 e installa la nuova versione quando non c'è una scansione in corso.",
+                    sched::UpdateMode::Notify => "Mostra solo l'avviso (pallino blu sull'icona): l'aggiornamento si avvia dal menu dell'icona.",
+                    sched::UpdateMode::Off => "Nessun controllo degli aggiornamenti.",
+                }).small().weak());
+                let note = sched::load_status().update_note;
+                if !note.is_empty() {
+                    ui.label(RichText::new(format!("Ultimo controllo: {note}")).small().weak());
+                }
+            });
+        };
+        let side = |ui: &mut egui::Ui, this: &Self| {
+            card(ui, |ui| {
+                label_dim(ui, "PROSSIME ESECUZIONI");
+                let next = if this.plan_on { this.draft.next_runs(chrono::Local::now().naive_local(), 3) } else { vec![] };
+                if next.is_empty() {
+                    ui.label(RichText::new("nessuna").weak());
+                }
+                for t in next {
+                    ui.label(sched::when_text(t));
+                }
+                if this.draft_config().ok() != Some(this.cfg.clone()) {
+                    ui.label(RichText::new("Modifiche non ancora salvate").small().color(c_warn()));
+                }
+            });
+            ui.add_space(8.);
+            card(ui, |ui| {
+                label_dim(ui, "ULTIME ESECUZIONI");
+                let history = sched::load_status().history;
+                if history.is_empty() {
+                    ui.label(RichText::new("ancora nessuna").weak());
+                }
+                for e in history.iter().take(6) {
+                    let (text, color) = match e.outcome.as_str() {
+                        "clean" => ("✓ nessun documento".to_string(), c_ok()),
+                        "found" => (format!("⚠ {} documenti trovati", e.findings), c_warn()),
+                        "incomplete" => ("⚠ incompleta".to_string(), c_warn()),
+                        _ => (format!("✗ non riuscita {}", e.note), c_err()),
+                    };
+                    ui.horizontal(|ui| {
+                        ui.label(&e.when);
+                        ui.label(RichText::new(text).color(color));
+                    });
+                }
+                if ui.link("Apri cartella verbali").clicked() {
+                    let dir = sched::verbali_dir();
+                    let _ = std::fs::create_dir_all(&dir);
+                    let _ = std::process::Command::new(PathBuf::from(std::env::var_os("WINDIR").unwrap_or_default()).join("explorer.exe")).arg(dir).spawn();
+                }
+            });
+        };
+        if wide_layout {
+            ui.horizontal_top(|ui| {
+                ui.vertical(|ui| {
+                    ui.set_width(left_w - 12.);
+                    body(ui, self);
+                });
+                ui.vertical(|ui| side(ui, self));
+            });
+        } else {
+            body(ui, self);
+            ui.add_space(8.);
+            side(ui, self);
+        }
     }
 }
 fn card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) {
@@ -547,9 +874,8 @@ fn card<R>(ui: &mut egui::Ui, body: impl FnOnce(&mut egui::Ui) -> R) {
 impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         let ctx = root.ctx().clone();
-        if self.handle.as_ref().is_some_and(|h| h.is_finished())
-            && self.handle.take().unwrap().join().is_err()
-        {
+        let just_finished = self.handle.as_ref().is_some_and(|h| h.is_finished());
+        if just_finished && self.handle.take().unwrap().join().is_err() {
             let mut p = self.shared.lock().unwrap();
             if let Some(r) = &mut p.run {
                 r.issue("Errore interno del coordinatore");
@@ -562,6 +888,22 @@ impl eframe::App for App {
         let running = self.handle.is_some();
         if running {
             ctx.request_repaint_after(self.repaint);
+        }
+        if just_finished {
+            self.scan_lock = None;
+            self.after_scan();
+        }
+        self.poll_job(&ctx);
+        if let Some(at) = self.shutdown_at {
+            if Instant::now() >= at {
+                self.shutdown_at = None;
+                match sched::run_tool("shutdown.exe", &["/s", "/t", "0", "/d", "p:0:0"]) {
+                    Ok(_) => diag::info("Spegnimento richiesto a fine scansione"),
+                    Err(e) => diag::err(format!("Spegnimento non riuscito: {e}")),
+                }
+            } else {
+                ctx.request_repaint_after(Duration::from_millis(500));
+            }
         }
         if !self.zoom_set {
             self.zoom_set = true;
@@ -698,7 +1040,7 @@ impl eframe::App for App {
             .exact_size(220.)
             .frame(egui::Frame::new().fill(c_side()).inner_margin(16))
             .show(root, |ui| {
-                let content = |ui: &mut egui::Ui| {
+                let mut content = |ui: &mut egui::Ui| {
                 ui.horizontal(|ui| {
                     ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)).tint(logo_tint()));
                     ui.vertical(|ui| {
@@ -710,7 +1052,12 @@ impl eframe::App for App {
                 ui.add_space(14.);
                 ui.spacing_mut().item_spacing.y = 4.;
                 for (n, label) in [(1, "Aree"), (2, "Scansione"), (3, "Revisione"), (4, "Verifica finale")] {
-                    step_row(ui, n, label, active);
+                    step_row(ui, n, label, if self.plan_page && !running { 0 } else { active });
+                }
+                ui.add_space(10.);
+                ui.label(RichText::new("AUTOMAZIONE").size(11.5).color(c_dim()));
+                if plan_row(ui, self.plan_page && !running, running).clicked() && !running {
+                    self.plan_page = !self.plan_page;
                 }
                 ui.add_space(14.);
                 if shown {
@@ -767,6 +1114,10 @@ impl eframe::App for App {
                 let h = if short { 40. } else { 48. };
                 ui.horizontal(|ui| {
                     ui.set_min_height(h);
+                    if self.plan_page && !running {
+                        self.plan_actions(ui, h);
+                        return;
+                    }
                     match active {
                         1 => {
                             let ready = !self.roots.is_empty() && !self.operator.trim().is_empty();
@@ -859,11 +1210,45 @@ impl eframe::App for App {
             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 // set_max_width(1100) da solo allargava l'ui oltre il pannello nelle finestre strette.
                 ui.set_max_width(ui.available_width().min(1700.));
+                if let Some(at) = self.shutdown_at {
+                    card(ui, |ui| {
+                        ui.horizontal_wrapped(|ui| {
+                            let left = at.saturating_duration_since(Instant::now()).as_secs();
+                            ui.label(RichText::new(format!("Il PC si spegne tra {left} secondi: verbale salvato, nessun documento trovato.")).font(semibold(17.)).color(c_warn()));
+                            if ui.button("Annulla spegnimento").clicked() {
+                                self.shutdown_at = None;
+                                diag::info("Spegnimento annullato dall'operatore");
+                            }
+                        });
+                    });
+                    ui.add_space(8.);
+                }
                 if !self.notice.is_empty() {
                     ui.label(RichText::new(&self.notice).color(c_warn()));
                 }
+                if self.plan_page && !running {
+                    self.plan_ui(ui);
+                    return;
+                }
                 match active {
                     1 => {
+                        if let Some(run) = self.pending_review.clone() {
+                            card(ui, |ui| {
+                                ui.label(RichText::new(format!("La scansione pianificata del {} ha trovato {} possibili documenti.", run.start.get(..16).unwrap_or(&run.start).replace('T', " "), run.remaining())).font(semibold(18.)).color(c_warn()));
+                                ui.label(RichText::new("Non è stato cancellato nulla. Rivedi i file, elimina quelli da togliere e ri-scansiona per il verbale finale.").weak());
+                                ui.horizontal(|ui| {
+                                    if ui.add(primary("Apri la revisione", 40.)).clicked() {
+                                        sched::mark_seen(&run.id);
+                                        self.shared.lock().unwrap().run = Some(run.clone());
+                                        self.pending_review = None;
+                                    }
+                                    if ui.button("Più tardi").clicked() {
+                                        self.pending_review = None;
+                                    }
+                                });
+                            });
+                            ui.add_space(10.);
+                        }
                         heading(ui, "Dove cerchiamo?", "Scegli i dischi o le cartelle da controllare. Tutto resta su questo computer, in sola lettura.");
                         ui.add_space(12.);
                         ui.label(RichText::new("AREE").size(12.).color(c_dim()));
@@ -941,6 +1326,7 @@ impl eframe::App for App {
                                 ui.label("Riferimento");
                                 ui.add(egui::TextEdit::singleline(&mut self.reference).hint_text("facoltativo").desired_width(260.));
                             });
+                            ui.checkbox(&mut self.shutdown_after, "Arresta il PC al termine se non trova documenti (salva prima il verbale, avviso di 60 secondi)");
                         });
                         ui.add_space(6.);
                         ui.collapsing("Altre opzioni di selezione", |ui| {

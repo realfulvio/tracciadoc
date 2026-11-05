@@ -509,11 +509,13 @@ pub fn run_scheduled() -> Result<(), String> {
     }
     let report = save_report(&run);
     let complete = !run.incomplete() && !run.interrupted;
-    let outcome = match (&report, complete, run.findings.len()) {
+    // I documenti trovati contano più dell'incompletezza: su C: la verifica è quasi sempre
+    // incompleta (file di sistema illeggibili) e non deve nascondere i rilevamenti.
+    let outcome = match (&report, run.findings.len(), complete) {
         (Err(_), _, _) => "error",
-        (_, false, _) => "incomplete",
-        (_, true, 0) => "clean",
-        _ => "found",
+        (_, 1.., _) => "found",
+        (_, 0, false) => "incomplete",
+        (_, 0, true) => "clean",
     };
     let note = match &report {
         Ok(p) => {

@@ -128,6 +128,7 @@ pub fn install() -> Result<(), String> {
             return Err("Manca la cartella runtime accanto all'EXE: avvia l'installazione dalla cartella dello zip".into());
         }
         replace_tree(&src, &dst)?;
+        cleanup_old();
     }
     register(&installed_exe())?;
     let cfg = sched::load_config();

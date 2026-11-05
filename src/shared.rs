@@ -219,6 +219,38 @@ pub fn riprova_sospesi(local: &Path, dir: Option<&Path>) -> (usize, usize) {
     (ok, left)
 }
 
+/// Scrive il verbale nella cartella locale con nome automatico e lo consegna alla condivisa.
+pub fn genera_e_salva(
+    run: &crate::model::Run,
+    paths: bool,
+    demo: bool,
+    cli_dir: Option<&str>,
+) -> Result<(PathBuf, Esito), String> {
+    let local = local_dir();
+    std::fs::create_dir_all(&local)
+        .map_err(|e| format!("Cartella locale dei verbali non creabile: {e}"))?;
+    let pdf = local.join(file_name(&run.computer, chrono::Local::now().naive_local()));
+    crate::report::write(run, &pdf, paths, demo)?;
+    let esito = salva_su_condivisa(&pdf, report_dir(cli_dir).as_deref());
+    Ok((pdf, esito))
+}
+
+/// Messaggio per l'operatore.
+pub fn messaggio(pdf: &Path, esito: &Esito) -> String {
+    let p = crate::diag::shown(pdf);
+    match esito {
+        Esito::Condivisa(_) => {
+            format!("Verbale salvato e consegnato alla cartella condivisa (copia locale: {p})")
+        }
+        Esito::SoloLocale(e) => format!(
+            "Cartella condivisa non raggiungibile ({e}): verbale salvato solo in locale in {p}. Verra riprovato all'apertura successiva."
+        ),
+        Esito::NonConfigurata => {
+            format!("Verbale salvato in {p}. Nessuna cartella condivisa configurata.")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,37 +299,5 @@ mod tests {
             salva_su_condivisa(&pdf, Some(&share)),
             Esito::Condivisa(_)
         ));
-    }
-}
-
-/// Scrive il verbale nella cartella locale con nome automatico e lo consegna alla condivisa.
-pub fn genera_e_salva(
-    run: &crate::model::Run,
-    paths: bool,
-    demo: bool,
-    cli_dir: Option<&str>,
-) -> Result<(PathBuf, Esito), String> {
-    let local = local_dir();
-    std::fs::create_dir_all(&local)
-        .map_err(|e| format!("Cartella locale dei verbali non creabile: {e}"))?;
-    let pdf = local.join(file_name(&run.computer, chrono::Local::now().naive_local()));
-    crate::report::write(run, &pdf, paths, demo)?;
-    let esito = salva_su_condivisa(&pdf, report_dir(cli_dir).as_deref());
-    Ok((pdf, esito))
-}
-
-/// Messaggio per l'operatore.
-pub fn messaggio(pdf: &Path, esito: &Esito) -> String {
-    let p = crate::diag::shown(pdf);
-    match esito {
-        Esito::Condivisa(_) => {
-            format!("Verbale salvato e consegnato alla cartella condivisa (copia locale: {p})")
-        }
-        Esito::SoloLocale(e) => format!(
-            "Cartella condivisa non raggiungibile ({e}): verbale salvato solo in locale in {p}. Verra riprovato all'apertura successiva."
-        ),
-        Esito::NonConfigurata => {
-            format!("Verbale salvato in {p}. Nessuna cartella condivisa configurata.")
-        }
     }
 }

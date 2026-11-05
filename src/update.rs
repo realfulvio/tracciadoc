@@ -87,28 +87,48 @@ fn package_root(dir: &Path) -> Option<PathBuf> {
     walkdir::WalkDir::new(dir).max_depth(2).into_iter().filter_map(Result::ok).find(|e| e.file_name().eq_ignore_ascii_case("TracciaDoc.exe")).and_then(|e| e.path().parent().map(Path::to_path_buf))
 }
 /// Versione dichiarata dall'EXE scaricato (`--version`): controllo che sia davvero eseguibile.
+/// Le versioni precedenti alla 0.5.0 non conoscono `--version`: dopo 20 s il processo viene chiuso.
 fn exe_version(exe: &Path) -> Option<String> {
     #[cfg(windows)]
     use std::os::windows::process::CommandExt;
+    use std::io::Read;
     let mut cmd = std::process::Command::new(exe);
-    cmd.arg("--version");
+    cmd.arg("--version").stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::null());
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000);
-    let out = cmd.output().ok()?;
-    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+    let mut child = cmd.spawn().ok()?;
+    let start = std::time::Instant::now();
+    loop {
+        if child.try_wait().ok()?.is_some() {
+            break;
+        }
+        if start.elapsed() > std::time::Duration::from_secs(20) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
+    let mut out = String::new();
+    child.stdout.take()?.read_to_string(&mut out).ok()?;
+    Some(out.trim().to_string())
 }
-/// `--update`: scarica, verifica e installa. Solo sulla copia installata e da amministratore.
-pub fn apply(auto: bool) -> Result<String, String> {
+fn preflight() -> Result<(), String> {
     if !install::is_admin() {
         return Err("Serve l'amministratore".into());
     }
     if !install::is_installed() {
         return Err("TracciaDoc non è installato su questo PC".into());
     }
+    install::cleanup_old();
+    Ok(())
+}
+/// `--update`: scarica l'ultima release, verifica e installa. Solo sulla copia installata e da amministratore.
+pub fn apply(auto: bool) -> Result<String, String> {
+    preflight()?;
     if auto && sched::load_config().update != sched::UpdateMode::Auto {
         return Ok("Aggiornamento automatico disattivato".into());
     }
-    install::cleanup_old();
     let Some(rel) = check()? else {
         return Ok("Nessun aggiornamento: versione già aggiornata".into());
     };
@@ -122,28 +142,53 @@ pub fn apply(auto: bool) -> Result<String, String> {
     let sums = String::from_utf8(curl(&[&rel.sums_url])?).map_err(|_| "SHA256SUMS.txt non leggibile")?;
     let expected = expected_hash(&sums, &rel.zip_name).ok_or("Hash dello zip assente da SHA256SUMS.txt")?;
     curl(&["-o", &zip.to_string_lossy(), &rel.zip_url])?;
-    let got = sha256(&zip)?;
+    let result = install_package(&zip, &expected, Some(&rel.version), &work);
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+/// `--update-from <zip>`: aggiorna da uno zip già scaricato (PC senza Internet o collaudo).
+/// Serve SHA256SUMS.txt accanto allo zip, come nelle release.
+pub fn apply_from(zip: &Path) -> Result<String, String> {
+    preflight()?;
+    let name = zip.file_name().ok_or("Zip non valido")?.to_string_lossy().to_string();
+    let sums = std::fs::read_to_string(zip.with_file_name("SHA256SUMS.txt")).map_err(|_| "Manca SHA256SUMS.txt accanto allo zip")?;
+    let expected = expected_hash(&sums, &name).ok_or("Hash dello zip assente da SHA256SUMS.txt")?;
+    if sched::scan_running() {
+        return Err("Scansione in corso: riprova al termine".into());
+    }
+    let work = sched::data_dir().join("aggiornamenti");
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
+    let result = install_package(zip, &expected, None, &work);
+    let _ = std::fs::remove_dir_all(&work);
+    result
+}
+/// Verifica hash ed EXE, poi sostituisce i file installati. `version` None = qualsiasi versione più recente.
+fn install_package(zip: &Path, expected: &str, version: Option<&str>, work: &Path) -> Result<String, String> {
+    let got = sha256(zip)?;
     if got != expected {
-        let _ = std::fs::remove_dir_all(&work);
-        return Err(format!("SHA-256 non corrispondente: aggiornamento {} scartato", rel.version));
+        return Err("SHA-256 non corrispondente: aggiornamento scartato".into());
     }
     let staging = work.join("estratto");
-    extract(&zip, &staging)?;
+    extract(zip, &staging)?;
     let root = package_root(&staging).ok_or("TracciaDoc.exe assente dallo zip")?;
     let declared = exe_version(&root.join("TracciaDoc.exe")).unwrap_or_default();
-    if declared != rel.version {
-        return Err(format!("L'EXE scaricato dichiara la versione '{declared}' invece di {}", rel.version));
+    let ok = match version {
+        Some(v) => declared == v,
+        None => newer(&declared, env!("CARGO_PKG_VERSION")),
+    };
+    if !ok {
+        return Err(format!("L'EXE dello zip dichiara la versione '{declared}': aggiornamento scartato"));
     }
     // Ricontrolla subito prima di sostituire: una scansione potrebbe essere partita nel frattempo.
     if sched::scan_running() {
-        return Ok(format!("{} rimandato: scansione in corso", rel.version));
+        return Ok(format!("{declared} rimandato: scansione in corso"));
     }
     install::replace_tree(&root, &install::install_dir())?;
     install::register(&install::installed_exe())?;
-    // Ricrea le attività con l'EXE nuovo (stesso percorso, nuove opzioni eventuali).
+    // Ricrea le attività con l'EXE nuovo (stesso percorso, eventuali nuove opzioni).
     let _ = sched::apply_config(&sched::load_config(), &install::installed_exe());
-    let _ = std::fs::remove_dir_all(&work);
-    let msg = format!("Aggiornato da {} a {} (SHA-256 verificato)", env!("CARGO_PKG_VERSION"), rel.version);
+    let msg = format!("Aggiornato da {} a {declared} (SHA-256 verificato)", env!("CARGO_PKG_VERSION"));
     diag::ok(&msg);
     Ok(msg)
 }

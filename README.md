@@ -71,6 +71,7 @@ Facoltative: TracciaDoc continua a funzionare anche solo come cartella portatile
 | `--scheduled` | scansione pianificata senza finestra (la lancia l'Utilità di pianificazione) |
 | `--tray` | icona nell'area di notifica (avviata all'accesso) |
 | `--update` | cerca e installa l'ultima versione (amministratore) |
+| `--update-from <zip>` | aggiorna da uno zip già scaricato, con `SHA256SUMS.txt` accanto (PC senza Internet) |
 | `--version` | stampa la versione |
 
 Configurazione, stato e verbali delle scansioni pianificate sono in `%ProgramData%\TracciaDoc`.

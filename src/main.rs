@@ -233,6 +233,10 @@ fn automation(args: &[String]) -> Option<i32> {
         Some("--install") => install::install().map(|_| "Installazione completata".into()),
         Some("--uninstall") => install::uninstall().map(|_| "Disinstallazione completata".into()),
         Some("--update") => update::apply(arg("--auto")),
+        Some("--update-from") => match value("--update-from") {
+            Some(zip) => update::apply_from(&zip),
+            None => Err("Manca il percorso dello zip".into()),
+        },
         Some("--apply-config") => (|| {
             let file = value("--apply-config").ok_or("Manca il file di configurazione")?;
             let bytes = std::fs::read(&file).map_err(|e| format!("Configurazione non leggibile: {e}"))?;
@@ -247,7 +251,7 @@ fn automation(args: &[String]) -> Option<i32> {
         })(),
         _ => return None,
     };
-    if args.get(1).is_some_and(|a| a == "--update") {
+    if args.get(1).is_some_and(|a| a.starts_with("--update")) {
         sched::set_update_note(match &result { Ok(m) | Err(m) => m });
     }
     // L'esito torna alla GUI (che ha chiesto l'elevazione) tramite un file indicato da lei.

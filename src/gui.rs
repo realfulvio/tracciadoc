@@ -2,7 +2,7 @@ use crate::{
     diag,
     engine::{self, Shared},
     model::{Finding, Previous, Review, Settings},
-    parser, report,
+    parser,
 };
 use eframe::egui::{self, Color32, RichText};
 use std::{

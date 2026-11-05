@@ -62,7 +62,7 @@ Facoltative: TracciaDoc continua a funzionare anche solo come cartella portatile
 
 - **Installa** dalla sezione *Pianificazione* (o con `TracciaDoc.exe --install` da amministratore): il programma va in `Program Files\TracciaDoc`, l'icona compare vicino all'orologio a ogni accesso e TracciaDoc risulta in App installate. Si disinstalla da lì o con `--uninstall`.
 - **Pianifica** quando eseguire la scansione: una volta, ogni giorno, ogni settimana o ogni mese, con orario e date. Parte anche senza utente collegato, a priorità bassa, e se il PC era spento appena viene acceso. Salva il verbale e **non cancella mai nulla da sola**: se trova documenti lo segnala e la revisione si fa aprendo TracciaDoc.
-- **Arresta il PC a fine scansione** (attivo di default): solo se la scansione è completa e il verbale salvato, dopo 60 secondi di avviso annullabili dall'icona.
+- **Arresta il PC a fine scansione** (attivo di default): solo dopo aver salvato il verbale (anche con verifica incompleta, che il verbale dichiara), mai se la scansione è interrotta, dopo 60 secondi di avviso annullabili dall'icona.
 - **Si aggiorna da solo** dalle release di questo repository, con verifica SHA-256 e mai durante una scansione. Si può passare a "solo avviso" o disattivare.
 
 | Comando | Cosa fa |

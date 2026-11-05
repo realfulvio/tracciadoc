@@ -51,16 +51,8 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
                 p.findings,
                 p.deleted,
                 p.findings.saturating_sub(p.deleted),
-                if p.failed > 0 {
-                    format!(" (di cui {} per eliminazione non riuscita)", p.failed)
-                } else {
-                    String::new()
-                },
-                if p.incomplete {
-                    ", copertura incompleta"
-                } else {
-                    ""
-                }
+                if p.failed > 0 { format!(" (di cui {} per eliminazione non riuscita)", p.failed) } else { String::new() },
+                if p.incomplete { ", copertura incompleta" } else { "" }
             ),
             10.,
         );
@@ -159,8 +151,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
                 run.timing.prefilter_skipped
             )
         } else {
-            "Prefiltro immagini disattivato: OCR su tutte le immagini e pagine entro i limiti."
-                .into()
+            "Prefiltro immagini disattivato: OCR su tutte le immagini e pagine entro i limiti.".into()
         },
         9.,
     );
@@ -197,10 +188,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
             );
             add(format!("Controllo manuale: {}", f.review.label()), 9.);
             if f.deleted() {
-                add(
-                    format!("Eliminato definitivamente dall'operatore: {}", f.deleted_at),
-                    9.,
-                );
+                add(format!("Eliminato definitivamente dall'operatore: {}", f.deleted_at), 9.);
             } else if !f.delete_error.is_empty() {
                 add(format!("Eliminazione non riuscita: {}", f.delete_error), 9.);
             }
@@ -302,11 +290,7 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
             {
                 {
                     // Logo on the white page: alpha flattened on white, PDF images have no transparency.
-                    let mut flat = image::RgbImage::from_pixel(
-                        logo.width(),
-                        logo.height(),
-                        image::Rgb([255, 255, 255]),
-                    );
+                    let mut flat = image::RgbImage::from_pixel(logo.width(), logo.height(), image::Rgb([255, 255, 255]));
                     for (x, y, p) in logo.enumerate_pixels() {
                         let a = p[3] as u32;
                         let mix = |c: u8| ((c as u32 * a + 255 * (255 - a)) / 255) as u8;
@@ -369,10 +353,7 @@ pub fn write(run: &Run, path: &Path, paths: bool, demo: bool) -> Result<(), Stri
 
 /// Logo facoltativo dell'ente: `logo-ente.png` accanto all'EXE. Non fa parte del repository ne del pacchetto.
 pub fn org_logo() -> Option<image::RgbaImage> {
-    let path = std::env::current_exe()
-        .ok()?
-        .parent()?
-        .join("logo-ente.png");
+    let path = std::env::current_exe().ok()?.parent()?.join("logo-ente.png");
     if std::fs::metadata(&path).ok()?.len() > 2 << 20 {
         return None;
     }

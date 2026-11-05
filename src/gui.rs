@@ -3,7 +3,7 @@ use crate::{
     engine::{self, Shared},
     install, sched,
     model::{Finding, Previous, Review, Settings},
-    parser, report,
+    parser,
 };
 use eframe::egui::{self, Color32, RichText};
 use std::{
@@ -126,6 +126,7 @@ pub struct App {
     handle: Option<thread::JoinHandle<()>>,
     volumes: Vec<(PathBuf, String)>,
     notice: String,
+    last_pdf: Option<std::path::PathBuf>,
     include_paths: bool,
     demo: bool,
     started: Option<Instant>,
@@ -402,6 +403,10 @@ fn kind_of(f: &Finding) -> (&'static str, Color32) {
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Riprova in background i verbali rimasti solo in locale.
+        std::thread::spawn(|| {
+            let _ = crate::shared::riprova_sospesi(&crate::shared::local_dir(), crate::shared::report_dir(None).as_deref());
+        });
         // Tema scelto dall'app (scuro all'avvio): il tema di Windows non conta, i colori del testo sono sempre espliciti.
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
@@ -461,6 +466,7 @@ impl App {
             handle: None,
             volumes,
             notice: String::new(),
+            last_pdf: None,
             include_paths: true,
             demo: false,
             started: None,
@@ -1169,9 +1175,15 @@ impl eframe::App for App {
                                     }
                                     if run.finished {
                                         let btn = if resolved && run.deleted_count() == 0 || active == 4 { primary("Genera verbale PDF...", h) } else { egui::Button::new("Genera verbale PDF...").min_size(egui::vec2(0., h)) };
-                                        if ui.add(btn).clicked()
-                                            && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(format!("Verbale-TracciaDoc-{}.pdf",run.id)).save_file() {
-                                                match report::write(run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",diag::shown(&path));diag::ok(format!("Verbale PDF salvato: {}",diag::shown(&path)));let _=engine::audit(run,"pdf-export");},Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}}
+                                        if ui.add(btn).clicked() {
+                                            match crate::shared::genera_e_salva(run,self.include_paths,self.demo,None) {
+                                                Ok((pdf,esito))=>{let m=crate::shared::messaggio(&pdf,&esito);diag::ok(m.clone());self.notice=m;self.last_pdf=Some(pdf);let _=engine::audit(run,"pdf-export");},
+                                                Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}
+                                            }
+                                        }
+                                        if let Some(src)=self.last_pdf.clone() && ui.add(egui::Button::new("Salva una copia con nome...").min_size(egui::vec2(0., h))).clicked()
+                                            && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(src.file_name().map(|n|n.to_string_lossy().into_owned()).unwrap_or_default()).save_file() {
+                                                self.notice=match std::fs::copy(&src,&path) {Ok(_)=>format!("Copia salvata: {}",diag::shown(&path)),Err(e)=>format!("Copia non salvata: {e}")};
                                             }
                                     }
                                 });

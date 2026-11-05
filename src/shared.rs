@@ -235,6 +235,21 @@ pub fn genera_e_salva(
     Ok((pdf, esito))
 }
 
+/// Nasconde i percorsi UNC nei messaggi d'errore mostrati e registrati.
+fn nascondi_unc(text: &str) -> String {
+    let mut out = String::new();
+    let mut rest = text;
+    while let Some(i) = rest.find("\\\\") {
+        out.push_str(&rest[..i]);
+        out.push_str("<cartella condivisa>");
+        let tail = &rest[i..];
+        let end = tail.find(|c: char| c.is_whitespace() || c == '"' || c == ')' || c == '\'').unwrap_or(tail.len());
+        rest = &tail[end..];
+    }
+    out.push_str(rest);
+    out
+}
+
 /// Messaggio per l'operatore.
 pub fn messaggio(pdf: &Path, esito: &Esito) -> String {
     let p = crate::diag::shown(pdf);
@@ -243,7 +258,8 @@ pub fn messaggio(pdf: &Path, esito: &Esito) -> String {
             format!("Verbale salvato e consegnato alla cartella condivisa (copia locale: {p})")
         }
         Esito::SoloLocale(e) => format!(
-            "Cartella condivisa non raggiungibile ({e}): verbale salvato solo in locale in {p}. Verra riprovato all'apertura successiva."
+            "Cartella condivisa non raggiungibile ({}): verbale salvato solo in locale in {p}. Verra riprovato all'apertura successiva.",
+            nascondi_unc(e)
         ),
         Esito::NonConfigurata => {
             format!("Verbale salvato in {p}. Nessuna cartella condivisa configurata.")
@@ -299,5 +315,12 @@ mod tests {
             salva_su_condivisa(&pdf, Some(&share)),
             Esito::Condivisa(_)
         ));
+    }
+    #[test]
+    fn unc_hidden() {
+        assert_eq!(
+            nascondi_unc(r"errore su \\srv\share\x.tmp (os error 67)"),
+            "errore su <cartella condivisa> (os error 67)"
+        );
     }
 }

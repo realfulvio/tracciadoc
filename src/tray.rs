@@ -222,7 +222,7 @@ fn tick(t: &mut Tray) {
                 match e.outcome.as_str() {
                     "found" => balloon(t, &format!("Trovati {} possibili documenti", e.findings), "Apri TracciaDoc per rivederli ed eliminarli: niente viene cancellato in automatico.", true),
                     "clean" => balloon(t, "Scansione completata", "Nessun documento trovato. Verbale salvato.", false),
-                    "incomplete" => balloon(t, "Scansione incompleta", "Alcuni file non sono stati analizzati: vedi il verbale.", true),
+                    "incomplete" => balloon(t, "Scansione incompleta", "Alcuni file non sono stati analizzati: vedi il verbale.", false),
                     _ => balloon(t, "Scansione pianificata non riuscita", &e.note, true),
                 }
             }
@@ -230,18 +230,21 @@ fn tick(t: &mut Tray) {
         }
     }
     let found_unseen = latest.as_ref().is_some_and(|e| e.outcome == "found" && !sched::seen(&e.id));
-    let failed = latest.as_ref().is_some_and(|e| e.outcome == "error" || e.outcome == "incomplete");
+    // Rosso solo per un errore vero: "incompleta" è l'esito normale su C: e resta nel tooltip.
+    let failed = latest.as_ref().is_some_and(|e| e.outcome == "error");
+    let incomplete = latest.as_ref().is_some_and(|e| e.outcome == "incomplete");
     let version = env!("CARGO_PKG_VERSION");
     let (which, tip) = if scanning {
         (SCAN, if status.state == "scanning" { format!("TracciaDoc · scansione in corso {}%", status.percent) } else { "TracciaDoc · scansione in corso".into() })
     } else if failed {
-        (ERROR, format!("TracciaDoc · ultima scansione {}", if latest.as_ref().is_some_and(|e| e.outcome == "incomplete") { "incompleta" } else { "non riuscita" }))
+        (ERROR, "TracciaDoc · ultima scansione non riuscita".into())
     } else if found_unseen {
         (FOUND, format!("TracciaDoc · {} documenti da rivedere", latest.as_ref().map_or(0, |e| e.findings)))
     } else if let Some(rel) = &t.release {
         (UPDATE, format!("TracciaDoc {version} · disponibile {}", rel.version))
     } else {
-        (READY, format!("TracciaDoc {version} · prossima scansione: {}", next_run_text()))
+        let last = if incomplete { " · ultima incompleta" } else { "" };
+        (READY, format!("TracciaDoc {version}{last} · prossima scansione: {}", next_run_text()))
     };
     set_icon(t, which, tip);
 }

@@ -1,6 +1,6 @@
 //! Scansioni pianificate: piano scelto nella GUI, attività dell'Utilità di pianificazione
 //! di Windows (account di sistema), stato condiviso con l'icona nell'area di notifica.
-use crate::{diag, engine, model::Settings, report};
+use crate::{diag, engine, model::Settings};
 use chrono::{Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, Weekday};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -428,23 +428,20 @@ fn low_priority() {
 #[cfg(not(windows))]
 fn low_priority() {}
 
-/// Nome file del verbale: postazione e data, nessuna collisione tra PC.
-pub fn report_name(computer: &str) -> String {
-    let safe: String = computer.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' }).collect();
-    format!("Verbale-TracciaDoc-{safe}-{}.pdf", Local::now().format("%Y-%m-%d_%H%M"))
-}
-/// Salva il verbale nella cartella locale dei verbali; restituisce il percorso.
+/// Verbale nella cartella locale (per SYSTEM: ProgramData\TracciaDoc\Verbali) e consegna
+/// alla cartella condivisa configurata, con nuovo tentativo dei verbali rimasti in sospeso.
 pub fn save_report(run: &crate::model::Run) -> Result<PathBuf, String> {
-    let dir = verbali_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("Cartella verbali non creata: {e}"))?;
-    let mut path = dir.join(report_name(&run.computer));
-    let mut n = 2;
-    while path.exists() {
-        path = dir.join(report_name(&run.computer).replace(".pdf", &format!("-{n}.pdf")));
-        n += 1;
+    let dir = crate::shared::report_dir(None);
+    let (pdf, esito) = crate::shared::genera_e_salva(run, true, false, None)?;
+    let (ok, _) = crate::shared::riprova_sospesi(&crate::shared::local_dir(), dir.as_deref());
+    if ok > 0 {
+        diag::ok(format!("Consegnati {ok} verbali rimasti in sospeso"));
     }
-    report::write(run, &path, true, false)?;
-    Ok(path)
+    match &esito {
+        crate::shared::Esito::SoloLocale(e) => diag::warn(format!("Verbale solo in locale: {e}")),
+        _ => diag::info(crate::shared::messaggio(&pdf, &esito)),
+    }
+    Ok(pdf)
 }
 /// Dischi fissi con lettera, come la selezione predefinita della GUI.
 pub fn fixed_roots() -> Vec<PathBuf> {

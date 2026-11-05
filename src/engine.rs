@@ -13,9 +13,9 @@ use std::{
     path::{Path, PathBuf},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, OnceLock,
         atomic::{AtomicBool, AtomicU64, Ordering},
-        OnceLock, mpsc,
+        mpsc,
     },
     thread,
     time::{Duration, Instant},
@@ -383,8 +383,7 @@ fn worker_loop(
             }
             if let Some((w, _)) = worker.as_mut() {
                 o.result = w.analyze(&request, &stop, &mut o.peak);
-                if o
-                    .result
+                if o.result
                     .as_ref()
                     .is_err_and(|e| e.starts_with("Parser terminato"))
                     && !settings.cpu_only
@@ -462,7 +461,10 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
             if !result.supported
                 && result.reasons.is_empty()
                 && !result.issues.is_empty()
-                && result.issues.iter().all(|i| i == crate::parser::UNSUPPORTED)
+                && result
+                    .issues
+                    .iter()
+                    .all(|i| i == crate::parser::UNSUPPORTED)
             {
                 // Firma non di interesse dopo lo sniff (es. .dat senza documenti): ignorato per tipo.
                 state.ignored_type += 1;
@@ -514,7 +516,10 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
         }
     }
     if state.findings.len() >= 5000 {
-        if !state.issues.contains_key("Limite 5000 segnalazioni raggiunto") {
+        if !state
+            .issues
+            .contains_key("Limite 5000 segnalazioni raggiunto")
+        {
             state.issue("Limite 5000 segnalazioni raggiunto");
         }
         return true;
@@ -527,7 +532,14 @@ fn collect_counted(state: &mut Run, o: Outcome, stop: &AtomicBool, counts: &Coun
 }
 /// Conta in anticipo i file che la scansione aprira (stessa enumerazione, solo metadati):
 /// serve al totale dell'indicatore di avanzamento. Si ferma con la scansione.
-fn precount(roots: Vec<PathBuf>, max_bytes: u64, max_entries: u64, stop: Arc<AtomicBool>, over: Arc<AtomicBool>, counts: Arc<Counts>) {
+fn precount(
+    roots: Vec<PathBuf>,
+    max_bytes: u64,
+    max_entries: u64,
+    stop: Arc<AtomicBool>,
+    over: Arc<AtomicBool>,
+    counts: Arc<Counts>,
+) {
     let mut seen = 0u64;
     let mut counted: Vec<PathBuf> = vec![];
     'roots: for root in roots {
@@ -536,18 +548,25 @@ fn precount(roots: Vec<PathBuf>, max_bytes: u64, max_entries: u64, stop: Arc<Ato
         }
         let root_reparse =
             std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
-        if (root_reparse || counted.iter().any(|r| root.starts_with(r))) && !is_volume_mount(&root) {
+        if (root_reparse || counted.iter().any(|r| root.starts_with(r))) && !is_volume_mount(&root)
+        {
             continue;
         }
         counted.push(root.clone());
-        let mut entries = walkdir::WalkDir::new(&root).follow_links(false).max_open(16).into_iter();
+        let mut entries = walkdir::WalkDir::new(&root)
+            .follow_links(false)
+            .max_open(16)
+            .into_iter();
         while let Some(entry) = entries.next() {
             if stop.load(Ordering::Relaxed) || over.load(Ordering::Relaxed) {
                 return;
             }
             let Ok(entry) = entry else { continue };
             let Ok(meta) = entry.metadata() else { continue };
-            if entry.depth() > 0 && meta.file_attributes() & 0x400 != 0 && (meta.is_dir() || entry.file_type().is_symlink()) {
+            if entry.depth() > 0
+                && meta.file_attributes() & 0x400 != 0
+                && (meta.is_dir() || entry.file_type().is_symlink())
+            {
                 if entry.file_type().is_dir() {
                     entries.skip_current_dir();
                 }
@@ -590,8 +609,16 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     shared.lock().unwrap().counts = counts.clone();
     let counter_over = Arc::new(AtomicBool::new(false));
     let counter = {
-        let (roots, stop, over, counts) = (state.roots.clone(), stop.clone(), counter_over.clone(), counts.clone());
-        let (max_bytes, max_entries) = (state.settings.max_mb * 1024 * 1024, state.settings.max_entries);
+        let (roots, stop, over, counts) = (
+            state.roots.clone(),
+            stop.clone(),
+            counter_over.clone(),
+            counts.clone(),
+        );
+        let (max_bytes, max_entries) = (
+            state.settings.max_mb * 1024 * 1024,
+            state.settings.max_entries,
+        );
         thread::spawn(move || precount(roots, max_bytes, max_entries, stop, over, counts))
     };
     let workers = state.settings.workers.max(1);
@@ -624,14 +651,18 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             continue;
         }
         if !root.exists() {
-            state.issue(diag::noted("Percorso selezionato non disponibile o accesso negato"));
+            state.issue(diag::noted(
+                "Percorso selezionato non disponibile o accesso negato",
+            ));
             continue;
         }
         // An explicitly selected volume/mount root is allowed; descendant reparses are not followed.
         let root_reparse =
             std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
         if root_reparse && !is_volume_mount(&root) {
-            state.issue(diag::noted("Radice collegamento/junction esclusa: selezionare la destinazione locale"));
+            state.issue(diag::noted(
+                "Radice collegamento/junction esclusa: selezionare la destinazione locale",
+            ));
             continue;
         }
         if scanned_roots.iter().any(|r| root.starts_with(r)) && !is_volume_mount(&root) {
@@ -707,7 +738,10 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
                 counts.done.fetch_add(1, Ordering::Relaxed);
-                state.issue(diag::noted_at("File reparse, offline, cloud recall o cifrato EFS non aperto", path));
+                state.issue(diag::noted_at(
+                    "File reparse, offline, cloud recall o cifrato EFS non aperto",
+                    path,
+                ));
                 continue;
             }
             if published.elapsed() >= Duration::from_millis(100) || state.encountered == 1 {
@@ -781,7 +815,11 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     }
     let summary = format!(
         "FINE verifica · {} · visti {} · analizzati {} · parziali {} · saltati {} · segnalati {} · {:.1} s",
-        if state.interrupted { "INTERROTTA" } else { "completata" },
+        if state.interrupted {
+            "INTERROTTA"
+        } else {
+            "completata"
+        },
         state.encountered,
         state.analyzed,
         state.partial_files,
@@ -817,8 +855,7 @@ pub fn is_network(path: &Path) -> bool {
 /// Physical cores (not SMT threads): OCR workers are CPU-bound.
 pub fn physical_cores() -> usize {
     use windows_sys::Win32::System::SystemInformation::{
-        GetLogicalProcessorInformation, RelationProcessorCore,
-        SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
+        GetLogicalProcessorInformation, RelationProcessorCore, SYSTEM_LOGICAL_PROCESSOR_INFORMATION,
     };
     let logical = thread::available_parallelism().map_or(1, |n| n.get());
     let mut len = 0u32;
@@ -940,7 +977,12 @@ pub fn volumes() -> Vec<(PathBuf, String)> {
 /// Capacita e spazio libero di un volume locale (byte), per le schede delle aree.
 pub fn disk_space(path: &Path) -> Option<(u64, u64)> {
     use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
-    let wide: Vec<u16> = path.as_os_str().to_string_lossy().encode_utf16().chain(Some(0)).collect();
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
     let (mut available, mut total, mut free) = (0u64, 0u64, 0u64);
     // SAFETY: stringa terminata da zero e tre puntatori validi a u64 locali.
     let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };

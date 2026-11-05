@@ -25,36 +25,83 @@ fn pick(dark: (u8, u8, u8), bright: (u8, u8, u8)) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 /// I loghi sono bianchi per lo sfondo scuro: sul tema chiaro si tingono di blu notte.
-fn logo_tint() -> Color32 { if light() { Color32::from_rgb(20, 32, 46) } else { Color32::WHITE } }
-fn c_accent() -> Color32 { pick((47, 209, 176), (11, 91, 140)) }
-fn c_primary() -> Color32 { pick((22, 154, 130), (11, 91, 140)) }
-fn c_bg() -> Color32 { pick((18, 20, 24), (238, 242, 246)) }
-fn c_surface() -> Color32 { pick((27, 30, 36), (255, 255, 255)) }
-fn c_side() -> Color32 { pick((14, 16, 19), (223, 231, 239)) }
-fn c_bar() -> Color32 { pick((22, 25, 29), (230, 236, 243)) }
-fn c_console() -> Color32 { pick((11, 13, 16), (214, 223, 233)) }
-fn c_line() -> Color32 { pick((43, 48, 57), (211, 220, 230)) }
-fn c_text() -> Color32 { pick((233, 236, 239), (20, 32, 46)) }
-fn c_weak() -> Color32 { pick((141, 148, 159), (93, 107, 124)) }
-fn c_dim() -> Color32 { pick((75, 83, 91), (150, 162, 176)) }
-fn c_ok() -> Color32 { pick((126, 217, 134), (30, 140, 70)) }
-fn c_warn() -> Color32 { pick((244, 183, 63), (184, 106, 0)) }
-fn c_danger() -> Color32 { pick((168, 50, 58), (179, 40, 47)) }
-fn c_err() -> Color32 { pick((255, 148, 148), (179, 40, 47)) }
-fn c_sel() -> Color32 { pick((18, 51, 47), (220, 235, 245)) }
-fn c_sel_soft() -> Color32 { pick((22, 44, 43), (232, 242, 249)) }
+fn logo_tint() -> Color32 {
+    if light() {
+        Color32::from_rgb(20, 32, 46)
+    } else {
+        Color32::WHITE
+    }
+}
+fn c_accent() -> Color32 {
+    pick((47, 209, 176), (11, 91, 140))
+}
+fn c_primary() -> Color32 {
+    pick((22, 154, 130), (11, 91, 140))
+}
+fn c_bg() -> Color32 {
+    pick((18, 20, 24), (238, 242, 246))
+}
+fn c_surface() -> Color32 {
+    pick((27, 30, 36), (255, 255, 255))
+}
+fn c_side() -> Color32 {
+    pick((14, 16, 19), (223, 231, 239))
+}
+fn c_bar() -> Color32 {
+    pick((22, 25, 29), (230, 236, 243))
+}
+fn c_console() -> Color32 {
+    pick((11, 13, 16), (214, 223, 233))
+}
+fn c_line() -> Color32 {
+    pick((43, 48, 57), (211, 220, 230))
+}
+fn c_text() -> Color32 {
+    pick((233, 236, 239), (20, 32, 46))
+}
+fn c_weak() -> Color32 {
+    pick((141, 148, 159), (93, 107, 124))
+}
+fn c_dim() -> Color32 {
+    pick((75, 83, 91), (150, 162, 176))
+}
+fn c_ok() -> Color32 {
+    pick((126, 217, 134), (30, 140, 70))
+}
+fn c_warn() -> Color32 {
+    pick((244, 183, 63), (184, 106, 0))
+}
+fn c_danger() -> Color32 {
+    pick((168, 50, 58), (179, 40, 47))
+}
+fn c_err() -> Color32 {
+    pick((255, 148, 148), (179, 40, 47))
+}
+fn c_sel() -> Color32 {
+    pick((18, 51, 47), (220, 235, 245))
+}
+fn c_sel_soft() -> Color32 {
+    pick((22, 44, 43), (232, 242, 249))
+}
 /// Colore del segno dentro i cerchi pieni (spunta, numero).
-fn c_ink() -> Color32 { pick((7, 32, 27), (255, 255, 255)) }
+fn c_ink() -> Color32 {
+    pick((7, 32, 27), (255, 255, 255))
+}
 /// Stile egui dalla tavolozza corrente; da richiamare a ogni cambio di tema.
 fn apply_style(ctx: &egui::Context) {
-    let theme = if light() { egui::Theme::Light } else { egui::Theme::Dark };
+    let theme = if light() {
+        egui::Theme::Light
+    } else {
+        egui::Theme::Dark
+    };
     ctx.set_theme(theme);
     ctx.style_mut_of(theme, |style| {
         style.spacing.item_spacing = egui::vec2(12., 10.);
         style.spacing.button_padding = egui::vec2(16., 10.);
         style.visuals.panel_fill = c_bg();
         style.visuals.window_fill = c_surface();
-        style.visuals.widgets.inactive.bg_stroke = egui::Stroke::new(1., pick((96, 106, 116), (160, 172, 186)));
+        style.visuals.widgets.inactive.bg_stroke =
+            egui::Stroke::new(1., pick((96, 106, 116), (160, 172, 186)));
         style.visuals.widgets.inactive.weak_bg_fill = pick((40, 44, 52), (244, 247, 250));
         style.visuals.extreme_bg_color = c_side();
         style.visuals.override_text_color = Some(c_text());
@@ -64,10 +111,18 @@ fn apply_style(ctx: &egui::Context) {
         style.visuals.widgets.hovered.weak_bg_fill = pick((48, 54, 64), (226, 236, 246));
         style.visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1., c_accent());
         style.visuals.widgets.active.bg_stroke = egui::Stroke::new(2., c_accent());
-        style.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(16.));
-        style.text_styles.insert(egui::TextStyle::Button, semibold(16.));
-        style.text_styles.insert(egui::TextStyle::Heading, semibold(21.));
-        style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(13.));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Body, egui::FontId::proportional(16.));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Button, semibold(16.));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Heading, semibold(21.));
+        style
+            .text_styles
+            .insert(egui::TextStyle::Small, egui::FontId::proportional(13.));
     });
 }
 fn semibold(size: f32) -> egui::FontId {
@@ -89,12 +144,16 @@ fn texture(ctx: &egui::Context, name: &str, bytes: &[u8]) -> egui::TextureHandle
 type Preview = Option<(egui::TextureHandle, egui::TextureHandle)>;
 /// Miniatura locale in memoria (nitida e sfocata). Solo immagini raster, mai su disco.
 fn make_preview(ctx: &egui::Context, path: &Path, format: &str) -> Preview {
-    if !["png", "jpeg", "bmp", "webp", "gif", "tiff"].contains(&format.to_ascii_lowercase().as_str())
+    if !["png", "jpeg", "bmp", "webp", "gif", "tiff"]
+        .contains(&format.to_ascii_lowercase().as_str())
         || std::fs::metadata(path).ok()?.len() > 32 * 1024 * 1024
     {
         return None;
     }
-    let mut reader = image::ImageReader::open(path).ok()?.with_guessed_format().ok()?;
+    let mut reader = image::ImageReader::open(path)
+        .ok()?
+        .with_guessed_format()
+        .ok()?;
     let mut limits = image::Limits::default();
     limits.max_image_width = Some(parser::MAX_SIDE);
     limits.max_image_height = Some(parser::MAX_SIDE);
@@ -125,6 +184,7 @@ pub struct App {
     handle: Option<thread::JoinHandle<()>>,
     volumes: Vec<(PathBuf, String)>,
     notice: String,
+    last_pdf: Option<std::path::PathBuf>,
     include_paths: bool,
     demo: bool,
     started: Option<Instant>,
@@ -169,7 +229,11 @@ fn it_num(n: u64) -> String {
 }
 /// "1 area" / "2 aree": singolare e plurale.
 fn plural(n: usize, one: &str, many: &str) -> String {
-    if n == 1 { format!("1 {one}") } else { format!("{n} {many}") }
+    if n == 1 {
+        format!("1 {one}")
+    } else {
+        format!("{n} {many}")
+    }
 }
 fn it_eta(secs: f64) -> String {
     let s = secs.ceil() as u64;
@@ -200,7 +264,13 @@ fn ring(ui: &mut egui::Ui, size: f32, frac: f32, text: &str) {
         painter.circle_filled(at(0), w / 2., c_accent());
         painter.circle_filled(at(steps), w / 2., c_accent());
     }
-    painter.text(c, egui::Align2::CENTER_CENTER, text, semibold(size / 4.), c_text());
+    painter.text(
+        c,
+        egui::Align2::CENTER_CENTER,
+        text,
+        semibold(size / 4.),
+        c_text(),
+    );
 }
 fn stat(ui: &mut egui::Ui, label: &str, value: String) {
     ui.horizontal(|ui| {
@@ -213,13 +283,18 @@ fn stat(ui: &mut egui::Ui, label: &str, value: String) {
 }
 /// Passo della barra laterale: cerchio numerato (spunta se concluso), evidenziato se corrente.
 fn step_row(ui: &mut egui::Ui, n: u32, label: &str, active: u32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 38.), egui::Sense::hover());
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 38.), egui::Sense::hover());
     let painter = ui.painter();
     if n == active {
         painter.rect_filled(rect, 8., c_sel());
     }
     let c = egui::pos2(rect.left() + 22., rect.center().y);
-    let (fill, text_color) = if n <= active { (c_accent(), c_text()) } else { (Color32::TRANSPARENT, c_weak()) };
+    let (fill, text_color) = if n <= active {
+        (c_accent(), c_text())
+    } else {
+        (Color32::TRANSPARENT, c_weak())
+    };
     painter.circle_filled(c, 11., fill);
     if n > active {
         painter.circle_stroke(c, 11., egui::Stroke::new(1.5, c_line()));
@@ -229,15 +304,38 @@ fn step_row(ui: &mut egui::Ui, n: u32, label: &str, active: u32) {
         painter.line_segment([c + egui::vec2(-4.5, 0.5), c + egui::vec2(-1.5, 3.5)], ink);
         painter.line_segment([c + egui::vec2(-1.5, 3.5), c + egui::vec2(4.5, -3.5)], ink);
     } else {
-        painter.text(c, egui::Align2::CENTER_CENTER, n.to_string(), semibold(13.), if n == active { c_ink() } else { text_color });
+        painter.text(
+            c,
+            egui::Align2::CENTER_CENTER,
+            n.to_string(),
+            semibold(13.),
+            if n == active { c_ink() } else { text_color },
+        );
     }
-    painter.text(egui::pos2(rect.left() + 44., rect.center().y), egui::Align2::LEFT_CENTER, label, semibold(17.), text_color);
+    painter.text(
+        egui::pos2(rect.left() + 44., rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        label,
+        semibold(17.),
+        text_color,
+    );
 }
 /// Etichetta arrotondata: stato, tipo di documento, accelerazione.
 fn chip(ui: &mut egui::Ui, text: &str, color: Color32, strong: bool) {
     egui::Frame::new()
-        .fill(if strong { color.gamma_multiply(0.16) } else { Color32::TRANSPARENT })
-        .stroke(egui::Stroke::new(1., if strong { color.gamma_multiply(0.6) } else { c_line() }))
+        .fill(if strong {
+            color.gamma_multiply(0.16)
+        } else {
+            Color32::TRANSPARENT
+        })
+        .stroke(egui::Stroke::new(
+            1.,
+            if strong {
+                color.gamma_multiply(0.6)
+            } else {
+                c_line()
+            },
+        ))
         .corner_radius(99)
         .inner_margin(egui::Margin::symmetric(9, 1))
         .show(ui, |ui| {
@@ -260,50 +358,104 @@ fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: String, color: Option
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.;
                 ui.label(RichText::new(label).size(12.5).color(c_weak()));
-                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(c_text())));
+                ui.label(
+                    RichText::new(value)
+                        .font(semibold(30.))
+                        .color(color.unwrap_or(c_text())),
+                );
             });
         });
 }
 fn primary(text: &str, height: f32) -> egui::Button<'static> {
-    egui::Button::new(RichText::new(text.to_string()).font(semibold(19.)).color(Color32::WHITE)).fill(c_primary()).min_size(egui::vec2(220., height))
+    egui::Button::new(
+        RichText::new(text.to_string())
+            .font(semibold(19.))
+            .color(Color32::WHITE),
+    )
+    .fill(c_primary())
+    .min_size(egui::vec2(220., height))
 }
 /// Dimensione di un file in KB/MB.
 fn size_text(bytes: u64) -> String {
-    if bytes >= 1_048_576 { format!("{:.1} MB", bytes as f64 / 1_048_576.).replace('.', ",") } else { format!("{} KB", bytes.div_ceil(1024)) }
+    if bytes >= 1_048_576 {
+        format!("{:.1} MB", bytes as f64 / 1_048_576.).replace('.', ",")
+    } else {
+        format!("{} KB", bytes.div_ceil(1024))
+    }
 }
 /// Dimensione in GB/TB all'italiana.
 fn it_size(bytes: u64) -> String {
     let gb = bytes as f64 / 1_073_741_824.;
-    if gb >= 1000. { format!("{:.1} TB", gb / 1024.).replace('.', ",") } else { format!("{} GB", gb.round() as u64) }
+    if gb >= 1000. {
+        format!("{:.1} TB", gb / 1024.).replace('.', ",")
+    } else {
+        format!("{} GB", gb.round() as u64)
+    }
 }
 /// Barra orizzontale piena per la frazione data.
 fn bar(ui: &mut egui::Ui, frac: f32, height: f32, color: Color32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
-    ui.painter().rect_filled(rect, height / 2., c_dim().gamma_multiply(0.35));
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::hover(),
+    );
+    ui.painter()
+        .rect_filled(rect, height / 2., c_dim().gamma_multiply(0.35));
     let frac = frac.clamp(0., 1.);
     if frac > 0. {
-        let fill = egui::Rect::from_min_size(rect.min, egui::vec2((rect.width() * frac).max(height), height));
+        let fill = egui::Rect::from_min_size(
+            rect.min,
+            egui::vec2((rect.width() * frac).max(height), height),
+        );
         ui.painter().rect_filled(fill, height / 2., color);
     }
 }
 /// Grafico a linea dei campioni (file al secondo).
 fn spark(ui: &mut egui::Ui, data: &[f32], height: f32) {
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), height), egui::Sense::hover());
-    ui.painter().line_segment([rect.left_bottom(), rect.right_bottom()], egui::Stroke::new(1., c_line()));
+    let (rect, _) = ui.allocate_exact_size(
+        egui::vec2(ui.available_width(), height),
+        egui::Sense::hover(),
+    );
+    ui.painter().line_segment(
+        [rect.left_bottom(), rect.right_bottom()],
+        egui::Stroke::new(1., c_line()),
+    );
     if data.len() < 2 {
-        ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, "il grafico compare dopo qualche secondo di scansione", egui::FontId::proportional(13.), c_weak());
+        ui.painter().text(
+            rect.center(),
+            egui::Align2::CENTER_CENTER,
+            "il grafico compare dopo qualche secondo di scansione",
+            egui::FontId::proportional(13.),
+            c_weak(),
+        );
         return;
     }
     let max = data.iter().cloned().fold(1., f32::max);
     let n = data.len() as f32 - 1.;
-    let pts: Vec<egui::Pos2> = data.iter().enumerate().map(|(i, v)| egui::pos2(rect.left() + rect.width() * i as f32 / n, rect.bottom() - 4. - (rect.height() - 8.) * (v / max))).collect();
-    ui.painter().add(egui::Shape::line(pts, egui::Stroke::new(2.5, c_accent())));
+    let pts: Vec<egui::Pos2> = data
+        .iter()
+        .enumerate()
+        .map(|(i, v)| {
+            egui::pos2(
+                rect.left() + rect.width() * i as f32 / n,
+                rect.bottom() - 4. - (rect.height() - 8.) * (v / max),
+            )
+        })
+        .collect();
+    ui.painter()
+        .add(egui::Shape::line(pts, egui::Stroke::new(2.5, c_accent())));
 }
 /// Giudizio sugli indizi di un file: tipo di riscontri trovati, non una probabilita statistica.
 fn level_of(f: &Finding) -> (&'static str, Color32, f32) {
-    let strong = f.reasons.iter().any(|r| r.starts_with("MRZ") || r.contains("numerazione formalmente compatibile") || r.contains("codice fiscale superato"));
+    let strong = f.reasons.iter().any(|r| {
+        r.starts_with("MRZ")
+            || r.contains("numerazione formalmente compatibile")
+            || r.contains("codice fiscale superato")
+    });
     // Fototessera "probabile": volto frontale unico su sfondo uniforme, un buon indizio ma senza testo.
-    let photo = f.reasons.iter().any(|r| r.starts_with("Fototessera:") && r.contains("(probabile)"));
+    let photo = f
+        .reasons
+        .iter()
+        .any(|r| r.starts_with("Fototessera:") && r.contains("(probabile)"));
     match (strong, f.reasons.len()) {
         (false, 1) if photo => ("Indizi buoni", c_accent(), 0.7),
         (true, n) if n >= 2 => ("Indizi forti", c_accent(), 0.95),
@@ -315,11 +467,18 @@ fn level_of(f: &Finding) -> (&'static str, Color32, f32) {
 /// Pulsante-filtro a pillola.
 fn pill(ui: &mut egui::Ui, text: &str, on: bool) -> egui::Response {
     ui.add(
-        egui::Button::new(RichText::new(text).size(14.).color(if on { c_accent() } else { c_weak() }))
-            .fill(if on { c_sel() } else { Color32::TRANSPARENT })
-            .stroke(egui::Stroke::new(1., if on { c_accent() } else { c_line() }))
-            .corner_radius(99)
-            .min_size(egui::vec2(0., 30.)),
+        egui::Button::new(RichText::new(text).size(14.).color(if on {
+            c_accent()
+        } else {
+            c_weak()
+        }))
+        .fill(if on { c_sel() } else { Color32::TRANSPARENT })
+        .stroke(egui::Stroke::new(
+            1.,
+            if on { c_accent() } else { c_line() },
+        ))
+        .corner_radius(99)
+        .min_size(egui::vec2(0., 30.)),
     )
 }
 /// Anteprima del verbale: pagina disegnata con i numeri reali, non il PDF vero.
@@ -330,53 +489,153 @@ fn paper(ui: &mut egui::Ui, width: f32, before: u64, after: u64, date: &str) {
     let ink = Color32::from_rgb(26, 34, 48);
     let mute = Color32::from_rgb(102, 110, 124);
     let teal = Color32::from_rgb(22, 154, 130);
-    p.rect_filled(rect.translate(egui::vec2(0., 5.)), 4., Color32::from_black_alpha(60));
+    p.rect_filled(
+        rect.translate(egui::vec2(0., 5.)),
+        4.,
+        Color32::from_black_alpha(60),
+    );
     p.rect_filled(rect, 4., Color32::WHITE);
     let k = size.x / 380.;
     let m = 30. * k;
     let x0 = rect.left() + m;
     let x1 = rect.right() - m;
     let mut y = rect.top() + m;
-    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "TracciaDoc", semibold(16. * k), ink);
-    p.text(egui::pos2(x1, y + 3. * k), egui::Align2::RIGHT_TOP, "Verbale di verifica", egui::FontId::proportional(10. * k), mute);
+    p.text(
+        egui::pos2(x0, y),
+        egui::Align2::LEFT_TOP,
+        "TracciaDoc",
+        semibold(16. * k),
+        ink,
+    );
+    p.text(
+        egui::pos2(x1, y + 3. * k),
+        egui::Align2::RIGHT_TOP,
+        "Verbale di verifica",
+        egui::FontId::proportional(10. * k),
+        mute,
+    );
     y += 28. * k;
-    p.line_segment([egui::pos2(x0, y), egui::pos2(x1, y)], egui::Stroke::new(2., teal));
+    p.line_segment(
+        [egui::pos2(x0, y), egui::pos2(x1, y)],
+        egui::Stroke::new(2., teal),
+    );
     y += 14. * k;
-    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "Verbale di verifica\ndocumenti d'identita", semibold(17. * k), ink);
+    p.text(
+        egui::pos2(x0, y),
+        egui::Align2::LEFT_TOP,
+        "Verbale di verifica\ndocumenti d'identita",
+        semibold(17. * k),
+        ink,
+    );
     y += 50. * k;
-    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, format!("Data {date}  ·  Operatore: ________"), egui::FontId::proportional(10. * k), mute);
+    p.text(
+        egui::pos2(x0, y),
+        egui::Align2::LEFT_TOP,
+        format!("Data {date}  ·  Operatore: ________"),
+        egui::FontId::proportional(10. * k),
+        mute,
+    );
     y += 26. * k;
     let bw = (x1 - x0 - 12. * k) / 2.;
-    for (i, (label, value, color, fill)) in [("Prima", before, Color32::from_rgb(184, 106, 0), Color32::WHITE), ("Dopo", after, teal, Color32::from_rgb(234, 248, 245))].into_iter().enumerate() {
-        let b = egui::Rect::from_min_size(egui::pos2(x0 + i as f32 * (bw + 12. * k), y), egui::vec2(bw, 62. * k));
+    for (i, (label, value, color, fill)) in [
+        (
+            "Prima",
+            before,
+            Color32::from_rgb(184, 106, 0),
+            Color32::WHITE,
+        ),
+        ("Dopo", after, teal, Color32::from_rgb(234, 248, 245)),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let b = egui::Rect::from_min_size(
+            egui::pos2(x0 + i as f32 * (bw + 12. * k), y),
+            egui::vec2(bw, 62. * k),
+        );
         p.rect_filled(b, 4., fill);
-        p.rect_stroke(b, 4., egui::Stroke::new(1., if i == 1 { teal } else { Color32::from_rgb(213, 219, 226) }), egui::StrokeKind::Inside);
-        p.text(b.min + egui::vec2(8. * k, 6. * k), egui::Align2::LEFT_TOP, label, egui::FontId::proportional(10. * k), mute);
-        p.text(b.min + egui::vec2(8. * k, 22. * k), egui::Align2::LEFT_TOP, value.to_string(), semibold(26. * k), color);
+        p.rect_stroke(
+            b,
+            4.,
+            egui::Stroke::new(
+                1.,
+                if i == 1 {
+                    teal
+                } else {
+                    Color32::from_rgb(213, 219, 226)
+                },
+            ),
+            egui::StrokeKind::Inside,
+        );
+        p.text(
+            b.min + egui::vec2(8. * k, 6. * k),
+            egui::Align2::LEFT_TOP,
+            label,
+            egui::FontId::proportional(10. * k),
+            mute,
+        );
+        p.text(
+            b.min + egui::vec2(8. * k, 22. * k),
+            egui::Align2::LEFT_TOP,
+            value.to_string(),
+            semibold(26. * k),
+            color,
+        );
     }
     y += 82. * k;
-    p.text(egui::pos2(x0, y), egui::Align2::LEFT_TOP, "Elenco dei file eliminati", semibold(11. * k), ink);
+    p.text(
+        egui::pos2(x0, y),
+        egui::Align2::LEFT_TOP,
+        "Elenco dei file eliminati",
+        semibold(11. * k),
+        ink,
+    );
     y += 20. * k;
     for _ in 0..5 {
-        p.rect_filled(egui::Rect::from_min_size(egui::pos2(x0, y), egui::vec2(x1 - x0, 5. * k)), 3., Color32::from_rgb(230, 235, 240));
+        p.rect_filled(
+            egui::Rect::from_min_size(egui::pos2(x0, y), egui::vec2(x1 - x0, 5. * k)),
+            3.,
+            Color32::from_rgb(230, 235, 240),
+        );
         y += 15. * k;
     }
     y += 6. * k;
     let note = egui::Rect::from_min_size(egui::pos2(x0, y), egui::vec2(x1 - x0, 44. * k));
     p.rect_filled(note, 3., Color32::from_rgb(234, 248, 245));
-    p.rect_filled(egui::Rect::from_min_size(note.min, egui::vec2(3., note.height())), 0., teal);
-    p.text(note.min + egui::vec2(12. * k, 8. * k), egui::Align2::LEFT_TOP, if after == 0 { "Nessun documento rilevato\nnell'ambito esaminato." } else { "Restano segnalazioni\nda rivedere." }, egui::FontId::proportional(10. * k), Color32::from_rgb(14, 90, 76));
+    p.rect_filled(
+        egui::Rect::from_min_size(note.min, egui::vec2(3., note.height())),
+        0.,
+        teal,
+    );
+    p.text(
+        note.min + egui::vec2(12. * k, 8. * k),
+        egui::Align2::LEFT_TOP,
+        if after == 0 {
+            "Nessun documento rilevato\nnell'ambito esaminato."
+        } else {
+            "Restano segnalazioni\nda rivedere."
+        },
+        egui::FontId::proportional(10. * k),
+        Color32::from_rgb(14, 90, 76),
+    );
 }
 /// Tipo di documento dedotto dai motivi della segnalazione.
 fn kind_of(f: &Finding) -> (&'static str, Color32) {
     for (name, prefixes, color) in [
-        ("Carta d'identita", &["Carta d'identita:", "MRZ TD1:"][..], c_accent()),
+        (
+            "Carta d'identita",
+            &["Carta d'identita:", "MRZ TD1:"][..],
+            c_accent(),
+        ),
         ("Passaporto", &["Passaporto:", "MRZ TD3:"][..], c_accent()),
         ("Patente", &["Patente:"][..], c_warn()),
         ("Tessera sanitaria", &["Tessera sanitaria:"][..], c_accent()),
         ("Fototessera", &["Fototessera:"][..], c_warn()),
     ] {
-        if f.reasons.iter().any(|r| prefixes.iter().any(|p| r.starts_with(p))) {
+        if f.reasons
+            .iter()
+            .any(|r| prefixes.iter().any(|p| r.starts_with(p)))
+        {
             return (name, color);
         }
     }
@@ -384,6 +643,13 @@ fn kind_of(f: &Finding) -> (&'static str, Color32) {
 }
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Riprova in background i verbali rimasti solo in locale.
+        std::thread::spawn(|| {
+            let _ = crate::shared::riprova_sospesi(
+                &crate::shared::local_dir(),
+                crate::shared::report_dir(None).as_deref(),
+            );
+        });
         // Tema scelto dall'app (scuro all'avvio): il tema di Windows non conta, i colori del testo sono sempre espliciti.
         let mut fonts = egui::FontDefinitions::default();
         fonts.font_data.insert(
@@ -428,9 +694,18 @@ impl App {
             env!("CARGO_PKG_VERSION")
         ));
         let volumes = engine::volumes();
-        let space: HashMap<PathBuf, (u64, u64)> = volumes.iter().filter_map(|(p, _)| engine::disk_space(p).map(|s| (p.clone(), s))).collect();
+        let space: HashMap<PathBuf, (u64, u64)> = volumes
+            .iter()
+            .filter_map(|(p, _)| engine::disk_space(p).map(|s| (p.clone(), s)))
+            .collect();
         // Di default tutti i dischi fissi con lettera: la scansione parte solo dal pulsante.
-        let roots: Vec<PathBuf> = volumes.iter().filter(|(p, l)| l.ends_with("locale fisso") && !p.to_string_lossy().starts_with("\\\\?\\Volume")).map(|(p, _)| p.clone()).collect();
+        let roots: Vec<PathBuf> = volumes
+            .iter()
+            .filter(|(p, l)| {
+                l.ends_with("locale fisso") && !p.to_string_lossy().starts_with("\\\\?\\Volume")
+            })
+            .map(|(p, _)| p.clone())
+            .collect();
         Self {
             roots,
             path: String::new(),
@@ -442,6 +717,7 @@ impl App {
             handle: None,
             volumes,
             notice: String::new(),
+            last_pdf: None,
             include_paths: true,
             demo: false,
             started: None,
@@ -555,7 +831,13 @@ impl eframe::App for App {
             self.zoom_set = true;
             // Schermi grandi a risoluzione nativa: UI troppo piccola, parte ingrandita (resta regolabile dal menu).
             let w = ctx.content_rect().width();
-            let z = if w >= 2400. { 1.5 } else if w >= 1900. { 1.25 } else { 1. };
+            let z = if w >= 2400. {
+                1.5
+            } else if w >= 1900. {
+                1.25
+            } else {
+                1.
+            };
             if z > 1. {
                 self.zoom = z;
                 ctx.set_zoom_factor(z);
@@ -563,14 +845,24 @@ impl eframe::App for App {
         }
         let screen = ctx.content_rect();
         let short = screen.height() < 700.;
-        let phase_state = self.shared.lock().unwrap().run.as_ref().map(|r| (r.finished, r.previous.is_some()));
+        let phase_state = self
+            .shared
+            .lock()
+            .unwrap()
+            .run
+            .as_ref()
+            .map(|r| (r.finished, r.previous.is_some()));
         let active = match (running, phase_state) {
             (true, _) => 2,
             (false, Some((true, true))) => 4,
             (false, Some((true, false))) => 3,
             _ => 1,
         };
-        if self.copied.as_ref().is_some_and(|(_, t)| t.elapsed() > Duration::from_secs(8)) {
+        if self
+            .copied
+            .as_ref()
+            .is_some_and(|(_, t)| t.elapsed() > Duration::from_secs(8))
+        {
             self.copied = None;
         } else if self.copied.is_some() {
             ctx.request_repaint_after(Duration::from_secs(1));
@@ -586,10 +878,13 @@ impl eframe::App for App {
         };
         if running {
             self.samples.push((Instant::now(), done));
-            self.samples.retain(|(t, _)| t.elapsed() < Duration::from_secs(20));
+            self.samples
+                .retain(|(t, _)| t.elapsed() < Duration::from_secs(20));
         }
         let rate = match (self.samples.first(), self.samples.last()) {
-            (Some((t0, d0)), Some((t1, d1))) if t1.duration_since(*t0) >= Duration::from_secs(3) => {
+            (Some((t0, d0)), Some((t1, d1)))
+                if t1.duration_since(*t0) >= Duration::from_secs(3) =>
+            {
                 d1.saturating_sub(*d0) as f64 / t1.duration_since(*t0).as_secs_f64()
             }
             _ => 0.,
@@ -604,17 +899,46 @@ impl eframe::App for App {
         let elapsed = self.started.map_or(0., |t| t.elapsed().as_secs_f64());
         let shown = running || outcome.is_some_and(|(finished, _)| finished);
         let finished_ok = !running && outcome.is_some_and(|(f, i)| f && !i);
-        let frac = if finished_ok { 1. } else if total > 0 { (done as f32 / total as f32).min(1.) } else { 0. };
+        let frac = if finished_ok {
+            1.
+        } else if total > 0 {
+            (done as f32 / total as f32).min(1.)
+        } else {
+            0.
+        };
         let ring_text = if finished_ok {
             "100%".to_string()
         } else {
             // Mai 100% finche la scansione non e davvero finita; "~" se il totale e ancora in conteggio.
             let pct = ((frac * 100.).floor() as u32).min(99);
-            if total_final || total == 0 { format!("{pct}%") } else { format!("~{pct}%") }
+            if total_final || total == 0 {
+                format!("{pct}%")
+            } else {
+                format!("~{pct}%")
+            }
         };
-        let ring_label = if running { if total_final { "Scansione in corso" } else { "Stima in corso..." } } else if finished_ok { "Scansione completata" } else { "Scansione interrotta" };
-        let files_text = format!("{} / {}{}", it_num(done), it_num(total), if total_final || !running { "" } else { "+" });
-        let rate_text = if rate > 0. { format!("{} file/s", it_num(rate.round() as u64)) } else { "-".into() };
+        let ring_label = if running {
+            if total_final {
+                "Scansione in corso"
+            } else {
+                "Stima in corso..."
+            }
+        } else if finished_ok {
+            "Scansione completata"
+        } else {
+            "Scansione interrotta"
+        };
+        let files_text = format!(
+            "{} / {}{}",
+            it_num(done),
+            it_num(total),
+            if total_final || !running { "" } else { "+" }
+        );
+        let rate_text = if rate > 0. {
+            format!("{} file/s", it_num(rate.round() as u64))
+        } else {
+            "-".into()
+        };
         let eta_text = if total_final && rate > 0.5 && done >= 30 && elapsed >= 10. {
             it_eta(total.saturating_sub(done) as f64 / rate)
         } else {
@@ -687,64 +1011,96 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(c_side()).inner_margin(16))
             .show(root, |ui| {
                 let content = |ui: &mut egui::Ui| {
-                ui.horizontal(|ui| {
-                    ui.add(egui::Image::from_texture(&self.mark).fit_to_exact_size(egui::vec2(34., 34.)).tint(logo_tint()));
-                    ui.vertical(|ui| {
-                        ui.spacing_mut().item_spacing.y = 0.;
-                        ui.label(RichText::new("TracciaDoc").font(semibold(22.)));
-                        ui.label(RichText::new(format!("v{}", env!("CARGO_PKG_VERSION"))).small().weak());
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Image::from_texture(&self.mark)
+                                .fit_to_exact_size(egui::vec2(34., 34.))
+                                .tint(logo_tint()),
+                        );
+                        ui.vertical(|ui| {
+                            ui.spacing_mut().item_spacing.y = 0.;
+                            ui.label(RichText::new("TracciaDoc").font(semibold(22.)));
+                            ui.label(
+                                RichText::new(format!("v{}", env!("CARGO_PKG_VERSION")))
+                                    .small()
+                                    .weak(),
+                            );
+                        });
                     });
-                });
-                ui.add_space(14.);
-                ui.spacing_mut().item_spacing.y = 4.;
-                for (n, label) in [(1, "Aree"), (2, "Scansione"), (3, "Revisione"), (4, "Verifica finale")] {
-                    step_row(ui, n, label, active);
-                }
-                ui.add_space(14.);
-                if shown {
-                    ui.vertical_centered(|ui| {
-                        ring(ui, if ui.available_height() < 400. { 76. } else { 104. }, frac, &ring_text);
-                        ui.label(RichText::new(ring_label).size(14.).weak());
+                    ui.add_space(14.);
+                    ui.spacing_mut().item_spacing.y = 4.;
+                    for (n, label) in [
+                        (1, "Aree"),
+                        (2, "Scansione"),
+                        (3, "Revisione"),
+                        (4, "Verifica finale"),
+                    ] {
+                        step_row(ui, n, label, active);
+                    }
+                    ui.add_space(14.);
+                    if shown {
+                        ui.vertical_centered(|ui| {
+                            ring(
+                                ui,
+                                if ui.available_height() < 400. {
+                                    76.
+                                } else {
+                                    104.
+                                },
+                                frac,
+                                &ring_text,
+                            );
+                            ui.label(RichText::new(ring_label).size(14.).weak());
+                        });
+                        ui.add_space(2.);
+                        stat(ui, "File", files_text.clone());
+                        if running {
+                            stat(ui, "Velocita", rate_text.clone());
+                            stat(ui, "Tempo residuo", eta_text.clone());
+                        }
+                    }
+                    // Accelerazioni subito sotto le statistiche: grigie se inattive, verdi se usate nella scansione.
+                    ui.add_space(14.);
+                    ui.label(RichText::new("ACCELERAZIONI").size(11.5).color(c_dim()));
+                    let method = engine::cpu_method(self.settings.cpu_only);
+                    let items = [
+                        ("SSE4.2", running && (method == "avx2" || method == "sse")),
+                        ("AVX2", running && method == "avx2"),
+                        ("AVX-512", false),
+                        ("GPU", false),
+                        ("iGPU", false),
+                        ("NPU", false),
+                    ];
+                    egui::Grid::new("accel").spacing([6., 6.]).show(ui, |ui| {
+                        for (i, (name, on)) in items.into_iter().enumerate() {
+                            chip(ui, name, if on { c_accent() } else { c_dim() }, on);
+                            if i % 3 == 2 {
+                                ui.end_row();
+                            }
+                        }
                     });
-                    ui.add_space(2.);
-                    stat(ui, "File", files_text.clone());
-                    if running {
-                        stat(ui, "Velocita", rate_text.clone());
-                        stat(ui, "Tempo residuo", eta_text.clone());
-                    }
-                }
-                // Accelerazioni subito sotto le statistiche: grigie se inattive, verdi se usate nella scansione.
-                ui.add_space(14.);
-                ui.label(RichText::new("ACCELERAZIONI").size(11.5).color(c_dim()));
-                let method = engine::cpu_method(self.settings.cpu_only);
-                let items = [
-                    ("SSE4.2", running && (method == "avx2" || method == "sse")),
-                    ("AVX2", running && method == "avx2"),
-                    ("AVX-512", false),
-                    ("GPU", false),
-                    ("iGPU", false),
-                    ("NPU", false),
-                ];
-                egui::Grid::new("accel").spacing([6., 6.]).show(ui, |ui| {
-                    for (i, (name, on)) in items.into_iter().enumerate() {
-                        chip(ui, name, if on { c_accent() } else { c_dim() }, on);
-                        if i % 3 == 2 { ui.end_row(); }
-                    }
-                });
                 };
                 // Schermo basso o UI ingrandita: la barra scorre invece di tagliare le accelerazioni; la firma resta solo se c'e posto.
                 if short {
-                    egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| content(ui));
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| content(ui));
                 } else {
                     content(ui);
-                // Firma in basso.
-                ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
-                    if !short && ui.available_height() >= 28. {
-                        let ratio = self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
-                        ui.add(egui::Image::from_texture(&self.signature).fit_to_exact_size(egui::vec2(112., 112. * ratio)).tint(logo_tint())).on_hover_text("powered by realhcok");
-                        ui.label(RichText::new("powered by").size(12.).weak());
-                    }
-                });
+                    // Firma in basso.
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                        if !short && ui.available_height() >= 28. {
+                            let ratio =
+                                self.signature.size()[1] as f32 / self.signature.size()[0] as f32;
+                            ui.add(
+                                egui::Image::from_texture(&self.signature)
+                                    .fit_to_exact_size(egui::vec2(112., 112. * ratio))
+                                    .tint(logo_tint()),
+                            )
+                            .on_hover_text("powered by realhcok");
+                            ui.label(RichText::new("powered by").size(12.).weak());
+                        }
+                    });
                 }
             });
 
@@ -823,9 +1179,15 @@ impl eframe::App for App {
                                     }
                                     if run.finished {
                                         let btn = if resolved && run.deleted_count() == 0 || active == 4 { primary("Genera verbale PDF...", h) } else { egui::Button::new("Genera verbale PDF...").min_size(egui::vec2(0., h)) };
-                                        if ui.add(btn).clicked()
-                                            && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(format!("Verbale-TracciaDoc-{}.pdf",run.id)).save_file() {
-                                                match report::write(run,&path,self.include_paths,self.demo) {Ok(())=>{self.notice=format!("Verbale salvato: {}",diag::shown(&path));diag::ok(format!("Verbale PDF salvato: {}",diag::shown(&path)));let _=engine::audit(run,"pdf-export");},Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}}
+                                        if ui.add(btn).clicked() {
+                                            match crate::shared::genera_e_salva(run,self.include_paths,self.demo,None) {
+                                                Ok((pdf,esito))=>{let m=crate::shared::messaggio(&pdf,&esito);diag::ok(m.clone());self.notice=m;self.last_pdf=Some(pdf);let _=engine::audit(run,"pdf-export");},
+                                                Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}
+                                            }
+                                        }
+                                        if let Some(src)=self.last_pdf.clone() && ui.add(egui::Button::new("Salva una copia con nome...").min_size(egui::vec2(0., h))).clicked()
+                                            && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(src.file_name().map(|n|n.to_string_lossy().into_owned()).unwrap_or_default()).save_file() {
+                                                self.notice=match std::fs::copy(&src,&path) {Ok(_)=>format!("Copia salvata: {}",diag::shown(&path)),Err(e)=>format!("Copia non salvata: {e}")};
                                             }
                                     }
                                 });
@@ -1248,7 +1610,9 @@ impl eframe::App for App {
             self.shared.lock().unwrap().run = Some(run.clone());
         }
         if let Some(p) = rescan {
-            if let Some(run) = &run { self.roots = run.roots.clone(); }
+            if let Some(run) = &run {
+                self.roots = run.roots.clone();
+            }
             self.start(Some(p));
         }
     }

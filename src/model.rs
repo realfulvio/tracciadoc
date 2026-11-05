@@ -260,7 +260,10 @@ impl Run {
     pub fn incomplete(&self) -> bool {
         !self.finished
             || self.interrupted
-            || self.issues.keys().any(|k| !crate::parser::is_informational(k))
+            || self
+                .issues
+                .keys()
+                .any(|k| !crate::parser::is_informational(k))
     }
     pub fn outcome(&self) -> String {
         let result = if self.findings.is_empty() {
@@ -358,9 +361,7 @@ impl Run {
                 live.iter()
                     .filter(|f| f.review == Review::Discarded)
                     .count(),
-                live.iter()
-                    .filter(|f| f.review == Review::Pending)
-                    .count()
+                live.iter().filter(|f| f.review == Review::Pending).count()
             ));
         }
         out
@@ -390,7 +391,10 @@ mod tests {
                 ..Default::default()
             });
         }
-        assert_eq!(r.finding_summary()[0], "File con possibili copie di documenti: 3");
+        assert_eq!(
+            r.finding_summary()[0],
+            "File con possibili copie di documenti: 3"
+        );
         r.findings[0].deleted_at = "2026-10-29T12:00:00+02:00".into();
         let text = r.finding_summary().join("\n");
         assert!(text.contains("possibili copie di documenti: 2"));

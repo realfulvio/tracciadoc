@@ -459,6 +459,10 @@ pub fn run_scheduled() -> Result<(), String> {
         return Ok(());
     };
     low_priority();
+    // Gira come SYSTEM: toglie le copie .old rimaste da un aggiornamento con l'icona aperta.
+    if crate::install::running_installed() {
+        crate::install::cleanup_old();
+    }
     let cfg = load_config();
     let shutdown = cfg.plan.as_ref().is_some_and(|p| p.shutdown);
     let when = Local::now().format("%Y-%m-%d %H:%M").to_string();

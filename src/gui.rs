@@ -166,7 +166,7 @@ pub struct App {
     plan_msg: String,
     /// Comando eseguito come amministratore (UAC) in un thread: esito "OK ..."/"ERR ...".
     job: Option<Arc<Mutex<Option<String>>>>,
-    /// Arresta il PC al termine se la scansione è completa e senza documenti.
+    /// Arresta il PC al termine se la scansione non trova documenti (verbale salvato prima).
     shutdown_after: bool,
     shutdown_at: Option<Instant>,
     /// Tenuto durante la scansione: l'aggiornamento automatico aspetta.
@@ -599,9 +599,9 @@ impl App {
             return;
         }
         let Some(run) = self.shared.lock().unwrap().run.clone() else { return };
-        if run.interrupted || run.incomplete() || !run.findings.is_empty() {
-            self.notice = "Spegnimento non eseguito: la scansione ha trovato documenti o è incompleta. Rivedi i risultati.".into();
-            diag::warn("Spegnimento non eseguito: documenti trovati o scansione incompleta");
+        if run.interrupted || !run.findings.is_empty() {
+            self.notice = "Spegnimento non eseguito: la scansione ha trovato documenti o è stata interrotta. Rivedi i risultati.".into();
+            diag::warn("Spegnimento non eseguito: documenti trovati o scansione interrotta");
             return;
         }
         match sched::save_report(&run) {
@@ -777,7 +777,7 @@ impl App {
                 });
                 ui.add_space(4.);
                 ui.checkbox(&mut d.shutdown, RichText::new("Arresta il PC a fine scansione").font(semibold(16.)));
-                ui.label(RichText::new("Solo se la scansione è completa e il verbale è salvato. Avviso di 60 secondi, annullabile dall'icona; i programmi aperti non vengono chiusi a forza.").small().weak());
+                ui.label(RichText::new("Solo dopo aver salvato il verbale (anche se la verifica risulta incompleta), mai se la scansione viene interrotta. Avviso di 60 secondi, annullabile dall'icona; i programmi aperti non vengono chiusi a forza.").small().weak());
                 ui.label(RichText::new("Se il PC è spento all'orario, la scansione parte appena viene acceso. Parte anche senza utente collegato (account di sistema), a priorità bassa, su tutti i dischi fissi.").small().weak());
                 if let Err(e) = d.validate() {
                     ui.label(RichText::new(e).color(c_warn()));

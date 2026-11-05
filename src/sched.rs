@@ -522,10 +522,12 @@ pub fn run_scheduled() -> Result<(), String> {
         }
     };
     let entry = Entry { when, outcome: outcome.into(), findings: run.findings.len(), id: run.id.clone(), note };
-    let off = shutdown && report.is_ok() && complete;
+    // Su un PC reale la verifica risulta spesso incompleta (file di sistema illeggibili):
+    // si spegne lo stesso se il verbale è salvato, che dichiara l'incompletezza. Mai se interrotta.
+    let off = shutdown && report.is_ok() && !run.interrupted;
     record(entry, if off { chrono::Utc::now().timestamp() + SHUTDOWN_DELAY as i64 } else { 0 });
     if shutdown && !off {
-        diag::warn("Spegnimento non eseguito: scansione incompleta o verbale non salvato");
+        diag::warn("Spegnimento non eseguito: scansione interrotta o verbale non salvato");
     }
     if off {
         shutdown_after_countdown();

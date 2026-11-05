@@ -405,7 +405,13 @@ impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // Riprova in background i verbali rimasti solo in locale.
         std::thread::spawn(|| {
-            let _ = crate::shared::riprova_sospesi(&crate::shared::local_dir(), crate::shared::report_dir(None).as_deref());
+            let (ok, left) = crate::shared::riprova_sospesi(&crate::shared::local_dir(), crate::shared::report_dir(None).as_deref());
+            if ok > 0 {
+                diag::ok(format!("Verbali in sospeso consegnati alla cartella condivisa: {ok}"));
+            }
+            if left > 0 {
+                diag::warn(format!("Verbali ancora in sospeso (cartella condivisa non raggiungibile): {left}"));
+            }
         });
         // Tema scelto dall'app (scuro all'avvio): il tema di Windows non conta, i colori del testo sono sempre espliciti.
         let mut fonts = egui::FontDefinitions::default();
@@ -1182,7 +1188,7 @@ impl eframe::App for App {
                                         let btn = if resolved && run.deleted_count() == 0 || active == 4 { primary("Genera verbale PDF...", h) } else { egui::Button::new("Genera verbale PDF...").min_size(egui::vec2(0., h)) };
                                         if ui.add(btn).clicked() {
                                             match crate::shared::genera_e_salva(run,self.include_paths,self.demo,None) {
-                                                Ok((pdf,esito))=>{let m=crate::shared::messaggio(&pdf,&esito);diag::ok(m.clone());self.notice=m;self.last_pdf=Some(pdf);let _=engine::audit(run,"pdf-export");},
+                                                Ok((pdf,esito))=>{let m=crate::shared::messaggio(&pdf,&esito);if matches!(esito,crate::shared::Esito::SoloLocale(_)){diag::warn(m.clone())}else{diag::ok(m.clone())};self.notice=m;self.last_pdf=Some(pdf);let _=engine::audit(run,"pdf-export");},
                                                 Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}
                                             }
                                         }

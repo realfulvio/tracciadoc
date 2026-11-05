@@ -5,11 +5,16 @@ mod doc;
 mod engine;
 mod face;
 mod gui;
+mod install;
 mod model;
 mod open;
 mod parser;
 mod report;
 mod rules;
+mod sched;
+#[cfg(windows)]
+mod tray;
+mod update;
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex, atomic::AtomicBool},
@@ -20,6 +25,9 @@ fn main() {
     if args.get(1).is_some_and(|s| s == "--worker") {
         parser::worker();
         return;
+    }
+    if let Some(code) = automation(&args) {
+        std::process::exit(code);
     }
     // CLI intentionally requires --scan; never starts a scan from merely opening the EXE.
     if args.get(1).is_some_and(|s| s == "--scan") {
@@ -201,4 +209,52 @@ fn gui_run(renderer: eframe::Renderer) -> eframe::Result {
         native,
         Box::new(|cc| Ok(Box::new(gui::App::new(cc)))),
     )
+}
+
+/// Comandi senza finestra: installazione, pianificazione, aggiornamento, icona di notifica.
+/// None se l'argomento non è uno di questi (si prosegue con CLI o GUI).
+fn automation(args: &[String]) -> Option<i32> {
+    let arg = |name: &str| args.iter().any(|a| a == name);
+    let value = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).map(PathBuf::from);
+    let result: Result<String, String> = match args.get(1).map(String::as_str) {
+        Some("--version") => {
+            println!("{}", env!("CARGO_PKG_VERSION"));
+            return Some(0);
+        }
+        #[cfg(windows)]
+        Some("--tray") => tray::run().map(|_| String::new()),
+        Some("--scheduled") => sched::run_scheduled().map(|_| "Scansione pianificata conclusa".into()),
+        Some("--install") => install::install().map(|_| "Installazione completata".into()),
+        Some("--uninstall") => install::uninstall().map(|_| "Disinstallazione completata".into()),
+        Some("--update") => update::apply(arg("--auto")),
+        Some("--apply-config") => (|| {
+            let file = value("--apply-config").ok_or("Manca il file di configurazione")?;
+            let bytes = std::fs::read(&file).map_err(|e| format!("Configurazione non leggibile: {e}"))?;
+            let cfg: sched::Config = serde_json::from_slice(&bytes).map_err(|_| "Configurazione non valida")?;
+            if !install::is_admin() {
+                return Err("Serve l'amministratore".to_string());
+            }
+            if !install::is_installed() {
+                return Err("Installa prima TracciaDoc su questa postazione".to_string());
+            }
+            sched::apply_config(&cfg, &install::installed_exe()).map(|_| "Pianificazione salvata".to_string())
+        })(),
+        _ => return None,
+    };
+    if args.get(1).is_some_and(|a| a == "--update") {
+        sched::set_update_note(match &result { Ok(m) | Err(m) => m });
+    }
+    // L'esito torna alla GUI (che ha chiesto l'elevazione) tramite un file indicato da lei.
+    if let Some(path) = value("--result") {
+        let text = match &result { Ok(m) => format!("OK {m}"), Err(e) => format!("ERR {e}") };
+        let _ = std::fs::write(path, text);
+    }
+    match result {
+        Ok(_) => Some(0),
+        Err(e) => {
+            diag::err(&e);
+            eprintln!("{e}");
+            Some(1)
+        }
+    }
 }

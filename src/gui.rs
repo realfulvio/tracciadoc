@@ -638,6 +638,11 @@ impl App {
                 self.plan_msg = text.strip_prefix("OK ").map_or_else(|| text.strip_prefix("ERR ").unwrap_or(&text).to_string(), |m| format!("✓ {m}"));
                 if text.starts_with("OK") { diag::ok(&self.plan_msg) } else { diag::warn(&self.plan_msg) }
                 self.cfg = sched::load_config();
+                // Dopo l'installazione l'icona parte subito, senza attendere il prossimo accesso
+                // (non elevata: è questa GUI a lanciarla; un'istanza già attiva esce da sola).
+                if text.starts_with("OK") && install::is_installed() {
+                    let _ = std::process::Command::new(install::installed_exe()).arg("--tray").spawn();
+                }
             }
         }
     }

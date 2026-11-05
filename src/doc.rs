@@ -21,14 +21,10 @@ pub struct Doc {
 }
 
 fn u16_at(b: &[u8], o: usize) -> Option<u16> {
-    Some(u16::from_le_bytes(
-        b.get(o..o.checked_add(2)?)?.try_into().ok()?,
-    ))
+    Some(u16::from_le_bytes(b.get(o..o.checked_add(2)?)?.try_into().ok()?))
 }
 fn u32_at(b: &[u8], o: usize) -> Option<u32> {
-    Some(u32::from_le_bytes(
-        b.get(o..o.checked_add(4)?)?.try_into().ok()?,
-    ))
+    Some(u32::from_le_bytes(b.get(o..o.checked_add(4)?)?.try_into().ok()?))
 }
 
 struct Entry {
@@ -104,8 +100,7 @@ impl<'a> Cfb<'a> {
         }
         for id in fat_sectors {
             let s = me.sector_bytes(id).ok_or(BAD)?;
-            me.fat
-                .extend(s.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)));
+            me.fat.extend(s.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)));
         }
         let dir = me.chain(first_dir, None)?;
         for chunk in dir.as_chunks::<128>().0.iter().take(1 << 20) {
@@ -133,12 +128,7 @@ impl<'a> Cfb<'a> {
         let (root_start, root_size) = (root.start, root.size);
         if n_mini > 0 && first_mini < 0xFFFF_FFFA {
             let raw = me.chain(first_mini, None)?;
-            me.mini_fat = raw
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|c| u32::from_le_bytes(*c))
-                .collect();
+            me.mini_fat = raw.as_chunks::<4>().0.iter().map(|c| u32::from_le_bytes(*c)).collect();
         }
         if root_start < 0xFFFF_FFFA && root_size > 0 {
             me.mini_stream = me.chain(root_start, Some(root_size))?;
@@ -159,8 +149,7 @@ impl<'a> Cfb<'a> {
                 return Err("DOC: catena di settori non valida o troppo grande".into());
             }
             out.extend_from_slice(
-                self.sector_bytes(id)
-                    .ok_or("DOC: contenitore OLE corrotto o troncato")?,
+                self.sector_bytes(id).ok_or("DOC: contenitore OLE corrotto o troncato")?,
             );
             id = *self.fat.get(id as usize).unwrap_or(&END);
         }
@@ -179,9 +168,7 @@ impl<'a> Cfb<'a> {
             }
             let start = id as usize * 64;
             out.extend_from_slice(
-                self.mini_stream
-                    .get(start..start + 64)
-                    .ok_or("DOC: contenitore OLE corrotto o troncato")?,
+                self.mini_stream.get(start..start + 64).ok_or("DOC: contenitore OLE corrotto o troncato")?,
             );
             id = *self.mini_fat.get(id as usize).unwrap_or(&END);
         }
@@ -206,29 +193,20 @@ impl<'a> Cfb<'a> {
         found
     }
     fn stream(&self, name: &str) -> Option<Result<Vec<u8>, String>> {
-        let e = self
-            .root_children()
-            .into_iter()
-            .find(|e| e.kind == 2 && e.name == name)?;
+        let e = self.root_children().into_iter().find(|e| e.kind == 2 && e.name == name)?;
         if e.size > MAX_STREAM as u64 {
             return Some(Err("DOC: flusso troppo grande".into()));
         }
-        Some(if e.size < self.mini_cutoff {
-            self.mini_chain(e.start, e.size)
-        } else {
-            self.chain(e.start, Some(e.size))
-        })
+        Some(if e.size < self.mini_cutoff { self.mini_chain(e.start, e.size) } else { self.chain(e.start, Some(e.size)) })
     }
     fn has_storage(&self, name: &str) -> bool {
-        self.root_children()
-            .into_iter()
-            .any(|e| e.kind == 1 && e.name == name)
+        self.root_children().into_iter().any(|e| e.kind == 1 && e.name == name)
     }
 }
 
 const CP1252_HIGH: [char; 32] = [
-    '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}',
-    '\u{90}', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
+    '€', '\u{81}', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '\u{8d}', 'Ž', '\u{8f}', '\u{90}', '‘', '’',
+    '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u{9d}', 'ž', 'Ÿ',
 ];
 
 fn push_char(text: &mut String, c: char) {
@@ -242,22 +220,11 @@ fn push_char(text: &mut String, c: char) {
 }
 fn push_cp1252(text: &mut String, bytes: &[u8]) {
     for &b in bytes {
-        push_char(
-            text,
-            if (0x80..0xA0).contains(&b) {
-                CP1252_HIGH[(b - 0x80) as usize]
-            } else {
-                b as char
-            },
-        );
+        push_char(text, if (0x80..0xA0).contains(&b) { CP1252_HIGH[(b - 0x80) as usize] } else { b as char });
     }
 }
 fn push_utf16(text: &mut String, bytes: &[u8]) {
-    let units = bytes
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|c| u16::from_le_bytes(*c));
+    let units = bytes.as_chunks::<2>().0.iter().map(|c| u16::from_le_bytes(*c));
     for c in char::decode_utf16(units) {
         push_char(text, c.unwrap_or('\u{fffd}'));
     }
@@ -302,11 +269,7 @@ fn word_text(wd: &[u8], table: &[u8], issues: &mut Vec<String>) -> Result<String
         let compressed = fc & 0x4000_0000 != 0;
         let fc = (fc & 0x3FFF_FFFF) as usize;
         let len = cp1.saturating_sub(cp0);
-        let (off, bytes) = if compressed {
-            (fc / 2, len)
-        } else {
-            (fc, len.saturating_mul(2))
-        };
+        let (off, bytes) = if compressed { (fc / 2, len) } else { (fc, len.saturating_mul(2)) };
         let Some(raw) = off.checked_add(bytes).and_then(|end| wd.get(off..end)) else {
             truncated = true;
             continue;
@@ -330,10 +293,7 @@ fn word_text(wd: &[u8], table: &[u8], issues: &mut Vec<String>) -> Result<String
 /// Word 6/95: testo a 8 bit contiguo fra fcMin e fcMac.
 fn word6_text(wd: &[u8]) -> Result<String, String> {
     const BAD: &str = "DOC: struttura Word non valida";
-    let (min, mac) = (
-        u32_at(wd, 0x18).ok_or(BAD)? as usize,
-        u32_at(wd, 0x1C).ok_or(BAD)? as usize,
-    );
+    let (min, mac) = (u32_at(wd, 0x18).ok_or(BAD)? as usize, u32_at(wd, 0x1C).ok_or(BAD)? as usize);
     let raw = wd.get(min..mac.min(min + MAX_TEXT)).ok_or(BAD)?;
     let mut text = String::new();
     push_cp1252(&mut text, raw);
@@ -350,20 +310,8 @@ fn dib_to_bmp(dib: &[u8]) -> Option<Vec<u8>> {
         let bits = u16_at(dib, 14)?;
         let compression = u32_at(dib, 16)?;
         let used = u32_at(dib, 32)? as usize;
-        let colors = if used > 0 {
-            used
-        } else if bits <= 8 {
-            1usize << bits
-        } else {
-            0
-        };
-        let masks = if h == 40 && compression == 3 {
-            12
-        } else if h == 40 && compression == 6 {
-            16
-        } else {
-            0
-        };
+        let colors = if used > 0 { used } else if bits <= 8 { 1usize << bits } else { 0 };
+        let masks = if h == 40 && compression == 3 { 12 } else if h == 40 && compression == 6 { 16 } else { 0 };
         colors.checked_mul(4)?.checked_add(masks)?
     } else {
         return None;
@@ -399,24 +347,12 @@ fn scan_blips(buf: &[u8], images: &mut Vec<Vec<u8>>, seen: &mut HashSet<u64>, me
         let body = &buf[i + 8..i + 8 + len];
         let payload = |uids: usize| body.get(16 * uids + 1..);
         let image: Option<Vec<u8>> = match (ty, inst) {
-            (0xF01D | 0xF02A, 0x46A | 0x6E2) => payload(1)
-                .filter(|d| d.starts_with(&[0xFF, 0xD8]))
-                .map(<[u8]>::to_vec),
-            (0xF01D | 0xF02A, 0x46B | 0x6E3) => payload(2)
-                .filter(|d| d.starts_with(&[0xFF, 0xD8]))
-                .map(<[u8]>::to_vec),
-            (0xF01E, 0x6E0) => payload(1)
-                .filter(|d| d.starts_with(&[0x89, b'P', b'N', b'G']))
-                .map(<[u8]>::to_vec),
-            (0xF01E, 0x6E1) => payload(2)
-                .filter(|d| d.starts_with(&[0x89, b'P', b'N', b'G']))
-                .map(<[u8]>::to_vec),
-            (0xF029, 0x6E4) => payload(1)
-                .filter(|d| d.starts_with(b"II*\0") || d.starts_with(b"MM\0*"))
-                .map(<[u8]>::to_vec),
-            (0xF029, 0x6E5) => payload(2)
-                .filter(|d| d.starts_with(b"II*\0") || d.starts_with(b"MM\0*"))
-                .map(<[u8]>::to_vec),
+            (0xF01D | 0xF02A, 0x46A | 0x6E2) => payload(1).filter(|d| d.starts_with(&[0xFF, 0xD8])).map(<[u8]>::to_vec),
+            (0xF01D | 0xF02A, 0x46B | 0x6E3) => payload(2).filter(|d| d.starts_with(&[0xFF, 0xD8])).map(<[u8]>::to_vec),
+            (0xF01E, 0x6E0) => payload(1).filter(|d| d.starts_with(&[0x89, b'P', b'N', b'G'])).map(<[u8]>::to_vec),
+            (0xF01E, 0x6E1) => payload(2).filter(|d| d.starts_with(&[0x89, b'P', b'N', b'G'])).map(<[u8]>::to_vec),
+            (0xF029, 0x6E4) => payload(1).filter(|d| d.starts_with(b"II*\0") || d.starts_with(b"MM\0*")).map(<[u8]>::to_vec),
+            (0xF029, 0x6E5) => payload(2).filter(|d| d.starts_with(b"II*\0") || d.starts_with(b"MM\0*")).map(<[u8]>::to_vec),
             (0xF01F, 0x7A8) => payload(1).and_then(dib_to_bmp),
             (0xF01F, 0x7A9) => payload(2).and_then(dib_to_bmp),
             (0xF01A, 0x3D4 | 0x3D5) | (0xF01B, 0x216 | 0x217) | (0xF01C, 0x542 | 0x543) => {
@@ -458,11 +394,7 @@ pub fn read(data: &[u8]) -> Result<Doc, String> {
     let text = if nfib < 0x00C1 {
         word6_text(&wd)?
     } else {
-        let name = if flags & 0x0200 != 0 {
-            "1Table"
-        } else {
-            "0Table"
-        };
+        let name = if flags & 0x0200 != 0 { "1Table" } else { "0Table" };
         let table = cfb.stream(name).ok_or("DOC: flusso Table assente")??;
         word_text(&wd, &table, &mut issues)?
     };
@@ -479,11 +411,7 @@ pub fn read(data: &[u8]) -> Result<Doc, String> {
     if cfb.has_storage("ObjectPool") || cfb.has_storage("Macros") {
         issues.push("DOC: oggetti OLE o macro non analizzati".into());
     }
-    Ok(Doc {
-        text,
-        images,
-        issues,
-    })
+    Ok(Doc { text, images, issues })
 }
 
 #[cfg(test)]
@@ -503,10 +431,7 @@ mod tests {
         let d = read(IMMAGINE).unwrap();
         assert!(d.text.contains("Nota ordinaria"), "{}", d.text);
         assert_eq!(d.images.len(), 1);
-        assert!(
-            d.images[0].starts_with(&[0x89, b'P', b'N', b'G'])
-                || d.images[0].starts_with(&[0xFF, 0xD8])
-        );
+        assert!(d.images[0].starts_with(&[0x89, b'P', b'N', b'G']) || d.images[0].starts_with(&[0xFF, 0xD8]));
     }
     #[test]
     fn file_troncati_o_alterati_non_vanno_in_panico() {

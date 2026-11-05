@@ -72,8 +72,7 @@ impl Ocr {
             let free = *lib
                 .get(b"TessDeleteText\0")
                 .map_err(|_| "OCR: API assente")?;
-            let mean_conf: Option<MeanConf> =
-                lib.get(b"TessBaseAPIMeanTextConf\0").ok().map(|s| *s);
+            let mean_conf: Option<MeanConf> = lib.get(b"TessBaseAPIMeanTextConf\0").ok().map(|s| *s);
             let seg_mode = match (
                 lib.get::<SetPageSegMode>(b"TessBaseAPISetPageSegMode\0"),
                 lib.get::<GetPageSegMode>(b"TessBaseAPIGetPageSegMode\0"),
@@ -115,8 +114,7 @@ impl Ocr {
                 CStr::from_ptr(method).to_string_lossy().into_owned()
             };
             let osd = (|| {
-                let detect: DetectOrientation =
-                    *lib.get(b"TessBaseAPIDetectOrientationScript\0").ok()?;
+                let detect: DetectOrientation = *lib.get(b"TessBaseAPIDetectOrientationScript\0").ok()?;
                 let api = create();
                 if api.is_null() {
                     return None;
@@ -130,11 +128,7 @@ impl Ocr {
             })();
             let backend = format!(
                 "CPU / Tesseract 5.5.3 LSTM ita; dotproduct effettivo: {method}; orientamento: {}; nessuna GPU",
-                if osd.is_some() {
-                    "lettura dritta, poi OSD e rotazioni se incerta"
-                } else {
-                    "lettura dritta, poi 4 rotazioni"
-                }
+                if osd.is_some() { "lettura dritta, poi OSD e rotazioni se incerta" } else { "lettura dritta, poi 4 rotazioni" }
             );
             Ok(Self {
                 _lib: lib,
@@ -173,8 +167,7 @@ impl Ocr {
                 3,
                 (rgb.width() * 3) as i32,
             );
-            let (mut deg, mut conf, mut script, mut script_conf) =
-                (0, 0f32, std::ptr::null(), 0f32);
+            let (mut deg, mut conf, mut script, mut script_conf) = (0, 0f32, std::ptr::null(), 0f32);
             if detect(api, &mut deg, &mut conf, &mut script, &mut script_conf) == 0 {
                 return None;
             }
@@ -265,18 +258,7 @@ fn unrecognized(ext: &str, head: &[u8]) -> &'static str {
         OLE
     } else if ["heic", "heif"].contains(&ext)
         || (head.get(4..8) == Some(b"ftyp")
-            && head.get(8..12).is_some_and(|b| {
-                [
-                    &b"heic"[..],
-                    b"heix",
-                    b"mif1",
-                    b"msf1",
-                    b"heim",
-                    b"heis",
-                    b"hevc",
-                ]
-                .contains(&b)
-            }))
+            && head.get(8..12).is_some_and(|b| [&b"heic"[..], b"heix", b"mif1", b"msf1", b"heim", b"heis", b"hevc"].contains(&b)))
     {
         HEIF
     } else {
@@ -332,8 +314,7 @@ pub fn is_informational(note: &str) -> bool {
         || note == "Office: risorse esterne non aperte"
 }
 
-pub const PREFILTERED: &str =
-    "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
+pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
 
 /// Cheap pre-OCR check on the image reduced to 1024 px, split into an 8x8 grid: a zone is
 /// text-like when at least 2% of its pixels are sharp contrast edges like printed strokes.
@@ -372,27 +353,10 @@ pub fn text_region(img: &DynamicImage) -> Option<(u32, u32, u32, u32)> {
     if x1 == 0 {
         return None;
     }
-    let (x0, y0, x1, y1) = (
-        x0.saturating_sub(1),
-        y0.saturating_sub(1),
-        (x1 + 1).min(T),
-        (y1 + 1).min(T),
-    );
+    let (x0, y0, x1, y1) = (x0.saturating_sub(1), y0.saturating_sub(1), (x1 + 1).min(T), (y1 + 1).min(T));
     // Zones map back proportionally; the last zone absorbs rounding up to the full size.
-    let sx = |t: u32| {
-        if t == T {
-            iw
-        } else {
-            ((t * tw) as u64 * iw as u64 / w as u64) as u32
-        }
-    };
-    let sy = |t: u32| {
-        if t == T {
-            ih
-        } else {
-            ((t * th) as u64 * ih as u64 / h as u64) as u32
-        }
-    };
+    let sx = |t: u32| if t == T { iw } else { ((t * tw) as u64 * iw as u64 / w as u64) as u32 };
+    let sy = |t: u32| if t == T { ih } else { ((t * th) as u64 * ih as u64 / h as u64) as u32 };
     Some((sx(x0), sy(y0), sx(x1), sy(y1)))
 }
 
@@ -427,15 +391,7 @@ pub fn split_blocks(img: &DynamicImage) -> Vec<(u32, u32, u32, u32)> {
         }
         out
     }
-    fn split(
-        g: &image::GrayImage,
-        x0: u32,
-        y0: u32,
-        x1: u32,
-        y1: u32,
-        depth: u32,
-        out: &mut Vec<(u32, u32, u32, u32)>,
-    ) {
+    fn split(g: &image::GrayImage, x0: u32, y0: u32, x1: u32, y1: u32, depth: u32, out: &mut Vec<(u32, u32, u32, u32)>) {
         let (w, h) = (x1 - x0, y1 - y0);
         let dark = |x: u32, y: u32| g.get_pixel(x, y)[0] < 200;
         let rows: Vec<bool> = (y0..y1)
@@ -472,20 +428,8 @@ pub fn split_blocks(img: &DynamicImage) -> Vec<(u32, u32, u32, u32)> {
     if blocks.len() < 2 {
         return vec![];
     }
-    let sx = |v: u32| {
-        if v == w {
-            iw
-        } else {
-            (v as u64 * iw as u64 / w as u64) as u32
-        }
-    };
-    let sy = |v: u32| {
-        if v == h {
-            ih
-        } else {
-            (v as u64 * ih as u64 / h as u64) as u32
-        }
-    };
+    let sx = |v: u32| if v == w { iw } else { (v as u64 * iw as u64 / w as u64) as u32 };
+    let sy = |v: u32| if v == h { ih } else { (v as u64 * ih as u64 / h as u64) as u32 };
     blocks
         .into_iter()
         .map(|(x0, y0, x1, y1)| (sx(x0), sy(y0), sx(x1), sy(y1)))
@@ -504,9 +448,7 @@ pub fn pdf_dpi() -> u32 {
 }
 pub const GIF_FIRST: &str = "GIF: solo primo fotogramma";
 /// One TIFF page as an image for the OCR, None when its layout is not converted here.
-fn tiff_page<R: std::io::Read + std::io::Seek>(
-    d: &mut tiff::decoder::Decoder<R>,
-) -> Option<DynamicImage> {
+fn tiff_page<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>) -> Option<DynamicImage> {
     use image::{ImageBuffer, Luma, LumaA, Rgb, Rgba};
     use tiff::{ColorType as C, decoder::DecodingResult as D};
     let (w, h) = d.dimensions().ok()?;
@@ -517,42 +459,26 @@ fn tiff_page<R: std::io::Read + std::io::Seek>(
     let data = d.read_image().ok()?;
     let n = (w as usize).checked_mul(h as usize)?;
     Some(match (color, data) {
-        (C::Gray(8), D::U8(v)) => {
-            DynamicImage::ImageLuma8(ImageBuffer::<Luma<u8>, _>::from_raw(w, h, v)?)
-        }
-        (C::Gray(16), D::U16(v)) => {
-            DynamicImage::ImageLuma16(ImageBuffer::<Luma<u16>, _>::from_raw(w, h, v)?)
-        }
-        (C::GrayA(8), D::U8(v)) => {
-            DynamicImage::ImageLumaA8(ImageBuffer::<LumaA<u8>, _>::from_raw(w, h, v)?)
-        }
-        (C::RGB(8), D::U8(v)) => {
-            DynamicImage::ImageRgb8(ImageBuffer::<Rgb<u8>, _>::from_raw(w, h, v)?)
-        }
-        (C::RGB(16), D::U16(v)) => {
-            DynamicImage::ImageRgb16(ImageBuffer::<Rgb<u16>, _>::from_raw(w, h, v)?)
-        }
-        (C::RGBA(8), D::U8(v)) => {
-            DynamicImage::ImageRgba8(ImageBuffer::<Rgba<u8>, _>::from_raw(w, h, v)?)
-        }
-        (C::RGBA(16), D::U16(v)) => {
-            DynamicImage::ImageRgba16(ImageBuffer::<Rgba<u16>, _>::from_raw(w, h, v)?)
-        }
-        (C::CMYK(8), D::U8(v)) if v.len() >= n * 4 => {
-            DynamicImage::ImageRgb8(ImageBuffer::from_raw(
-                w,
-                h,
-                v.as_chunks::<4>()
-                    .0
-                    .iter()
-                    .take(n)
-                    .flat_map(|p| {
-                        let k = 255 - p[3] as u16;
-                        [0, 1, 2].map(|i| ((255 - p[i] as u16) * k / 255) as u8)
-                    })
-                    .collect(),
-            )?)
-        }
+        (C::Gray(8), D::U8(v)) => DynamicImage::ImageLuma8(ImageBuffer::<Luma<u8>, _>::from_raw(w, h, v)?),
+        (C::Gray(16), D::U16(v)) => DynamicImage::ImageLuma16(ImageBuffer::<Luma<u16>, _>::from_raw(w, h, v)?),
+        (C::GrayA(8), D::U8(v)) => DynamicImage::ImageLumaA8(ImageBuffer::<LumaA<u8>, _>::from_raw(w, h, v)?),
+        (C::RGB(8), D::U8(v)) => DynamicImage::ImageRgb8(ImageBuffer::<Rgb<u8>, _>::from_raw(w, h, v)?),
+        (C::RGB(16), D::U16(v)) => DynamicImage::ImageRgb16(ImageBuffer::<Rgb<u16>, _>::from_raw(w, h, v)?),
+        (C::RGBA(8), D::U8(v)) => DynamicImage::ImageRgba8(ImageBuffer::<Rgba<u8>, _>::from_raw(w, h, v)?),
+        (C::RGBA(16), D::U16(v)) => DynamicImage::ImageRgba16(ImageBuffer::<Rgba<u16>, _>::from_raw(w, h, v)?),
+        (C::CMYK(8), D::U8(v)) if v.len() >= n * 4 => DynamicImage::ImageRgb8(ImageBuffer::from_raw(
+            w,
+            h,
+            v.as_chunks::<4>()
+                .0
+                .iter()
+                .take(n)
+                .flat_map(|p| {
+                    let k = 255 - p[3] as u16;
+                    [0, 1, 2].map(|i| ((255 - p[i] as u16) * k / 255) as u8)
+                })
+                .collect(),
+        )?),
         // Bilevel and 2/4-bit gray: packed rows, 0 = black after the decoder's WhiteIsZero fix.
         (C::Gray(bits @ (1 | 2 | 4)), D::U8(v)) => {
             let bits = bits as usize;
@@ -787,8 +713,8 @@ impl Parser {
     fn tiff(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) {
         let mut limits = tiff::decoder::Limits::default();
         limits.decoding_buffer_size = 128 * 1024 * 1024;
-        let decoder =
-            tiff::decoder::Decoder::new(std::io::Cursor::new(bytes)).map(|d| d.with_limits(limits));
+        let decoder = tiff::decoder::Decoder::new(std::io::Cursor::new(bytes))
+            .map(|d| d.with_limits(limits));
         let Ok(mut decoder) = decoder else {
             self.image_bytes(bytes, a, req);
             return;
@@ -1174,10 +1100,7 @@ mod tests {
     fn unrecognized_content_of_wanted_formats_is_not_ignored() {
         assert_eq!(unrecognized("dat", b"garbage"), UNSUPPORTED);
         assert_eq!(unrecognized("jpg", b""), UNSUPPORTED);
-        assert_eq!(
-            unrecognized("docx", &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0]),
-            OLE
-        );
+        assert_eq!(unrecognized("docx", &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0]), OLE);
         assert_eq!(unrecognized("jpg", b"\0\0\0\x18ftypheic\0\0"), HEIF);
         assert_eq!(unrecognized("heic", b"anything"), HEIF);
         assert_eq!(unrecognized("pdf", b"random bytes"), MISMATCH);
@@ -1190,10 +1113,7 @@ mod tests {
         enc.write_image::<Gray8>(4, 2, &[0u8; 8]).unwrap();
         enc.write_image::<Gray8>(3, 5, &[200u8; 15]).unwrap();
         let mut d = tiff::decoder::Decoder::new(std::io::Cursor::new(buf.into_inner())).unwrap();
-        assert_eq!(
-            tiff_page(&mut d).map(|i| (i.width(), i.height())),
-            Some((4, 2))
-        );
+        assert_eq!(tiff_page(&mut d).map(|i| (i.width(), i.height())), Some((4, 2)));
         assert!(d.more_images());
         d.next_image().unwrap();
         let second = tiff_page(&mut d).unwrap();

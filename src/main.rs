@@ -131,17 +131,9 @@ fn main() {
             )
             .map_err(|_| "Riepilogo non scrivibile")?;
             // Consegna alla cartella condivisa (se configurata); in caso di errore il verbale resta dove e.
-            let cli_dir = args
-                .iter()
-                .position(|s| s == "--report-dir")
-                .and_then(|i| args.get(i + 1))
-                .map(String::as_str);
+            let cli_dir = args.iter().position(|s| s == "--report-dir").and_then(|i| args.get(i + 1)).map(String::as_str);
             match shared::salva_su_condivisa(&output, shared::report_dir(cli_dir).as_deref()) {
-                shared::Esito::SoloLocale(e) => {
-                    return Err(format!(
-                        "Verbale creato ma non consegnato alla cartella condivisa: {e}"
-                    ));
-                }
+                shared::Esito::SoloLocale(e) => Err(format!("Verbale creato ma non consegnato alla cartella condivisa: {e}")),
                 _ => Ok(()),
             }
         })();

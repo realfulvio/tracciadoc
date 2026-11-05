@@ -72,12 +72,7 @@ pub fn faces(img: &DynamicImage) -> Result<Vec<Face>, String> {
     };
     let mut found: Vec<Face> = vec![];
     for (level, stride) in [8usize, 16, 32].into_iter().enumerate() {
-        let (cls, obj, bbox, kps) = (
-            get(level)?,
-            get(3 + level)?,
-            get(6 + level)?,
-            get(9 + level)?,
-        );
+        let (cls, obj, bbox, kps) = (get(level)?, get(3 + level)?, get(6 + level)?, get(9 + level)?);
         let n = SIDE / stride;
         let at = |a: &tract_ndarray::ArrayViewD<'_, f32>, k: usize, j: usize| a[[0, k, j]];
         for k in 0..n * n {
@@ -89,12 +84,7 @@ pub fn faces(img: &DynamicImage) -> Result<Vec<Face>, String> {
             let s = stride as f32;
             let (cx, cy) = ((col + at(&bbox, k, 0)) * s, (row + at(&bbox, k, 1)) * s);
             let (w, h) = (at(&bbox, k, 2).exp() * s, at(&bbox, k, 3).exp() * s);
-            let pt = |i: usize| {
-                (
-                    (col + at(&kps, k, 2 * i)) * s / scale,
-                    (row + at(&kps, k, 2 * i + 1)) * s / scale,
-                )
-            };
+            let pt = |i: usize| ((col + at(&kps, k, 2 * i)) * s / scale, (row + at(&kps, k, 2 * i + 1)) * s / scale);
             found.push(Face {
                 score,
                 x: (cx - w / 2.) / scale,
@@ -183,13 +173,9 @@ pub fn judge(img: &DynamicImage, faces: &[Face]) -> Option<String> {
         return None;
     }
     if uniform_background(img) {
-        Some(format!(
-            "{CLASS} ritratto frontale unico su sfondo uniforme (probabile)"
-        ))
+        Some(format!("{CLASS} ritratto frontale unico su sfondo uniforme (probabile)"))
     } else if size >= 0.45 {
-        Some(format!(
-            "{CLASS} ritratto frontale molto ravvicinato, sfondo non uniforme (possibile)"
-        ))
+        Some(format!("{CLASS} ritratto frontale molto ravvicinato, sfondo non uniforme (possibile)"))
     } else {
         None
     }
@@ -236,11 +222,7 @@ mod tests {
         if noisy {
             // Fondo d'ambiente: strisce di colori diversi.
             for i in 0..14u32 {
-                let c = [
-                    (40 + i * 15) as u8,
-                    (200 - i * 9) as u8,
-                    (90 + (i % 3) * 50) as u8,
-                ];
+                let c = [(40 + i * 15) as u8, (200 - i * 9) as u8, (90 + (i % 3) * 50) as u8];
                 fill(&mut im, 0, i * 32, 70, i * 32 + 32, c);
                 fill(&mut im, w - 70, i * 32, w, i * 32 + 32, [c[2], c[0], c[1]]);
             }
@@ -248,49 +230,18 @@ mod tests {
         let (skin, hair) = ([224, 172, 140], [60, 40, 30]);
         let cx = w as f32 / 2.;
         ellipse(&mut im, cx, h as f32 * 1.05, 150., 150., [40, 60, 110]);
-        fill(
-            &mut im,
-            (cx - 30.) as u32,
-            (h as f32 * 0.55) as u32,
-            (cx + 30.) as u32,
-            (h as f32 * 0.75) as u32,
-            skin,
-        );
+        fill(&mut im, (cx - 30.) as u32, (h as f32 * 0.55) as u32, (cx + 30.) as u32, (h as f32 * 0.75) as u32, skin);
         ellipse(&mut im, cx, h as f32 * 0.39, 62., h as f32 * 0.21, skin);
         ellipse(&mut im, cx, h as f32 * 0.25, 64., h as f32 * 0.09, hair);
         for dx in [-28., 28.] {
             ellipse(&mut im, cx + dx, h as f32 * 0.36, 14., 8., [255, 255, 255]);
             ellipse(&mut im, cx + dx, h as f32 * 0.36, 6., 6., [50, 30, 20]);
-            fill(
-                &mut im,
-                (cx + dx - 18.) as u32,
-                (h as f32 * 0.31) as u32,
-                (cx + dx + 18.) as u32,
-                (h as f32 * 0.31) as u32 + 5,
-                hair,
-            );
+            fill(&mut im, (cx + dx - 18.) as u32, (h as f32 * 0.31) as u32, (cx + dx + 18.) as u32, (h as f32 * 0.31) as u32 + 5, hair);
         }
-        fill(
-            &mut im,
-            cx as u32 - 3,
-            (h as f32 * 0.38) as u32,
-            cx as u32 + 3,
-            (h as f32 * 0.48) as u32,
-            [190, 140, 110],
-        );
-        fill(
-            &mut im,
-            cx as u32 - 22,
-            (h as f32 * 0.52) as u32,
-            cx as u32 + 22,
-            (h as f32 * 0.52) as u32 + 5,
-            [160, 60, 60],
-        );
+        fill(&mut im, cx as u32 - 3, (h as f32 * 0.38) as u32, cx as u32 + 3, (h as f32 * 0.48) as u32, [190, 140, 110]);
+        fill(&mut im, cx as u32 - 22, (h as f32 * 0.52) as u32, cx as u32 + 22, (h as f32 * 0.52) as u32 + 5, [160, 60, 60]);
         // Come una foto: bordi morbidi.
-        DynamicImage::ImageRgba8(image::imageops::blur(
-            &DynamicImage::ImageRgb8(im).to_rgba8(),
-            1.5,
-        ))
+        DynamicImage::ImageRgba8(image::imageops::blur(&DynamicImage::ImageRgb8(im).to_rgba8(), 1.5))
     }
 
     #[test]
@@ -306,10 +257,7 @@ mod tests {
         let f = faces(&img).unwrap();
         assert_eq!(f.len(), 1, "{f:?}");
         let reason = judge(&img, &f).expect("fototessera");
-        assert!(
-            reason.starts_with(CLASS) && reason.contains("probabile"),
-            "{reason}"
-        );
+        assert!(reason.starts_with(CLASS) && reason.contains("probabile"), "{reason}");
     }
 
     #[test]
@@ -368,17 +316,10 @@ mod tests {
     /// TRACCIADOC_FACE_SAMPLE=percorso cargo test face_sample -- --nocapture
     #[test]
     fn face_sample() {
-        let Ok(path) = std::env::var("TRACCIADOC_FACE_SAMPLE") else {
-            return;
-        };
+        let Ok(path) = std::env::var("TRACCIADOC_FACE_SAMPLE") else { return };
         let img = image::open(path).unwrap();
         let t = std::time::Instant::now();
         let f = faces(&img).unwrap();
-        println!(
-            "volti {} in {:?}; giudizio: {:?}",
-            f.len(),
-            t.elapsed(),
-            judge(&img, &f)
-        );
+        println!("volti {} in {:?}; giudizio: {:?}", f.len(), t.elapsed(), judge(&img, &f));
     }
 }

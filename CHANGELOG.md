@@ -1,6 +1,6 @@
 # Changelog
 
-## Non rilasciato
+## 0.5.1 - 2026-11-06
 
 Aggiornamento delle dipendenze per gli avvisi di sicurezza RustSec. Nessun cambiamento di funzione.
 

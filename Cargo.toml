@@ -17,15 +17,15 @@ serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 walkdir = "2"
 regex = "1"
-zip = { version = "7", default-features = false, features = ["deflate"] }
-quick-xml = "0.39"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+quick-xml = "0.42"
 tiff = "0.11"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "bmp", "gif", "webp"] }
 pdfium-render = { version = "0.8", default-features = false, features = ["pdfium_latest", "image_025"] }
 libloading = "0.9"
 tempfile = "3"
 sha2 = "0.10"
-tract-onnx = "0.21"
+tract-onnx = "0.23"
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem", "Win32_System_Threading", "Win32_System_JobObjects", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_Foundation", "Win32_System_DataExchange", "Win32_System_Memory", "Win32_Security", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_System_Registry"] }
 
 [build-dependencies]

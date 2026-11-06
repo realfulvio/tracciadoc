@@ -825,7 +825,11 @@ impl Parser {
             let mut f = zip
                 .by_index(i)
                 .map_err(|_| "Office: parte cifrata o illeggibile")?;
-            let name = f.name().to_owned();
+            // zip 9: `name()` puo fallire sulla decodifica; si ripiega sui byte grezzi.
+            let name = f
+                .name()
+                .map(|n| n.into_owned())
+                .unwrap_or_else(|_| String::from_utf8_lossy(f.name_raw()).into_owned());
             if name.starts_with("word/")
                 || name.starts_with("xl/")
                 || name.starts_with("ppt/")
@@ -870,12 +874,10 @@ impl Parser {
                 loop {
                     match reader.read_event() {
                         Ok(quick_xml::events::Event::Text(t)) => {
-                            text.push_str(&t.decode().map_err(|_| "Office: testo XML non valido")?);
+                            text.push_str(&t.xml10_content());
                         }
                         Ok(quick_xml::events::Event::GeneralRef(r)) => {
-                            let name = r
-                                .decode()
-                                .map_err(|_| "Office: riferimento XML non valido")?;
+                            let name = r.xml10_content();
                             let character = match name.as_ref() {
                                 "apos" => Some('\''),
                                 "quot" => Some('"'),
@@ -894,7 +896,7 @@ impl Parser {
                         }
                         Ok(quick_xml::events::Event::End(e)) => {
                             let local = e.local_name();
-                            if [b"p".as_slice(), b"si", b"row", b"c"].contains(&local.as_ref()) {
+                            if ["p", "si", "row", "c"].contains(&local.as_ref()) {
                                 text.push('\n');
                             }
                         }

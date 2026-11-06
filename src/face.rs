@@ -17,7 +17,7 @@ const NMS_IOU: f32 = 0.3;
 /// Prefisso comune dei motivi: la GUI e il verbale riconoscono la classe da qui.
 pub const CLASS: &str = "Fototessera:";
 
-type Plan = TypedRunnableModel<TypedModel>;
+type Plan = Arc<TypedRunnableModel>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Face {
@@ -68,7 +68,7 @@ pub fn faces(img: &DynamicImage) -> Result<Vec<Face>, String> {
         .run(tvec!(Tensor::from(input).into()))
         .map_err(|e| format!("Rilevamento volti non riuscito: {e}"))?;
     let get = |i: usize| -> Result<tract_ndarray::ArrayViewD<'_, f32>, String> {
-        out[i].to_array_view::<f32>().map_err(|e| e.to_string())
+        out[i].to_plain_array_view::<f32>().map_err(|e| e.to_string())
     };
     let mut found: Vec<Face> = vec![];
     for (level, stride) in [8usize, 16, 32].into_iter().enumerate() {

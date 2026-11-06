@@ -1,5 +1,15 @@
 # Changelog
 
+## Non rilasciato
+
+Aggiornamento delle dipendenze per gli avvisi di sicurezza RustSec. Nessun cambiamento di funzione.
+
+- `zip` 7.4 → 9.4 (RUSTSEC-2026-0367, -0368, -0369, -0429: symlink, permessi e crash in `extract`). TracciaDoc non usa `extract` (l'aggiornamento estrae a mano con `enclosed_name`), ma lo zip scaricato e i file Office sono input non fidati.
+- `quick-xml` 0.39 → 0.42 (RUSTSEC-2026-0194, -0195: tempo quadratico sugli attributi duplicati e allocazione illimitata dei namespace). Il testo dei documenti Office ora passa con la normalizzazione dei fine riga XML 1.0.
+- `tract-onnx` 0.21 → 0.23 (RUSTSEC-2026-0217, overflow nel parser NNEF, non usato: il modello dei volti è ONNX incorporato).
+- `cargo update` sulle altre dipendenze compatibili (solo patch e minor).
+- `cargo audit`: nessuna vulnerabilità aperta; restano 3 avvisi "non mantenuto" su crate usati solo su Linux (zbus/zvariant).
+
 ## 0.5.0 - 2026-11-05
 
 Installazione sulla postazione, scansioni pianificate, icona nell'area di notifica e aggiornamento automatico. La modalità portatile resta: niente cambia se non si installa.

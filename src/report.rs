@@ -86,8 +86,12 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         9.,
     );
     add("AMBITO SELEZIONATO".into(), 12.);
-    for path in &run.roots {
-        add(path.to_string_lossy().into_owned(), 10.);
+    if paths {
+        for path in &run.roots {
+            add(report_path(path), 10.);
+        }
+    } else {
+        add(format!("{} aree selezionate; percorsi omessi su scelta dell'operatore.", run.roots.len()), 10.);
     }
     add("Altre unita e cartelle esterne ai percorsi selezionati non controllate. Collegamenti, junction e volumi montati discendenti non attraversati: selezionarli separatamente. Nessuna esclusione automatica di AppData, cestino, temporanei o profili; valgono i permessi dell'operatore.".into(),9.);
     add("COPERTURA E MOTORI".into(), 12.);
@@ -115,10 +119,10 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         ),
         9.,
     );
-    add("Formati: PDF (testo e raster di tutte le pagine entro limite), PNG, JPEG, BMP, WebP, TIFF (tutte le pagine entro limite); GIF solo primo fotogramma (limite segnalato). DOCX/XLSX/PPTX (anche varianti con macro, modelli e presentazioni) e ODT/ODS/ODP: XML e immagini raster incorporate. RTF solo testo grezzo. I file di solo testo (TXT, CSV, LOG, MD) non vengono analizzati: non contengono copie di documenti. Ricerca completa: anche i PDF con testo digitale sono sottoposti a OCR. Appena una pagina o immagine di un file rileva un documento, le successive dello stesso file non vengono lette: l'esito del file non puo cambiare.".into(),9.);
+    add("Formati: PDF, PNG, JPEG, BMP, WebP, TIFF (tutte le pagine entro limite); GIF solo primo fotogramma (limite segnalato). DOCX/XLSX/PPTX (anche varianti con macro, modelli e presentazioni) e ODT/ODS/ODP: XML e immagini raster incorporate. Word DOC: testo e immagini raster supportate. RTF solo testo grezzo. I file di solo testo non vengono analizzati; alcune estensioni generiche, inclusa TXT, sono controllate per riconoscere documenti rinominati. PDF: testo digitale e OCR, salvo pagine verificate con soli oggetti di testo leggibili. Archivi, contenitori di posta e flussi alternativi NTFS presenti ma non letti rendono la verifica incompleta. Appena una pagina o immagine di un file rileva un documento, le successive dello stesso file non vengono lette: l'esito del file non puo cambiare.".into(),9.);
     add(
         format!(
-            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi/file; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF a {} dpi (max 3600 px/lato), immagini max 10000 px/lato e 128 MiB decodificati, OCR a 3600 px/lato al massimo. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Riuso esiti: un file con contenuto identico (SHA-256) a uno gia analizzato in questa sessione (analisi conclusa, non interrotta, file invariato durante la lettura), con stessa estensione, impostazioni e versione, riceve lo stesso esito verificato senza nuova lettura; file con esito riusato: {}. Ogni percorso e elencato e contato singolarmente. Nessuna cache su disco.",
+            "Limiti: {} MiB/file; {} pagine o immagini/file; {} secondi per tentativo; {} MiB memoria privata per worker; {} file. {} worker parser/OCR in parallelo, ognuno processo separato con un thread OCR. Raster PDF a {} dpi (max 3600 px/lato), immagini max 10000 px/lato e 128 MiB decodificati, OCR a 3600 px/lato al massimo. Office: 3000 parti, 64 MiB espansi, 16 MiB/parte. Riuso esiti: un file con contenuto identico (SHA-256) a uno gia analizzato in questa sessione (analisi conclusa, non interrotta, file invariato durante la lettura), con stessa estensione, impostazioni e versione, riceve lo stesso esito verificato senza nuova lettura; file con esito riusato: {}. Ogni percorso e elencato e contato singolarmente. Nessuna cache su disco.",
             run.settings.max_mb,
             run.settings.max_pages,
             run.settings.timeout_secs,
@@ -130,6 +134,7 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
         ),
         9.,
     );
+    add(format!("I timeout sono ritentati una volta, in sequenza dopo la fase parallela, con lo stesso limite per tentativo (massimo 10000 riprove). Tentativi ripetuti: {}; risposte ottenute in riprova: {}. Pagine PDF con soli oggetti di testo leggibili, senza immagini, grafica o annotazioni, esaminate senza OCR superfluo: {}.", run.timing.timeout_retries, run.timing.timeout_recovered, run.timing.pdf_text_only_pages), 9.);
     add("CONTEGGI".into(), 12.);
     add(
         format!(
@@ -193,18 +198,42 @@ pub fn paragraphs(run: &Run, paths: bool, demo: bool) -> Vec<(String, f32)> {
                 add(format!("Eliminazione non riuscita: {}", f.delete_error), 9.);
             }
             if paths {
-                add(f.path.to_string_lossy().into_owned(), 9.);
+                add(report_path(&f.path), 9.);
             }
+        }
+    }
+    if paths && !run.coverage_gaps.is_empty() {
+        add("DETTAGLI DEI FILE O DELLE AREE NON COMPLETAMENTE ESAMINATI".into(), 12.);
+        for gap in &run.coverage_gaps {
+            add(gap.reason.clone(), 9.);
+            add(report_path(&gap.path), 9.);
         }
     }
     add("CONCLUSIONE E SOTTOSCRIZIONE".into(), 12.);
     add("Riconoscimento euristico: possibili falsi positivi e negativi. Nessuna garanzia di trovare qualsiasi documento, ne certificazione dell'assenza assoluta. Nessuna approvazione Lepida; l'accettazione resta da verificare con il destinatario. Controllo in sola lettura, senza snapshot: non garantisce coerenza temporale dell'intero disco.".into(),9.);
-    add("Non sono inclusi immagini, testo OCR o valori personali riconosciuti. Archivio locale limitato a eventi e conteggi, senza percorsi o contenuti. I processi isolati hanno limiti Windows Job ma non costituiscono una sandbox di sicurezza.".into(),9.);
+    add("L'eliminazione rimuove il file senza passare dal Cestino; non sovrascrive lo spazio liberato e non garantisce irrecuperabilita. Backup, copie VSS, cache e spazio non allocato non sono verificati da questa scansione.".into(),9.);
+    add("Non sono inclusi immagini, testo OCR o valori personali riconosciuti. L'audit conserva eventi e conteggi senza percorsi o contenuti. La diagnostica e l'esito locale delle scansioni pianificate possono contenere percorsi: conservarli in modo riservato. I processi isolati hanno limiti Windows Job ma non costituiscono una sandbox di sicurezza.".into(),9.);
     add(
         "Firma / riferimento alla sottoscrizione del responsabile: ________________________".into(),
         10.,
     );
     lines
+}
+/// The bundled font cannot render every Unicode script. An explicit, reversible escaped
+/// representation preserves every scalar value instead of silently dropping path characters.
+fn report_path(path: &Path) -> String {
+    let text = path.to_string_lossy();
+    if text.is_ascii() && !text.chars().any(char::is_control)
+        && !text.starts_with(char::is_whitespace) && !text.ends_with(char::is_whitespace)
+        && !text.contains("  ") {
+        text.into_owned()
+    } else {
+        let escaped: String = text.chars().map(|c| {
+            if c.is_whitespace() { format!("\\u{{{:x}}}", c as u32) }
+            else { c.escape_default().to_string() }
+        }).collect();
+        format!("Percorso con escape Unicode: {escaped}")
+    }
 }
 fn wrap(
     s: &str,
@@ -390,5 +419,36 @@ mod tests {
                 .iter()
                 .any(|(s, _)| s.contains("sentinella-personale"))
         );
+    }
+    #[test]
+    fn unicode_paths_remain_identifiable_and_omitted_paths_stay_private() {
+        let path = std::path::PathBuf::from("C:\\synthetic\\Ж中😀.pdf");
+        let rendered = report_path(&path);
+        assert!(rendered.is_ascii());
+        assert!(rendered.contains("\\u{416}\\u{4e2d}\\u{1f600}"));
+        assert!(report_path(Path::new("C:\\synthetic\\trailing.jpg ")).ends_with("\\u{20}"));
+        let mut r = crate::engine::new_run(vec![path.clone()], Default::default(), "test".into(), "test".into());
+        r.finished = true;
+        r.issue_at(&path, crate::streams::NOT_ANALYZED);
+        assert!(r.incomplete());
+        assert!(paragraphs(&r, true, false).iter().any(|(s, _)| s == &rendered));
+        assert!(!paragraphs(&r, false, false).iter().any(|(s, _)| s.contains("synthetic")));
+        assert!(!serde_json::to_string(&r.issues).unwrap().contains("synthetic"));
+    }
+    #[test]
+    fn reopening_scheduled_review_preserves_coverage_details_and_reads_old_runs() {
+        let path = std::path::PathBuf::from("C:\\synthetic\\archive.zip");
+        let mut r = crate::engine::new_run(vec![path.clone()], Default::default(), "test".into(), "test".into());
+        r.finished = true;
+        r.issue_at(&path, crate::parser::CONTAINER_NOT_READ);
+        let mut stored = serde_json::to_value(&r).unwrap();
+        let reopened: Run = serde_json::from_value(stored.clone()).unwrap();
+        assert_eq!(reopened.coverage_gaps.len(), 1);
+        assert!(paragraphs(&reopened, true, false).iter().any(|(s, _)| s == &report_path(&path)));
+        // Existing scheduled reviews predate the field and must still open.
+        stored.as_object_mut().unwrap().remove("coverage_gaps");
+        let old: Run = serde_json::from_value(stored).unwrap();
+        assert!(old.coverage_gaps.is_empty());
+        assert!(old.incomplete());
     }
 }

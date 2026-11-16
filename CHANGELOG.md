@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.2 - 2026-11-16
+
+Correzioni di copertura e rendicontazione emerse dal collaudo su dati sintetici.
+
+- Archivi generici, contenitori di posta, file vuoti con estensioni supportate e formati Office legacy non letti rendono esplicita la copertura incompleta. Rilevati e dichiarati anche i flussi alternativi NTFS di file e cartelle; il loro contenuto non viene letto.
+- Riconoscimento delle firme anche sotto 20 KiB e nelle estensioni TXT e di download temporaneo.
+- Un solo nuovo tentativo sequenziale dopo un timeout, con lo stesso limite temporale per tentativo e contatori espliciti nel verbale. Un secondo fallimento resta una lacuna di copertura.
+- Le pagine PDF con soli oggetti di testo leggibili, senza immagini, grafica o annotazioni, evitano la rasterizzazione e l'OCR superflui. Le pagine miste restano sottoposte a OCR.
+- Il verbale conserva i percorsi Unicode mediante escape espliciti quando necessario e riporta i percorsi dei file non esaminati. L'opzione per omettere i percorsi comprende anche le radici selezionate e questi dettagli. Il riepilogo JSON resta senza percorsi ed evita chiavi vuote incompatibili con PowerShell 5.1.
+- Chiarito che l'eliminazione non sovrascrive lo spazio liberato e non garantisce irrecuperabilita. Nessuna certificazione di assenza assoluta o verifica forense del disco.
+
 ## 0.5.1 - 2026-11-06
 
 Aggiornamento delle dipendenze per gli avvisi di sicurezza RustSec. Nessun cambiamento di funzione.

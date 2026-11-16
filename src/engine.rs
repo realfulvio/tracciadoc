@@ -76,6 +76,7 @@ pub fn new_run(
         ocr_seconds: 0.,
         ocr_init_ms: 0.,
         issues: Default::default(),
+        coverage_gaps: vec![],
         findings: vec![],
         interrupted: false,
         finished: false,
@@ -94,6 +95,7 @@ struct Worker {
     reader: Option<thread::JoinHandle<()>>,
     job: HANDLE,
 }
+const TIMEOUT: &str = "Timeout parser/OCR; processo recuperato";
 impl Worker {
     fn spawn(settings: &Settings) -> Result<Self, String> {
         let mut child = Command::new(std::env::current_exe().map_err(|_| "EXE non individuato")?)
@@ -199,7 +201,7 @@ impl Worker {
                 _ => {}
             }
             if start.elapsed().as_secs() >= req.settings.timeout_secs {
-                return Err("Timeout parser/OCR; processo recuperato".into());
+                return Err(TIMEOUT.into());
             }
         }
     }
@@ -445,7 +447,7 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
             state.timing.add(&result.timing);
             state
                 .timing_by_format
-                .entry(result.format.clone())
+                .entry(if result.format.is_empty() { "Non riconosciuto".into() } else { result.format.clone() })
                 .or_default()
                 .add(&result.timing);
             state.ocr_seconds += result.ocr_seconds;
@@ -478,7 +480,7 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 if !crate::parser::is_quiet(&issue) {
                     diag::warn_file(&issue, format!("{shown} · {issue}"));
                 }
-                state.issue(issue);
+                state.issue_at(&o.path, issue);
             }
             if !result.reasons.is_empty() {
                 diag::info(format!("SEGNALATO {shown} ({})", result.format));
@@ -505,7 +507,7 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
             } else {
                 state.skipped += 1;
                 diag::err_file(&e, format!("{shown} · {e}"));
-                state.issue(e);
+                state.issue_at(&o.path, e);
             }
             if stop.load(Ordering::Relaxed) {
                 state.interrupted = true;
@@ -524,6 +526,17 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
 fn collect_counted(state: &mut Run, o: Outcome, stop: &AtomicBool, counts: &Counts) -> bool {
     counts.done.fetch_add(1, Ordering::Relaxed);
     collect(state, o, stop)
+}
+/// A single retry after the parallel pass separates transient load from a persistent failure.
+/// Failed attempts are not yet counted as final file outcomes, and the queue is bounded.
+fn collect_or_defer(state: &mut Run, o: Outcome, stop: &AtomicBool, counts: &Counts, retries: &mut Vec<Outcome>) -> bool {
+    if o.result.as_ref().is_err_and(|e| e == TIMEOUT)
+        && !stop.load(Ordering::Relaxed) && retries.len() < 10_000 {
+        retries.push(o);
+        false
+    } else {
+        collect_counted(state, o, stop, counts)
+    }
 }
 /// Conta in anticipo i file che la scansione aprira (stessa enumerazione, solo metadati):
 /// serve al totale dell'indicatore di avanzamento. Si ferma con la scansione.
@@ -614,6 +627,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     drop(out_tx);
     // Halted: no further files are dispatched (limits, fatal worker error, stop).
     let mut halted = false;
+    let mut retries = Vec::new();
     let mut published = Instant::now();
     let roots = state.roots.clone();
     let mut scanned_roots: Vec<PathBuf> = vec![];
@@ -624,14 +638,14 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             continue;
         }
         if !root.exists() {
-            state.issue(diag::noted("Percorso selezionato non disponibile o accesso negato"));
+            state.issue_at(&root, diag::noted("Percorso selezionato non disponibile o accesso negato"));
             continue;
         }
         // An explicitly selected volume/mount root is allowed; descendant reparses are not followed.
         let root_reparse =
             std::fs::symlink_metadata(&root).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
         if root_reparse && !is_volume_mount(&root) {
-            state.issue(diag::noted("Radice collegamento/junction esclusa: selezionare la destinazione locale"));
+            state.issue_at(&root, diag::noted("Radice collegamento/junction esclusa: selezionare la destinazione locale"));
             continue;
         }
         if scanned_roots.iter().any(|r| root.starts_with(r)) && !is_volume_mount(&root) {
@@ -655,10 +669,10 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 Ok(e) => e,
                 Err(e) => {
                     const DENIED: &str = "Enumerazione: accesso negato o voce non disponibile";
-                    state.issue(match e.path() {
-                        Some(p) => diag::noted_at(DENIED, p),
-                        None => diag::noted(DENIED),
-                    });
+                    match e.path() {
+                        Some(p) => state.issue_at(p, diag::noted_at(DENIED, p)),
+                        None => state.issue(diag::noted(DENIED)),
+                    }
                     continue;
                 }
             };
@@ -672,8 +686,17 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 if entry.file_type().is_dir() {
                     entries.skip_current_dir();
                 }
-                state.issue(diag::noted_at("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente", path));
+                state.issue_at(path, diag::noted_at("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente", path));
                 continue;
+            }
+            // Streams also belong to directories and files whose ordinary extension is ignored.
+            // Do not open reparse/offline/cloud/EFS entries even just to enumerate their streams.
+            if std::fs::symlink_metadata(path).is_ok_and(|m| m.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) == 0) {
+                match crate::streams::has_named_data(path) {
+                    Ok(true) => state.issue_at(path, diag::noted_at(crate::streams::NOT_ANALYZED, path)),
+                    Err(note) => state.issue_at(path, diag::noted_at(note, path)),
+                    Ok(false) => {}
+                }
             }
             if entry.file_type().is_dir() {
                 continue;
@@ -692,7 +715,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 Err(_) => {
                     state.skipped += 1;
                     counts.done.fetch_add(1, Ordering::Relaxed);
-                    state.issue(diag::noted_at("File: metadati non leggibili", path));
+                    state.issue_at(path, diag::noted_at("File: metadati non leggibili", path));
                     continue;
                 }
             };
@@ -707,7 +730,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
             if metadata.file_attributes() & (0x400 | 0x1000 | 0x400000 | 0x4000) != 0 {
                 state.skipped += 1;
                 counts.done.fetch_add(1, Ordering::Relaxed);
-                state.issue(diag::noted_at("File reparse, offline, cloud recall o cifrato EFS non aperto", path));
+                state.issue_at(path, diag::noted_at("File reparse, offline, cloud recall o cifrato EFS non aperto", path));
                 continue;
             }
             if published.elapsed() >= Duration::from_millis(100) || state.encountered == 1 {
@@ -728,7 +751,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                     Err(mpsc::TrySendError::Full(r)) => {
                         request = r;
                         if let Ok(o) = out_rx.recv_timeout(Duration::from_millis(50)) {
-                            halted |= collect_counted(&mut state, o, &stop, &counts);
+                            halted |= collect_or_defer(&mut state, o, &stop, &counts, &mut retries);
                         }
                         if stop.load(Ordering::Relaxed) {
                             state.interrupted = true;
@@ -742,7 +765,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 }
             }
             while let Ok(o) = out_rx.try_recv() {
-                halted |= collect_counted(&mut state, o, &stop, &counts);
+                halted |= collect_or_defer(&mut state, o, &stop, &counts, &mut retries);
             }
             if halted {
                 break 'roots;
@@ -756,7 +779,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     }
     drop(job_tx);
     for o in out_rx {
-        collect_counted(&mut state, o, &stop, &counts);
+        collect_or_defer(&mut state, o, &stop, &counts, &mut retries);
         state.elapsed_secs = start.elapsed().as_secs_f64();
         if published.elapsed() >= Duration::from_millis(100) {
             shared.lock().unwrap().run = Some(state.clone());
@@ -769,8 +792,45 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     // Il conteggio non serve piu: si ferma e non rallenta la chiusura.
     counter_over.store(true, Ordering::Relaxed);
     let _ = counter.join();
+    if !retries.is_empty() {
+        let retry_count = retries.len();
+        let (tx, rx) = mpsc::sync_channel(1);
+        let (result_tx, result_rx) = mpsc::channel();
+        let (settings, retry_stop, retry_fallback) = (state.settings.clone(), stop.clone(), fallback.clone());
+        let retry_worker = thread::spawn(move || worker_loop(settings, Arc::new(Mutex::new(rx)), result_tx, retry_stop, retry_fallback));
+        let mut retry_halted = false;
+        for (index, first) in retries.into_iter().enumerate() {
+            if retry_halted || stop.load(Ordering::Relaxed) {
+                collect_counted(&mut state, first, &stop, &counts);
+                continue;
+            }
+            {
+                let mut p = shared.lock().unwrap();
+                p.phase = format!("Riprova sequenziale dei timeout: {} / {retry_count}", index + 1);
+                p.current = first.path.to_string_lossy().into_owned();
+                p.run = Some(state.clone());
+            }
+            let request = Request { path: first.path.clone(), settings: state.settings.clone() };
+            let received = tx.send(request).ok().and_then(|_| result_rx.recv().ok());
+            state.timing.timeout_retries += 1;
+            if let Some(mut o) = received {
+                if o.result.is_ok() { state.timing.timeout_recovered += 1; }
+                o.peak = o.peak.max(first.peak);
+                o.roundtrip_ms += first.roundtrip_ms;
+                o.notes.extend(first.notes);
+                retry_halted |= collect_counted(&mut state, o, &stop, &counts);
+            } else {
+                retry_halted = true;
+                collect_counted(&mut state, first, &stop, &counts);
+            }
+            state.elapsed_secs = start.elapsed().as_secs_f64();
+        }
+        drop(tx);
+        let _ = retry_worker.join();
+    }
     // Parallel workers complete out of order: stable output independent of scheduling.
     state.findings.sort_by(|a, b| a.path.cmp(&b.path));
+    state.coverage_gaps.sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.reason.cmp(&b.reason)));
     state.interrupted |= stop.load(Ordering::Relaxed);
     state.finished = true;
     state.end = now();
@@ -945,4 +1005,52 @@ pub fn disk_space(path: &Path) -> Option<(u64, u64)> {
     // SAFETY: stringa terminata da zero e tre puntatori validi a u64 locali.
     let ok = unsafe { GetDiskFreeSpaceExW(wide.as_ptr(), &mut available, &mut total, &mut free) };
     (ok != 0 && total > 0).then_some((total, free))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn timeout() -> Outcome {
+        Outcome { path: PathBuf::from("synthetic.pdf"), result: Err(TIMEOUT.into()),
+            notes: vec![], peak: 0, roundtrip_ms: 120_000., fatal: false }
+    }
+
+    #[test]
+    fn deferred_timeout_counts_only_its_final_outcome() {
+        let mut run = new_run(vec![], Settings::default(), String::new(), String::new());
+        let stop = AtomicBool::new(false);
+        let counts = Counts::default();
+        let mut retries = vec![];
+        assert!(!collect_or_defer(&mut run, timeout(), &stop, &counts, &mut retries));
+        assert_eq!(retries.len(), 1);
+        assert_eq!(counts.done.load(Ordering::Relaxed), 0);
+        assert_eq!(run.skipped, 0);
+        assert!(run.issues.is_empty());
+        let mut recovered = retries.pop().unwrap();
+        recovered.result = Ok(Analysis { supported: true, format: "PDF".into(), ..Default::default() });
+        collect_counted(&mut run, recovered, &stop, &counts);
+        assert_eq!(counts.done.load(Ordering::Relaxed), 1);
+        assert_eq!(run.analyzed, 1);
+        assert_eq!(run.skipped, 0);
+        assert!(run.issues.is_empty());
+    }
+
+    #[test]
+    fn repeated_timeout_or_cancellation_remains_incomplete() {
+        let mut run = new_run(vec![], Settings::default(), String::new(), String::new());
+        run.finished = true;
+        let stop = AtomicBool::new(false);
+        let counts = Counts::default();
+        collect_counted(&mut run, timeout(), &stop, &counts);
+        assert_eq!(run.skipped, 1);
+        assert_eq!(run.coverage_gaps.len(), 1);
+        assert!(run.incomplete());
+        stop.store(true, Ordering::Relaxed);
+        let mut retries = vec![];
+        assert!(collect_or_defer(&mut run, timeout(), &stop, &counts, &mut retries));
+        assert!(retries.is_empty());
+        assert!(run.interrupted);
+        assert_eq!(counts.done.load(Ordering::Relaxed), 2);
+    }
 }

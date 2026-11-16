@@ -244,15 +244,19 @@ fn upright_conf() -> i32 {
 }
 
 pub const UNSUPPORTED: &str = "Formato non supportato o archivio non aperto";
-pub const OLE: &str = "Office cifrato o formato OLE legacy con estensione moderna: non analizzato";
+pub const OLE: &str = "Office cifrato o formato OLE non supportato: non analizzato";
 pub const HEIF: &str = "HEIC/HEIF: formato immagine non supportato, non analizzato";
 pub const MISMATCH: &str = "Contenuto corrotto o diverso dall'estensione: non analizzato";
+pub const CONTAINER_NOT_READ: &str = "Archivio o contenitore di posta non supportato: contenuto non analizzato";
+const CONTAINER_EXT: &[&str] = &["zip", "7z", "rar", "tar", "gz", "bz2", "xz", "eml", "msg", "pst", "ost"];
 
 /// Firma non riconosciuta. Per i file senza estensione significativa (.dat, .tmp, ...) e solo un
 /// file non di interesse; con l'estensione di un formato cercato (foto.jpg, documento.docx) la
 /// copertura e invece incompleta e va dichiarata: es. Office protetto da password, HEIC, file corrotti.
 fn unrecognized(ext: &str, head: &[u8]) -> &'static str {
-    if !WANTED_EXT.contains(&ext) || head.is_empty() {
+    if CONTAINER_EXT.contains(&ext) {
+        CONTAINER_NOT_READ
+    } else if !WANTED_EXT.contains(&ext) {
         UNSUPPORTED
     } else if head.starts_with(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {
         OLE
@@ -273,10 +277,10 @@ const WANTED_EXT: &[&str] = &[
     // Stessi contenitori zip/XML dei precedenti: macro, modelli e presentazioni a scorrimento.
     "docm", "dotx", "dotm", "xlsm", "xltx", "xltm", "pptm", "potx", "potm", "ppsx", "ppsm", "ott",
     "ots", "otp", "jpe",
+    "xls", "ppt",
 ];
 /// Extensions of files that are often renamed scans or have no type at all: only these are sniffed.
-const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp"];
-const SNIFF_MIN_BYTES: u64 = 20 * 1024;
+const SNIFF_EXT: &[&str] = &["", "dat", "tmp", "bak", "bin", "old", "cache", "temp", "txt", "part", "crdownload", "download"];
 
 /// True when the file can hold a document worth opening. Decided from the name and size alone,
 /// without touching the disk: everything else is only counted as "ignored by type".
@@ -287,7 +291,8 @@ pub fn worth_opening(path: &std::path::Path, size: u64, max_bytes: u64) -> bool 
         .unwrap_or("")
         .to_ascii_lowercase();
     WANTED_EXT.contains(&ext.as_str())
-        || (SNIFF_EXT.contains(&ext.as_str()) && size >= SNIFF_MIN_BYTES && size <= max_bytes)
+        || CONTAINER_EXT.contains(&ext.as_str())
+        || (SNIFF_EXT.contains(&ext.as_str()) && size > 0 && size <= max_bytes)
 }
 
 /// Messages that happen once per file and only inflate the log: counted, never listed.
@@ -297,7 +302,6 @@ pub fn is_quiet(note: &str) -> bool {
         || note == INTERRUPTED
         || note == GIF_FIRST
         || note.starts_with("RTF: solo testo grezzo")
-        || note.starts_with("Archivio generico non aperto")
         || note.starts_with("Codifica testo non UTF-8")
 }
 
@@ -309,7 +313,6 @@ pub fn is_informational(note: &str) -> bool {
         || note == UNSUPPORTED
         || note == GIF_FIRST
         || note.starts_with("RTF: solo testo grezzo")
-        || note.starts_with("Archivio generico non aperto")
         || note.starts_with("Codifica testo non UTF-8")
         || note == "Office: risorse esterne non aperte"
 }
@@ -775,9 +778,15 @@ impl Parser {
                     a.timing.early_stops += 1;
                     break;
                 }
-                match page.text() {
-                    Ok(t) => a.reasons.extend(rules::detect(&t.all())),
-                    Err(_) => a.issues.push("PDF: estrazione testo fallita".into()),
+                let extracted = match page.text() {
+                    Ok(t) => Some(t.all()),
+                    Err(_) => {
+                        a.issues.push("PDF: estrazione testo fallita".into());
+                        None
+                    }
+                };
+                if let Some(text) = &extracted {
+                    a.reasons.extend(rules::detect(text));
                 }
                 if !a.reasons.is_empty() {
                     if n + 1 < pages.min(req.settings.max_pages) || req.settings.deep {
@@ -786,6 +795,12 @@ impl Parser {
                     break;
                 }
                 if req.settings.deep {
+                    // Extracted text alone is not enough: mixed pages, paths (including outlined
+                    // text), form XObjects, annotations and unknown objects still require OCR.
+                    if extracted.as_deref().is_some_and(|text| pdf_text_only(&page, text)) {
+                        a.timing.pdf_text_only_pages += 1;
+                        continue;
+                    }
                     // Card labels are ~5 pt: render like the image files (~300 dpi), capped at the
                     // OCR side so an A3 or a huge page does not explode memory or time.
                     let config = PdfRenderConfig::new()
@@ -1073,6 +1088,27 @@ impl Parser {
     }
 }
 
+fn pdf_text_only(page: &PdfPage<'_>, text: &str) -> bool {
+    fn readable(text: &str) -> bool {
+        text.chars().any(char::is_alphanumeric)
+            && !text.contains('\u{fffd}')
+            && !text.chars().any(|c| c.is_control() && !c.is_whitespace())
+    }
+    if !readable(text) || !page.annotations().is_empty() {
+        return false;
+    }
+    let Ok(page_text) = page.text() else { return false };
+    let objects = page.objects();
+    !objects.is_empty() && (0..objects.len()).all(|i| {
+        objects.get(i).is_ok_and(|object| {
+            object.as_text_object().is_some_and(|obj| {
+                let text = page_text.for_object(obj);
+                !text.is_empty() && (text.chars().all(char::is_whitespace) || readable(&text))
+            })
+        })
+    })
+}
+
 pub fn worker() {
     let mut parser = Parser::new();
     let stdin = std::io::stdin();
@@ -1101,11 +1137,26 @@ mod tests {
     #[test]
     fn unrecognized_content_of_wanted_formats_is_not_ignored() {
         assert_eq!(unrecognized("dat", b"garbage"), UNSUPPORTED);
-        assert_eq!(unrecognized("jpg", b""), UNSUPPORTED);
+        assert_eq!(unrecognized("jpg", b""), MISMATCH);
         assert_eq!(unrecognized("docx", &[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0]), OLE);
         assert_eq!(unrecognized("jpg", b"\0\0\0\x18ftypheic\0\0"), HEIF);
         assert_eq!(unrecognized("heic", b"anything"), HEIF);
         assert_eq!(unrecognized("pdf", b"random bytes"), MISMATCH);
+    }
+    #[test]
+    fn containers_and_small_renamed_images_are_not_silent() {
+        for ext in CONTAINER_EXT {
+            let path = std::path::PathBuf::from(format!("synthetic.{ext}"));
+            assert!(worth_opening(&path, 0, 64 << 20));
+            let note = unrecognized(ext, b"synthetic container");
+            assert!(!is_informational(note));
+            assert!(!is_quiet(note));
+        }
+        for name in ["cache-entry", "scan.tmp", "scan.jpg.txt", "scan.jpg.crdownload"] {
+            assert!(worth_opening(std::path::Path::new(name), 1024, 64 << 20));
+        }
+        assert!(!is_informational("Archivio generico non aperto come documento Office"));
+        assert!(!worth_opening(std::path::Path::new("empty.tmp"), 0, 64 << 20));
     }
     #[test]
     fn tiff_pages_after_the_first_are_read() {

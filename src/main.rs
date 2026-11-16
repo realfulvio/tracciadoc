@@ -13,6 +13,7 @@ mod report;
 mod rules;
 mod sched;
 mod shared;
+mod streams;
 #[cfg(windows)]
 mod tray;
 mod update;
@@ -125,6 +126,10 @@ fn main() {
                 for f in &mut run.findings {
                     f.path = PathBuf::from("CORPUS-SINTETICO")
                         .join(f.path.file_name().unwrap_or_default());
+                }
+                for gap in &mut run.coverage_gaps {
+                    gap.path = PathBuf::from("CORPUS-SINTETICO")
+                        .join(gap.path.file_name().unwrap_or_default());
                 }
                 run.roots = vec![PathBuf::from(
                     "CORPUS-SINTETICO (solo fixture dimostrative)",

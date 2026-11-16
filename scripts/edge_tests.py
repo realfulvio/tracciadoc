@@ -46,6 +46,8 @@ images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.png',images/'z.png')
 result=scan('timeout',images,['--timeout-secs','1'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
+assert 1 <= result['timing']['timeout_retries'] <= 2, 'Every timed-out file gets at most one retry'
+assert result['analyzed'] + result['partial'] + result['skipped'] + result['ignored_type'] == 2, 'Retries must not count a file twice'
 # Deterministic memory pressure: a 6400x6400 RGB raster decodes to ~123 MB, within the 128 MiB decoder
 # limit but above a 96 MiB worker Job limit. 96 MiB still fit the OCR of z.png (ita+eng+osd engines,
 # ~90 MiB peak working set on the Windows VM); at 64 MiB the OCR itself no longer fits.

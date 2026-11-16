@@ -42,6 +42,10 @@ Tutto avviene **in locale**: niente cloud, niente telemetria, nessun file lascia
 
 L'esito **«nessun documento rilevato»** compare solo a copertura completa: errori, accessi negati e limiti raggiunti sono dichiarati e rendono la verifica incompleta.
 
+La versione 0.5.2 dichiara anche i contenitori ZIP/posta non aperti e la presenza di flussi alternativi NTFS. Il verbale elenca i file non completamente esaminati con il motivo; omettendo i percorsi si nascondono anche questi dettagli e le cartelle selezionate. I caratteri non rappresentabili nel font sono conservati come escape Unicode.
+
+**Stato delle verifiche 0.5.2:** build e test automatici nativi su Windows 11, avvio GUI reale e prove sui canary completati. Il riconoscimento resta limitato: nel corpus esterno di volti sintetici sono state segnalate 13/90 foto singole positive e 26/100 immagini etichettate come ritratti negativi. Il set cieco umano e la verifica forense non sono stati eseguiti; questa release non rappresenta una certificazione del collaudo. Metodi e limiti sono in [Validazione](docs/VALIDAZIONE.md).
+
 ## Com'è fatto
 
 <p align="center">
@@ -80,6 +84,7 @@ Configurazione, stato e verbali delle scansioni pianificate sono in `%ProgramDat
 
 - **Rust**, eseguibile portatile con GUI nativa (egui) su DirectX 12; con PC senza driver video usa l'adattatore software WARP, con OpenGL come ripiego. Portatile oppure installabile; nessun Python. Internet serve solo per l'aggiornamento automatico, disattivabile.
 - **OCR Tesseract 5 offline** e PDFium incorporati. Più worker in parallelo (default: core fisici − 1), ognuno in un processo separato con Windows Job, limite di memoria e timeout.
+- I timeout vengono riprovati una volta in sequenza, con lo stesso limite per tentativo. I PDF composti esclusivamente da testo leggibile evitano l'OCR superfluo; pagine miste, immagini, grafica e annotazioni continuano a essere elaborate con OCR.
 - **Prefiltro** che scarta le immagini senza zone di testo e **orientamento automatico** delle scansioni ruotate: l'OCR lavora solo dove serve.
 - **AVX2/SSE** scelti a runtime con ripiego su CPU generica. L'uso di GPU/iGPU/NPU è valutato solo se un benchmark dimostra un vantaggio reale.
 - Nessuna cache persistente. Lo storico `audit.jsonl` contiene solo eventi e conteggi, mai percorsi o contenuti.
@@ -100,7 +105,7 @@ TracciaDoc è uno strumento di aiuto, non una garanzia.
 
 - Il riconoscimento è euristico: possibili falsi positivi e falsi negativi. Le segnalazioni vanno viste da una persona.
 - Il verbale documenta l'ambito effettivamente controllato e **non certifica l'assenza assoluta** di documenti, né implica l'approvazione di terzi.
-- Non sono letti: HEIC/HEIF, XLS e PPT legacy, archivi generici, file cifrati, oggetti OLE e macro (quelli con estensione moderna rendono la verifica incompleta). GIF solo il primo fotogramma (i TIFF multipagina sono letti tutti).
+- Non sono letti: HEIC/HEIF, XLS e PPT legacy, archivi generici, contenitori di posta, file cifrati, oggetti OLE e macro. I contenitori riconosciuti ma non aperti rendono la verifica incompleta. I flussi alternativi NTFS sono enumerati e dichiarati, ma non analizzati. GIF solo il primo fotogramma (i TIFF multipagina sono letti tutti).
 - Il parser gira con i privilegi dell'operatore: processo separato e Windows Job non sono una sandbox di sicurezza. Non c'è uno snapshot coerente dell'intero disco.
 - Il PDF può contenere percorsi e giudizi manuali: va conservato in una cartella riservata, oppure si omettono i percorsi in esportazione.
 
@@ -119,6 +124,7 @@ cargo build --release --locked
 & .\scratch\tooling\Scripts\python.exe scripts/package.py
 & .\scratch\tooling\Scripts\python.exe scripts/validate.py
 & .\scratch\tooling\Scripts\python.exe scripts/edge_tests.py
+& .\scratch\tooling\Scripts\python.exe scripts/collaudo_regressions.py
 ```
 
 L'uscita è in `dist/TracciaDoc/`. Il manifesto del runtime MSYS2 è bloccato in [docs/runtime-lock.json](docs/runtime-lock.json); PDFium e modelli OCR sono verificati con SHA256.
@@ -131,7 +137,7 @@ Scansione da riga di comando, solo con percorso assoluto esplicito:
 
 Opzioni: `--cpu`, `--omit-paths`, `--max-mb`, `--max-pages`, `--max-files`, `--timeout-secs`, `--memory-mb`, `--workers`, `--no-prefilter`. `--demo` marca gli output sintetici; un output già esistente non viene sovrascritto.
 
-Test e benchmark usano **solo il corpus sintetico** in `fixtures/`: facsimili inventati, nessun documento reale.
+I test riproducibili nel repository usano le fixture sintetiche in `fixtures/` e quelle generate dagli script. Le ulteriori misure su corpus sintetici esterni sono documentate separatamente, senza pubblicare immagini o rapporti operativi. Nessun documento reale viene usato nei test distribuiti.
 
 ## Licenze
 

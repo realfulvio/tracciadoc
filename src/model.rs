@@ -103,6 +103,13 @@ pub struct Timing {
     pub photo_ms: f64,
     #[serde(default)]
     pub photo_found: u64,
+    /// Pages proven to contain readable text objects only, so no raster OCR was needed.
+    #[serde(default)]
+    pub pdf_text_only_pages: u64,
+    #[serde(default)]
+    pub timeout_retries: u64,
+    #[serde(default)]
+    pub timeout_recovered: u64,
 }
 impl Timing {
     pub fn add(&mut self, o: &Timing) {
@@ -131,6 +138,9 @@ impl Timing {
         self.photo_checks += o.photo_checks;
         self.photo_ms += o.photo_ms;
         self.photo_found += o.photo_found;
+        self.pdf_text_only_pages += o.pdf_text_only_pages;
+        self.timeout_retries += o.timeout_retries;
+        self.timeout_recovered += o.timeout_recovered;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -191,6 +201,13 @@ pub enum Review {
     Confirmed,
     Discarded,
 }
+/// Coverage details follow the local review state, like finding paths. The audit and CLI summary
+/// use separate, path-free projections and must not serialize this state directly.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CoverageGap {
+    pub path: PathBuf,
+    pub reason: String,
+}
 impl Review {
     pub fn label(self) -> &'static str {
         match self {
@@ -222,6 +239,8 @@ pub struct Run {
     pub ocr_seconds: f64,
     pub ocr_init_ms: f64,
     pub issues: BTreeMap<String, u64>,
+    #[serde(default)]
+    pub coverage_gaps: Vec<CoverageGap>,
     pub findings: Vec<Finding>,
     pub interrupted: bool,
     pub finished: bool,
@@ -290,6 +309,18 @@ impl Run {
     }
     pub fn issue(&mut self, code: impl Into<String>) {
         *self.issues.entry(code.into()).or_default() += 1;
+    }
+    pub fn issue_at(&mut self, path: &std::path::Path, code: impl Into<String>) {
+        let reason = code.into();
+        self.issue(reason.clone());
+        if crate::parser::is_informational(&reason) {
+            return;
+        }
+        if self.coverage_gaps.len() < 5000 {
+            self.coverage_gaps.push(CoverageGap { path: path.to_path_buf(), reason });
+        } else {
+            self.issues.entry("Elenco dettagli per file limitato a 5000 voci; conteggi completi".into()).or_insert(1);
+        }
     }
     pub fn finding_summary(&self) -> Vec<String> {
         let mut formats: BTreeMap<&str, u64> = BTreeMap::new();

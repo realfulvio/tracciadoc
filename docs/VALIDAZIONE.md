@@ -1,3 +1,74 @@
+# Verifiche 0.5.2 - 16 novembre 2026
+
+Release correttiva di copertura e rendicontazione. Le prove seguenti sono distinte dal collaudo umano del riconoscimento: non costituiscono una certificazione di assenza di documenti. Le sezioni successive conservano le misure storiche delle versioni precedenti.
+
+## Build e prove automatiche
+
+Windows 11 x64, build MSVC nativa, Rust 1.99.1. CRT statica e target x86_64 standard, senza `target-cpu=native` o AVX imposta globalmente. Dipendenze Rust e runtime OCR/PDF invariati rispetto alla 0.5.1; file del runtime confrontati tramite SHA-256.
+
+- `cargo test --release --locked`: **48 test passati**.
+- `cargo clippy --release --all-targets --locked -- -D warnings` e build release: passati.
+- Pacchetto portatile: `scripts/validate.py`, `scripts/edge_tests.py` e le 11 scansioni di `scripts/collaudo_regressions.py` passati. Sulle 36 fixture tracciate del pacchetto: 29 positivi rilevati, 3 negativi, 4 casi limitati; CPU generica e AVX2 producono le stesse motivazioni. Questo insieme non misura l'accuratezza su documenti reali.
+- Regressioni verificate: ZIP/posta dichiarati incompleti, file vuoto, immagine rinominata sotto 20 KiB, estensioni TXT/download, ADS su file e cartella, percorsi Unicode e loro omissione, summary leggibile da PowerShell 5.1. Tre pagine PDF di solo testo evitano l'OCR; un PDF misto con immagine positiva viene ancora segnalato tramite OCR.
+- Timeout ripetuto una sola volta e conteggi senza duplicazioni, memoria insufficiente e recupero del worker, accesso negato, file bloccato, limiti, junction, radice assente, audit e annullamento: verificati dagli script. Le ACL della sola fixture di prova vengono ripristinate.
+- **42 mutazioni deterministiche** di PDF, DOCX, ODT, PPTX, XLSX, ZIP ed EML: processo concluso senza crash/hang, 42 file contabilizzati, verifica incompleta con motivazioni. Non equivalgono a fuzzing continuo dei parser Windows.
+- `cargo audit` 0.22.2, database RustSec del 15 novembre 2026: zero vulnerabilità segnalate; restano tre avvisi di manutenzione per `zbus_names`, `zvariant` e `zvariant_derive`.
+
+## Canary, eliminazione e interfaccia
+
+Documento sintetico riconosciuto nel temporaneo dell'utente e in esecuzione SYSTEM. Nella sessione interattiva di un utente standard, il file è finito realmente nel Cestino (hash confrontato) ed è stato riconosciuto. Un file EFS realmente cifrato è stato escluso con motivo e verifica incompleta. Nessun contenuto ADS è stato letto: la presenza viene dichiarata come lacuna.
+
+Un banco di prova esterno include gli effettivi `delete.rs` e `model.rs`: scansione con una segnalazione, eliminazione, ri-scansione con zero segnalazioni e senza incompletezza. Questa prova non verifica la selezione e conferma nella GUI né la recuperabilità dal disco. Il verbale chiarisce che l'eliminazione non sovrascrive lo spazio liberato.
+
+La GUI 0.5.2 è stata avviata e osservata nella sessione Windows interattiva, con rendering DirectX 12 WARP. Il ciclo completo scansione/revisione/eliminazione dalla GUI **non è stato ricollaudato per questa versione**; i risultati CLI e del banco esterno non lo sostituiscono.
+
+## Fototessere: corpus esterno sintetico
+
+250 immagini CGI: 90 foto singole positive, 60 fogli da quattro fototessere e 100 ritratti negativi secondo il manifest originario. Controllati visivamente 24 campioni: alcune etichette positive comprendono pose oblique, sfondi scuri e forti degradi; positivi e negativi possono essere simili. Il corpus non è una verifica di conformità fotografica e non contiene documenti reali. Manifest ed etichette sono rimasti invariati.
+
+Le cinque scansioni sequenziali (0.5.1 e 0.5.2 automatiche, entrambe in CPU generica, ripetizione CPU della 0.5.2) producono **esattamente gli stessi 39 percorsi segnalati**. Nessuna modifica alle soglie del riconoscimento è stata tarata su questi dati.
+
+| Gruppo | Segnalati / totale | Tasso | Wilson 95% |
+|---|---:|---:|---:|
+| Foto singole positive | 13/90 | 14,4% | 8,6–23,2% |
+| Fogli con quattro foto, esclusi dal prodotto | 0/60 | 0% | 0–6,0% |
+| Ritratti negativi (falsi positivi secondo le etichette) | 26/100 | 26,0% | 18,4–35,4% |
+
+Fra le foto singole: 12/30 pulite, 1/30 nel degrado intermedio e 0/30 nel più forte. Bootstrap a cluster sulle 30 identità delle foto singole, 2.000 ricampionamenti: 7,8–22,2%; sui negativi: 17–35%. Il valore aggregato originario 13/150 (8,7%) include i fogli multipli fuori ambito e non deve sostituire la misura sulle singole. I cinque passaggi non sono campioni indipendenti.
+
+Tempi del motore con nove worker, senza altri build o benchmark concorrenti: automatico 43,48 s (0.5.1) e 43,49 s (0.5.2); CPU 46,85 s e 46,95 s, ripetizione 46,88 s. Nessuna cache applicativa persistente; cache filesystem non svuotata. Non emerge un miglioramento di riconoscimento o velocità su questo insieme. La quota di falsi positivi supera il riferimento del 10% riportato nel passaggio di consegne del collaudo; il riconoscimento delle fototessere resta un limite aperto.
+
+Il binario definitivo distribuito è stato nuovamente provato: 43,14 s in automatico, gli stessi 39 percorsi segnalati. L'ultima correzione riguarda la conservazione dei dettagli di copertura nelle scansioni pianificate e il testo del verbale, senza cambiare il riconoscimento.
+
+## Corpus esterno di 4.096 file e riservatezza degli output
+
+Sul binario definitivo, con nove worker, limite 120 s per tentativo e 768 MiB per worker:
+
+| Percorso | Secondi del motore | Segnalazioni | Timeout | Esito tecnico |
+|---|---:|---:|---:|---|
+| CPU generica | 365,56 | 191 | 0 | Incompleto per le lacune dichiarate |
+| Automatico AVX2 | 342,88 | 191 | 0 | Incompleto per le lacune dichiarate |
+
+Gli insiemi dei percorsi segnalati sono identici, anche rispetto alla prima build correttiva (330,28 s). Tutti i 4.096 hash sono invariati; il manifest JSON è contato separatamente come un ulteriore file ignorato. Conteggi finali: 3.675 analizzati, 386 parziali, 35 saltati; 2.517 pagine PDF di solo testo senza OCR. Picco aggregato campionato del working set circa 1,72 GiB, massimo dieci processi. Nessun altro build o benchmark concorrente durante le misure; cache filesystem non svuotata.
+
+Secondo le etichette originarie: **180/546 positivi rilevabili trovati (32,97%)**, Wilson 95% 29,15–37,02%, bootstrap a cluster 23,44–42,30%. Falsi positivi: 0/3.100 negativi normali e 11/440 difficili. Nessuna segnalazione delle quattro corse precedenti 0.5.1 viene persa; rispetto alla migliore si aggiungono quattro PDF multipagina positivi. Sono facsimili disegnati con pochi cluster per classe: questi numeri non stimano l'accuratezza su documenti reali. Fra i 366 miss, 63 hanno una lacuna per file nel verbale; per gli altri la causa non è determinata da questa prova.
+
+Confronto controllato di un PDF ordinario di quattro pagine, un worker, ordine vecchio/nuovo/vecchio/nuovo: 0.5.1 18,46 e 18,49 s; 0.5.2 0,043 e 0,041 s, stesso esito e zero pagine OCR nel nuovo. I tempi sono del motore. Le corse complete storiche avevano carichi diversi e non sono usate per attribuire un fattore di accelerazione controllato.
+
+Cercati 65 token sintetici, compresi cinque canary dedicati, e il pattern del codice fiscale in **272 output**: 76 PDF, 118 JSON, 22 log, 53 TXT e 3 audit JSONL. Zero occorrenze e zero errori di lettura. Controllati testo/metadati PDF e testo UTF-8/UTF-16; esclusi gli input sintetici e i risultati del valutatore indipendente che contengono le etichette. Nessun dump TracciaDoc disponibile nelle quattro posizioni di profilo controllate. Non è una verifica delle cache di sistema, delle immagini incorporate o dello spazio non allocato.
+
+## Copertura del codice e fuzzing portabile
+
+Sul codice dei moduli portabili, invariato rispetto alla 0.5.1: 13 test unitari su Linux; righe di produzione eseguite `rules.rs` 163/170 (95,88%), `doc.rs` 265/318 (83,33%), escludendo i test. Non è copertura della scansione Windows, della GUI o dell'intero parser. Branch coverage e MC/DC non misurati.
+
+Fuzzing aggiuntivo di `doc::read` con due DOC sintetici validi come semi: 491.330 esecuzioni in 121 s, nessun crash/hang/OOM, picco RSS 528 MiB; input massimo 1 MiB, timeout 20 s, limite RSS 2 GiB. Questi risultati non attestano l'assenza di vulnerabilità.
+
+## Verifiche ancora mancanti
+
+Set cieco umano con secondo valutatore, collaudo Windows 10, OneDrive con veri placeholder, ciclo GUI completo della 0.5.2, recupero da spazio non allocato e copie VSS non verificati. I documenti completi delle soglie del collaudo esterno non erano accessibili: nessun PASS complessivo attribuito ai relativi gate. L'aggiornamento corregge lacune dimostrate senza dichiarare risolti i limiti di riconoscimento.
+
+---
+
 # Validazione MVP 0.1.0 - 28 ottobre 2026
 
 Verifiche effettuate nativamente su Windows 11 Pro build 26300, Rust 1.99.1 x64 MSVC. CPU AMD Ryzen 7 PRO, 8 core / 16 thread; 32 GB RAM; corpus su SSD NVMe. GPU rilevate: una NVIDIA dedicata e un adattatore virtuale. Nessun backend OCR GPU/NPU utilizzato e nessuna misura di memoria GPU dichiarata.

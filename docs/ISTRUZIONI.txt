@@ -1,4 +1,4 @@
-TRACCIADOC 0.1.0 - WINDOWS X64 - PORTATILE
+TRACCIADOC 0.5.2 - WINDOWS X64
 
 1. Apri TracciaDoc.exe. Non parte alcuna scansione automatica.
 2. Seleziona cartelle, dischi locali o volumi da verificare.
@@ -16,6 +16,10 @@ TRACCIADOC 0.1.0 - WINDOWS X64 - PORTATILE
 6. Genera verbale PDF. I percorsi sono inclusi per impostazione iniziale:
    possono contenere dati personali; puoi ometterli con la casella dedicata.
    Il verbale riporta anche lo stato delle verifiche manuali.
+   I percorsi dei file non completamente esaminati sono elencati con il motivo.
+   I caratteri non ASCII dei percorsi sono conservati come escape Unicode
+   (es. \u{4e2d}); non vengono eliminati se il font non li rappresenta.
+   Ometti percorsi nasconde anche le cartelle selezionate e i dettagli per file.
 
 Interrompi termina il lavoro e mantiene gli esiti raccolti; il PDF resta
 marcato come incompleto/interrotto. La chiusura dell'app termina il parser.
@@ -27,7 +31,10 @@ l'esito incompleto e previsto. Esempio-verbale.pdf e solo dimostrativo.
 I dati di riconoscimento restano in memoria: nessun testo OCR, numero di
 documento o codice fiscale viene salvato nei risultati o nell'audit.
 Percorsi e verifiche manuali della sessione restano nel PDF se esportati.
-Alla chiusura non sono conservati come archivio delle segnalazioni.
+La diagnostica locale puo contenere percorsi (il nome utente e mascherato).
+Le scansioni pianificate salvano l'ultimo esito, inclusi percorsi e lacune,
+in %ProgramData%\TracciaDoc\ultima-pianificata.json per riaprirlo nella GUI.
+Questi file possono contenere dati personali nei nomi: conservarli riservati.
 Storico essenziale: %LOCALAPPDATA%\TracciaDoc\audit.jsonl (eventi e conteggi).
 Permessi ereditati dal profilo Windows, nessuna protezione da amministratori.
 Limite storico 5 MiB: raggiunto il limite compare un errore nel verbale.
@@ -36,16 +43,24 @@ Nessuna cache persistente e nessun temporaneo OCR su disco.
 I PDF esportati restano nelle cartelle scelte dall'operatore.
 
 Formati: PDF, PNG/JPEG/BMP/WebP, TIFF (tutte le pagine), GIF (solo primo fotogramma),
-DOCX/XLSX/PPTX, ODT/ODS/ODP, RTF (solo testo grezzo).
+DOC, DOCX/XLSX/PPTX, ODT/ODS/ODP, RTF (solo testo grezzo).
 I file di solo testo (TXT, CSV, TSV, LOG, MD) non vengono analizzati.
 Office: XML e immagini raster incorporate.
-Legacy DOC/XLS/PPT, archivi generici (.zip, .7z...) e gli altri tipi non
-cercati sono solo contati come "ignorati per tipo". Office protetto da
-password o OLE con estensione moderna, HEIC/HEIF, file corrotti o con
+XLS/PPT legacy, archivi generici (ZIP/7z/RAR/TAR/GZ/BZ2/XZ) e contenitori
+di posta (EML/MSG/PST/OST) non sono aperti: rendono la verifica incompleta.
+Gli altri tipi non cercati sono contati come "ignorati per tipo". Office
+protetto da password o OLE non supportato, HEIC/HEIF, file corrotti o con
 contenuto diverso dall'estensione, OLE/macro, file cifrati/non locali e
 parti non supportate generano limiti visibili (verifica incompleta).
 Firma controllata anche per i file senza estensione o con estensione
-generica (.dat, .tmp, .bak, .bin, .old, .cache, .temp) da 20 KB in su.
+generica (.dat, .tmp, .bak, .bin, .old, .cache, .temp, .txt, .part,
+.crdownload, .download), anche sotto 20 KB, entro il limite di dimensione.
+I flussi alternativi NTFS di file e cartelle sono enumerati: se presenti,
+il loro contenuto non analizzato e dichiarato e la verifica e incompleta.
+I timeout sono ritentati una volta, in sequenza al termine della fase
+parallela, con lo stesso limite per tentativo (al massimo 10000 riprove).
+Le pagine PDF composte soltanto da testo leggibile vengono lette direttamente;
+immagini, grafica, annotazioni e pagine miste continuano a passare dall'OCR.
 Immagini fino a 10000 px per lato e 128 MiB decodificati; oltre 3600 px
 vengono ridotte prima dell'OCR (scansioni A4 a 600 dpi comprese).
 Le immagini a basso contrasto e ruotate sono euristiche: non e garantito
@@ -60,9 +75,12 @@ Non richiede Rust, Python, SDK, Internet o un'installazione di Tesseract.
 Nessuna modifica, quarantena o invio dei documenti. L'eliminazione
 definitiva avviene solo sui file segnalati selezionati dall'operatore,
 dopo conferma esplicita.
+Non sovrascrive lo spazio liberato e non garantisce irrecuperabilita.
+Backup, copie VSS, cache e spazio non allocato restano fuori dalla scansione.
 Il processo separato con limiti Windows Job non e una sandbox di sicurezza.
 L'app non garantisce coerenza temporale dell'intero disco durante la ricerca.
-I duplicati sono rianalizzati; tutti i percorsi incontrati restano disponibili.
+I duplicati identici (SHA-256) possono riusare un esito gia verificato nella
+stessa sessione; ogni percorso resta contato e disponibile separatamente.
 Collegamenti e junction non sono seguiti; i volumi montati nelle cartelle
 vanno selezionati esplicitamente. AppData/cestino/temporanei non sono esclusi.
 

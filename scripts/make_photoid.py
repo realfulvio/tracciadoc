@@ -2,6 +2,8 @@
 
 fototessera-sintetica.png: volto frontale unico su sfondo uniforme (atteso: segnalata).
 ritratto-sfondo-vario.png: lo stesso volto su sfondo d'ambiente e piu piccolo (atteso: non segnalato).
+fototessera-su-modulo.png: la fototessera ingrandita e incollata su un foglio A4 con testo (atteso: segnalata, possibile).
+fototessere-foglio.png: quattro fototessere identiche su un foglio 2x2 (atteso: segnalata, possibile).
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
@@ -38,3 +40,21 @@ portrait().save(OUT / "fototessera-sintetica.png")
 big = Image.new("RGB", (700, 900), (120, 160, 110))
 big.paste(portrait(busy=True).resize((233, 300)), (233, 300))
 big.save(OUT / "ritratto-sfondo-vario.png")
+
+# Fototessera incollata su un modulo: il volto e circa il 14% dell'altezza del foglio.
+from PIL import ImageFont
+FONT = "C:/Windows/Fonts/arial.ttf" if Path("C:/Windows/Fonts/arial.ttf").exists() else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+form = Image.new("RGB", (1240, 1754), (252, 252, 250))
+d = ImageDraw.Draw(form)
+f = ImageFont.truetype(FONT, 34)
+d.text((90, 90), "FACSIMILE SINTETICO - NON VALIDO", fill="black", font=f)
+for i, line in enumerate(["MODULO DI RICHIESTA", "Oggetto: esempio di pratica", "Allegare una fotografia formato tessera", "Data: 01/01/2030", "Firma: ______________"]):
+    d.text((90, 220 + i * 70), line, fill="black", font=f)
+form.paste(portrait().resize((560, 720), Image.LANCZOS), (620, 150))
+form.save(OUT / "fototessera-su-modulo.png")
+
+# Foglio con quattro fototessere identiche in due righe, come escono da una cabina.
+sheet = Image.new("RGB", (820, 1020), (245, 245, 245))
+for x, y in [(20, 20), (450, 20), (20, 520), (450, 520)]:
+    sheet.paste(portrait(), (x, y))
+sheet.save(OUT / "fototessere-foglio.png")

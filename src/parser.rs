@@ -521,6 +521,15 @@ fn tiff_page<R: std::io::Read + std::io::Seek>(d: &mut tiff::decoder::Decoder<R>
     })
 }
 
+/// Immagine ruotata per leggere un testo che OSD indica girato di `deg` gradi in senso orario.
+fn turned(img: &DynamicImage, deg: i32) -> DynamicImage {
+    match deg {
+        90 => img.rotate270(),
+        180 => img.rotate180(),
+        _ => img.rotate90(),
+    }
+}
+
 pub struct Parser {
     ocr: Option<Ocr>,
     ocr_error: Option<String>,
@@ -620,6 +629,7 @@ impl Parser {
         // Nothing found on the whole sheet: several documents side by side can confuse the
         // layout analysis. Each block separated by blank bands is read on its own, and the
         // blocks together, before any rotation. This runs also after a confident read.
+        let mut weak: Vec<(u32, u32, u32, u32)> = vec![];
         if a.reasons.is_empty() && !failed {
             let blocks = split_blocks(&img);
             if !blocks.is_empty() {
@@ -628,9 +638,14 @@ impl Parser {
                 for (x0, y0, x1, y1) in blocks {
                     let block = img.crop_imm(x0, y0, x1 - x0, y1 - y0);
                     a.timing.ocr_calls += 1;
-                    if let Ok((s, _)) = ocr.recognize(&block) {
-                        useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
+                    if let Ok((s, conf)) = ocr.recognize(&block) {
+                        let chars = s.chars().filter(|c| c.is_alphanumeric()).count();
+                        useful |= chars >= 20;
                         a.reasons.extend(rules::detect(&s));
+                        // Un blocco letto dritto con poco testo o bassa confidenza puo essere girato.
+                        if chars < 20 || (min_conf > 0 && (0..min_conf).contains(&conf)) {
+                            weak.push((x0, y0, x1, y1));
+                        }
                         all.push_str(&s);
                         all.push('\n');
                     }
@@ -647,6 +662,31 @@ impl Parser {
                 if let Ok((s, _)) = read {
                     useful |= s.chars().filter(|c| c.is_alphanumeric()).count() >= 20;
                     a.reasons.extend(rules::detect(&s));
+                }
+            }
+            // La lettura dritta della pagina era buona e ha fermato la ricerca, ma un documento
+            // girato accanto al testo dritto abbassa poco la media: i blocchi letti male si
+            // provano ruotati, uno alla volta, solo se l'OSD ne indica la rotazione.
+            if a.reasons.is_empty() && settled && !weak.is_empty() {
+                'weak: for &(x0, y0, x1, y1) in weak.iter().take(4) {
+                    let block = img.crop_imm(x0, y0, x1 - x0, y1 - y0);
+                    let osd = std::time::Instant::now();
+                    let hint = ocr.orientation(&block);
+                    a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
+                    let Some(first) = hint.filter(|d| *d != 0) else { continue };
+                    a.timing.osd_hits += 1;
+                    let mut order = vec![first];
+                    order.extend([90, 180, 270].into_iter().filter(|d| *d != first));
+                    for deg in order {
+                        a.timing.ocr_calls += 1;
+                        if let Ok((s, _)) = ocr.recognize(&turned(&block, deg)) {
+                            let reasons = rules::detect(&s);
+                            if !reasons.is_empty() {
+                                a.reasons.extend(reasons);
+                                break 'weak;
+                            }
+                        }
+                    }
                 }
             }
             a.reasons.sort();
@@ -669,11 +709,7 @@ impl Parser {
                 a.timing.osd_hits += 1;
             }
             for deg in order {
-                let current = match deg {
-                    90 => img.rotate270(),
-                    180 => img.rotate180(),
-                    _ => img.rotate90(),
-                };
+                let current = turned(&img, deg);
                 a.timing.ocr_calls += 1;
                 match ocr.recognize(&current) {
                     Ok((s, _)) => {

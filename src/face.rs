@@ -3,7 +3,10 @@
 //! Il rilevatore e YuNet (OpenCV Zoo, MIT) in formato ONNX, incorporato nell'eseguibile ed
 //! eseguito con tract (puro Rust, solo CPU, nessuna DLL aggiuntiva). Il modello trova i volti;
 //! la decisione "fototessera" la prendono i criteri di `judge` su dimensione, proporzioni,
-//! frontalita e sfondo. L'esito e sempre un indizio da rivedere, mai una prova.
+//! frontalita e sfondo; se il ritratto occupa solo una parte dell'immagine (foto incollata su un
+//! modulo, foglio con piu fototessere) `judge_crops` giudica il ritaglio intorno a ciascun volto.
+//! Un riquadro che non ha l'aspetto di una fotografia (loghi, icone, disegni piatti) e scartato.
+//! L'esito e sempre un indizio da rivedere, mai una prova.
 use image::{DynamicImage, GenericImageView};
 use std::sync::OnceLock;
 use tract_onnx::prelude::*;
@@ -12,6 +15,9 @@ const MODEL: &[u8] = include_bytes!("../assets/face/yunet_320.onnx");
 const SIDE: usize = 320;
 /// Punteggio minimo di un volto per entrare nell'elenco.
 const MIN_SCORE: f32 = 0.6;
+/// Nei riquadri il volto resta piccolo e il punteggio scende: la soglia e piu bassa, perche
+/// il giudizio sul ritaglio (frontale, aspetto fotografico, fondo uniforme) e piu severo.
+const TILE_MIN_SCORE: f32 = 0.5;
 const NMS_IOU: f32 = 0.3;
 
 /// Prefisso comune dei motivi: la GUI e il verbale riconoscono la classe da qui.
@@ -50,6 +56,9 @@ fn plan() -> Result<&'static Plan, String> {
 
 /// Volti trovati nell'immagine, dal piu sicuro, senza sovrapposizioni.
 pub fn faces(img: &DynamicImage) -> Result<Vec<Face>, String> {
+    faces_above(img, MIN_SCORE)
+}
+fn faces_above(img: &DynamicImage, min_score: f32) -> Result<Vec<Face>, String> {
     let (iw, ih) = img.dimensions();
     if iw == 0 || ih == 0 {
         return Ok(vec![]);
@@ -77,7 +86,7 @@ pub fn faces(img: &DynamicImage) -> Result<Vec<Face>, String> {
         let at = |a: &tract_ndarray::ArrayViewD<'_, f32>, k: usize, j: usize| a[[0, k, j]];
         for k in 0..n * n {
             let score = (at(&cls, k, 0).clamp(0., 1.) * at(&obj, k, 0).clamp(0., 1.)).sqrt();
-            if score < MIN_SCORE {
+            if score < min_score {
                 continue;
             }
             let (row, col) = ((k / n) as f32, (k % n) as f32);
@@ -181,15 +190,105 @@ pub fn judge(img: &DynamicImage, faces: &[Face]) -> Option<String> {
     }
 }
 
+/// Altezza minima del volto, in pixel, per giudicare un ritratto dentro un'immagine piu ampia.
+const MIN_FACE_PX: f32 = 80.;
+
+/// Il riquadro del volto ha l'aspetto di una fotografia: tinta di pelle (anche sbiadita) oppure,
+/// nelle scansioni in grigio, mezzitoni graduati. Si guarda la parte centrale del riquadro, ridotta
+/// a 32x32 (una fotocopia retinata o in bianco e nero ne esce con i grigi, un logo no).
+fn natural(img: &DynamicImage, f: &Face) -> bool {
+    let (iw, ih) = img.dimensions();
+    let (x0, y0) = (f.x.max(0.) as u32, f.y.max(0.) as u32);
+    let (cw, ch) = ((f.w as u32).min(iw.saturating_sub(x0)), (f.h as u32).min(ih.saturating_sub(y0)));
+    if cw < 8 || ch < 8 {
+        return false;
+    }
+    let small = img.crop_imm(x0, y0, cw, ch).resize_exact(32, 32, image::imageops::FilterType::Triangle).to_rgb8();
+    let (mut n, mut neutral, mut skin, mut mid) = (0u32, 0u32, 0u32, 0u32);
+    for y in 8..24 {
+        for x in 8..24 {
+            let [r, g, b] = small.get_pixel(x, y).0.map(f32::from);
+            let cb = 128. - 0.168_736 * r - 0.331_264 * g + 0.5 * b;
+            let cr = 128. + 0.5 * r - 0.418_688 * g - 0.081_312 * b;
+            let luma = 0.299 * r + 0.587 * g + 0.114 * b;
+            n += 1;
+            neutral += ((cb - 128.).hypot(cr - 128.) < 9.) as u32;
+            skin += ((75. ..=130.).contains(&cb) && (130. ..=178.).contains(&cr)) as u32;
+            mid += (40. ..=220.).contains(&luma) as u32;
+        }
+    }
+    if neutral * 100 >= n * 85 { mid * 100 >= n * 50 } else { skin * 100 >= n * 20 }
+}
+
+/// Ritaglio intorno al volto (testa e spalle, come in una foto 35x45 mm), dentro l'immagine.
+fn portrait_crop(img: &DynamicImage, f: &Face) -> DynamicImage {
+    let (iw, ih) = (img.width() as f32, img.height() as f32);
+    let (x0, x1) = ((f.x - 0.6 * f.w).max(0.), (f.x + 1.6 * f.w).min(iw));
+    let (y0, y1) = ((f.y - 0.5 * f.h).max(0.), (f.y + 1.7 * f.h).min(ih));
+    img.crop_imm(x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32)
+}
+
+/// Il ritratto non riempie l'immagine: una fototessera incollata su un modulo, un foglio con piu
+/// foto, una scansione con ampi margini. Ogni volto frontale, abbastanza grande e fotografico si
+/// giudica sul proprio ritaglio: il fondo intorno alla testa deve essere uniforme, e questo basta
+/// anche a escludere i volti di una foto di gruppo, che si vedono nei margini del vicino.
+fn judge_crops(img: &DynamicImage, faces: &[Face]) -> Option<String> {
+    let (iw, ih) = (img.width() as f32, img.height() as f32);
+    faces.iter().take(8).find_map(|f| {
+        let inside = f.x >= 0. && f.y >= 0. && f.x + f.w <= iw && f.y + f.h <= ih;
+        let eligible = inside && f.h >= MIN_FACE_PX && f.h / ih >= 0.05;
+        (eligible && frontal(f) && natural(img, f) && uniform_background(&portrait_crop(img, f)))
+            .then(|| format!("{CLASS} ritratto frontale su sfondo uniforme in un'immagine piu ampia (possibile)"))
+    })
+}
+
+/// Come `faces`; se l'immagine intera non mostra volti e ha proporzioni da foglio o da foto, si
+/// riprova su quattro riquadri sovrapposti di 3/5 del lato. Una fototessera incollata su un foglio
+/// A4 ha il volto di ~30 px sulla riduzione a 320 px, al limite del modello; nel riquadro e 1,7
+/// volte piu grande. Le immagini molto larghe (schermate) e le piccole non pagano il costo.
+fn faces_deep(img: &DynamicImage) -> Result<Vec<Face>, String> {
+    let whole = faces(img)?;
+    let (iw, ih) = img.dimensions();
+    if !whole.is_empty() || iw.min(ih) < 600 || !(0.5..=1.5).contains(&(iw as f32 / ih as f32)) {
+        return Ok(whole);
+    }
+    let (tw, th) = (iw * 3 / 5, ih * 3 / 5);
+    let mut found: Vec<Face> = vec![];
+    for (ox, oy) in [(0, 0), (iw - tw, 0), (0, ih - th), (iw - tw, ih - th)] {
+        let (dx, dy) = (ox as f32, oy as f32);
+        for mut f in faces_above(&img.crop_imm(ox, oy, tw, th), TILE_MIN_SCORE)? {
+            f.x += dx;
+            f.y += dy;
+            f.eyes = f.eyes.map(|(x, y)| (x + dx, y + dy));
+            f.nose = (f.nose.0 + dx, f.nose.1 + dy);
+            found.push(f);
+        }
+    }
+    found.sort_by(|a, b| b.score.total_cmp(&a.score));
+    let mut kept: Vec<Face> = vec![];
+    for f in found {
+        if kept.iter().all(|k| iou(k, &f) < NMS_IOU) {
+            kept.push(f);
+        }
+    }
+    Ok(kept)
+}
+
+/// Giudizio completo sui volti trovati: prima l'immagine intera, poi il ritaglio di ogni volto.
+fn judge_all(img: &DynamicImage, faces: &[Face]) -> Option<String> {
+    judge(img, faces).filter(|_| faces.first().is_some_and(|f| natural(img, f))).or_else(|| judge_crops(img, faces))
+}
+
 /// Fototessera nell'immagine, se c'e. Gli errori del rilevatore non fermano l'analisi: tornano
 /// come nota da riportare fra i limiti.
 pub fn photo_id(img: &DynamicImage) -> Result<Option<String>, String> {
     let (w, h) = (img.width(), img.height());
-    // Icone, miniature e strisce non possono essere una fototessera leggibile.
-    if w.min(h) < 100 || !(0.55..=1.15).contains(&(w as f32 / h as f32)) {
+    // Icone, miniature e strisce non possono contenere una fototessera leggibile. Un foglio
+    // orizzontale (fino a 2,5:1) puo portare piu foto, quindi non si scarta per le proporzioni.
+    if w.min(h) < 100 || !(0.4..=2.5).contains(&(w as f32 / h as f32)) {
         return Ok(None);
     }
-    Ok(judge(img, &faces(img)?))
+    Ok(judge_all(img, &faces_deep(img)?))
 }
 
 #[cfg(test)]
@@ -267,19 +366,74 @@ mod tests {
     }
 
     #[test]
-    fn small_face_in_a_large_page_is_not_judged() {
-        // Stesso ritratto dentro un foglio molto piu grande: il volto e il 10% dell'altezza.
+    fn small_face_in_a_large_page_is_judged_on_its_crop() {
+        // Stesso ritratto incollato su un foglio molto piu grande: il volto e il 10% dell'altezza.
+        // L'immagine intera non e una fototessera, ma il ritaglio intorno alla testa si': possibile.
         let p = portrait([225, 228, 232], false).to_rgb8();
         let mut page = RgbImage::from_pixel(1000, 1400, Rgb([250, 250, 250]));
         image::imageops::overlay(&mut page, &p, 300, 400);
         let page = DynamicImage::ImageRgb8(page);
-        assert_eq!(photo_id(&page).unwrap(), None);
+        let f = faces(&page).unwrap();
+        assert_eq!(judge(&page, &f), None);
+        let reason = photo_id(&page).unwrap().expect("ritratto nel foglio");
+        assert!(reason.starts_with(CLASS) && reason.contains("possibile"), "{reason}");
     }
 
     #[test]
-    fn landscape_images_are_skipped() {
+    fn portrait_pasted_on_a_large_form_is_judged() {
+        // Volto piccolo su un foglio grande (anche i riquadri lo cercano, se l'intera immagine no).
+        let p = portrait([225, 228, 232], false).to_rgb8();
+        let mut page = RgbImage::from_pixel(1600, 2400, Rgb([252, 252, 250]));
+        image::imageops::overlay(&mut page, &p, 900, 300);
+        let page = DynamicImage::ImageRgb8(page);
+        let reason = photo_id(&page).unwrap().expect("ritratto nel modulo");
+        assert!(reason.starts_with(CLASS) && reason.contains("possibile"), "{reason}");
+    }
+
+    #[test]
+    fn four_portraits_on_a_sheet_are_judged_one_by_one() {
+        let p = portrait([225, 228, 232], false).to_rgb8();
+        let mut sheet = RgbImage::from_pixel(820, 1020, Rgb([245, 245, 245]));
+        for (x, y) in [(20, 20), (450, 20), (20, 520), (450, 520)] {
+            image::imageops::overlay(&mut sheet, &p, x, y);
+        }
+        let reason = photo_id(&DynamicImage::ImageRgb8(sheet)).unwrap().expect("foglio di fototessere");
+        assert!(reason.starts_with(CLASS), "{reason}");
+    }
+
+    #[test]
+    fn small_face_on_a_busy_page_is_not_judged() {
+        // Lo stesso ritratto con fondo d'ambiente: nel ritaglio i margini non sono uniformi.
+        let p = portrait([225, 228, 232], true).to_rgb8();
+        let mut page = RgbImage::from_pixel(1000, 1400, Rgb([250, 250, 250]));
+        image::imageops::overlay(&mut page, &p, 300, 400);
+        assert_eq!(photo_id(&DynamicImage::ImageRgb8(page)).unwrap(), None);
+    }
+
+    #[test]
+    fn plain_landscape_images_have_no_photo_id() {
         let wide = DynamicImage::ImageRgb8(RgbImage::from_pixel(800, 400, Rgb([200, 200, 200])));
         assert_eq!(photo_id(&wide).unwrap(), None);
+        // Strisce molto allungate non si analizzano nemmeno.
+        let strip = DynamicImage::ImageRgb8(RgbImage::from_pixel(1200, 300, Rgb([200, 200, 200])));
+        assert_eq!(photo_id(&strip).unwrap(), None);
+    }
+
+    #[test]
+    fn flat_drawings_are_not_photographs() {
+        let face_box = |w: f32, h: f32| Face { score: 0.9, x: 0., y: 0., w, h, eyes: [(0., 0.); 2], nose: (0., 0.) };
+        // Logo arancione piatto, come un'icona qualsiasi.
+        let orange = DynamicImage::ImageRgb8(RgbImage::from_pixel(200, 200, Rgb([240, 80, 51])));
+        assert!(!natural(&orange, &face_box(200., 200.)));
+        // Bianco e nero netto a meta: nessun mezzotono nella parte centrale.
+        let mut bw = RgbImage::from_pixel(200, 200, Rgb([255, 255, 255]));
+        fill(&mut bw, 0, 0, 200, 100, [0, 0, 0]);
+        assert!(!natural(&DynamicImage::ImageRgb8(bw), &face_box(200., 200.)));
+        // Pelle (anche in toni piu scuri) e grigi medi di una fotocopia: fotografici.
+        for c in [[224, 172, 140], [141, 85, 36], [198, 134, 66]] {
+            assert!(natural(&DynamicImage::ImageRgb8(RgbImage::from_pixel(200, 200, Rgb(c))), &face_box(200., 200.)), "{c:?}");
+        }
+        assert!(natural(&DynamicImage::ImageRgb8(RgbImage::from_pixel(200, 200, Rgb([150, 150, 150]))), &face_box(200., 200.)));
     }
 
     #[test]

@@ -377,12 +377,33 @@ fn register_task(name: &str, xml: &str) -> Result<(), String> {
 pub fn delete_task(name: &str) {
     let _ = run_tool("schtasks.exe", &["/Delete", "/TN", name, "/F"]);
 }
+/// Permessi di %ProgramData%\TracciaDoc. Di norma gli utenti comuni vi creano file e cartelle, e la
+/// scansione pianificata (SYSTEM) legge qui configurazione e stato: restano solo SYSTEM e
+/// amministratori con controllo completo. Gli utenti comuni leggono (verbali ed esiti) e possono
+/// creare file soltanto nella cartella principale, per il segnale che annulla lo spegnimento.
+/// I proprietari dei file gia presenti passano agli amministratori. Un errore non blocca
+/// l'installazione ma e segnalato.
+fn secure_data_dir() {
+    let dir = data_dir().to_string_lossy().into_owned();
+    let steps: [&[&str]; 3] = [
+        &[&dir, "/inheritance:r", "/grant:r", "*S-1-5-18:(OI)(CI)F", "*S-1-5-32-544:(OI)(CI)F", "*S-1-5-32-545:(OI)(CI)RX"],
+        &[&dir, "/grant", "*S-1-5-32-545:(WD)"],
+        &[&dir, "/setowner", "*S-1-5-32-544", "/T", "/C", "/Q"],
+    ];
+    for args in steps {
+        if let Err(e) = run_tool("icacls.exe", args) {
+            diag::warn(format!("Permessi della cartella dati non impostati: {e}"));
+            return;
+        }
+    }
+}
 /// Applica la configurazione (serve l'amministratore): salva config.json e crea/rimuove le attività.
 pub fn apply_config(cfg: &Config, exe: &Path) -> Result<(), String> {
     if let Some(plan) = &cfg.plan {
         plan.validate()?;
     }
     std::fs::create_dir_all(verbali_dir()).map_err(|e| format!("Cartella dati non creata: {e}"))?;
+    secure_data_dir();
     match &cfg.plan {
         Some(plan) => register_task(TASK_SCAN, &scan_task_xml(plan, exe)?)?,
         None => delete_task(TASK_SCAN),

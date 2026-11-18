@@ -266,6 +266,13 @@
     "limited": true
   },
   {
+    "file": "pagina-testo-carta-girata.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG pagina con documento girato",
+    "limited": false
+  },
+  {
     "file": "fototessera-sintetica.png",
     "positive": true,
     "document_class": "fototessera",
@@ -276,6 +283,20 @@
     "file": "ritratto-sfondo-vario.png",
     "positive": false,
     "document_class": "ritratto",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "fototessera-su-modulo.png",
+    "positive": true,
+    "document_class": "fototessera",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "fototessere-foglio.png",
+    "positive": true,
+    "document_class": "fototessera",
     "format": "PNG",
     "limited": false
   }

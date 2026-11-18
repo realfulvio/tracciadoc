@@ -279,7 +279,9 @@ fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: String, color: Option
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.;
                 ui.label(RichText::new(label).size(12.5).color(c_weak()));
-                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(c_text())));
+                // Tessere strette (finestra a 1024 px): cifre piu piccole, per non andare a capo.
+                let size = if width < 150. { 24. } else { 30. };
+                ui.add(egui::Label::new(RichText::new(value).font(semibold(size)).color(color.unwrap_or(c_text()))).truncate());
             });
         });
 }
@@ -1112,7 +1114,10 @@ impl eframe::App for App {
             .frame(egui::Frame::new().fill(c_bar()).inner_margin(egui::Margin::symmetric(28, if short { 8 } else { 14 })))
             .show(root, |ui| {
                 let h = if short { 40. } else { 48. };
-                ui.horizontal(|ui| {
+                // Revisione con finestra stretta o UI ingrandita: casella e conteggio sopra, pulsanti sotto,
+                // invece di sovrapporli ("Genera verbale PDF..." copriva "Seleziona tutti").
+                let stacked = active == 4 && !(self.plan_page && !running) && ui.available_width() < 1180.;
+                let mut actions = |ui: &mut egui::Ui| {
                     ui.set_min_height(h);
                     if self.plan_page && !running {
                         self.plan_actions(ui, h);
@@ -1170,11 +1175,13 @@ impl eframe::App for App {
                                 });
                             } else {
                                 if open > 0 {
-                                    let mut all = selected == open;
-                                    if ui.add(egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
-                                        for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
-                                    }
-                                    ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
+                                    ui.horizontal(|ui| {
+                                        let mut all = selected == open;
+                                        if ui.add(egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
+                                            for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
+                                        }
+                                        ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
+                                    });
                                 }
                                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
@@ -1201,7 +1208,12 @@ impl eframe::App for App {
                             }
                         }
                     }
-                });
+                };
+                if stacked {
+                    ui.vertical(|ui| actions(ui));
+                } else {
+                    ui.horizontal(|ui| actions(ui));
+                }
             });
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(c_bg()).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
@@ -1380,7 +1392,7 @@ impl eframe::App for App {
                                 ui.horizontal(|ui| {
                                     tile(ui, w, "ANALIZZATI", it_num(done), None);
                                     tile(ui, w, "SOSPETTI", findings.to_string(), if findings > 0 { Some(c_warn()) } else { None });
-                                    tile(ui, w, "VELOCITA", rate_text.clone(), None);
+                                    tile(ui, w, "FILE/S", rate_text.trim_end_matches(" file/s").to_string(), None);
                                     tile(ui, w, "TRASCORSO", elapsed_text, None);
                                 });
                                 card(ui, |ui| {

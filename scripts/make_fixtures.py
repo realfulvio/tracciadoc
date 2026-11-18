@@ -128,10 +128,17 @@ stream=io.BytesIO();c=Canvas(stream,pagesize=(595,842));c.drawImage(ImageReader(
 (DEST/'carta-a4-grandezza-reale.pdf').write_bytes(stream.getvalue());record('carta-a4-grandezza-reale.pdf',True,'sanitaria','PDF raster carta piccola')
 with zipfile.ZipFile(DEST/'archivio.zip','w') as z:z.writestr('../../outside.txt','synthetic')
 record('archivio.zip',False,'problema','ZIP non aperto',True)
+# Pagina con testo dritto e, separata da una fascia vuota, una carta girata di 90 gradi: la lettura
+# dritta della pagina e buona (testo ordinario) e non deve fermare la ricerca del documento girato.
+top=image('APPUNTI DI RIUNIONE\nAcquisto materiali\nVerifica preventivi\nProssimo incontro\nOrdine del giorno e varie\nAggiornamento calendario').crop((0,0,1500,560))
+page=Image.new('RGB',(1500,2060),'white');page.paste(top,(0,0));page.paste(image(TEXT['carta']).rotate(90,expand=True),(250,560))
+page.save(DEST/'pagina-testo-carta-girata.png');record('pagina-testo-carta-girata.png',True,'carta','PNG pagina con documento girato')
 # Ritratti disegnati per le fototessere (make_photoid.py): il manifest deve elencare tutto il corpus.
 import subprocess,sys
 subprocess.run([sys.executable,str(ROOT/'scripts'/'make_photoid.py')],check=True)
 record('fototessera-sintetica.png',True,'fototessera','PNG')
 record('ritratto-sfondo-vario.png',False,'ritratto','PNG')
+record('fototessera-su-modulo.png',True,'fototessera','PNG')
+record('fototessere-foglio.png',True,'fototessera','PNG')
 (ROOT/'fixtures'/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 print(f'{len(manifest)} synthetic fixtures generated.')

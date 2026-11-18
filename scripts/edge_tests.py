@@ -44,7 +44,9 @@ note=Image.open(PKG/'prove-sintetiche'/'appunti.png');mosaic=Image.new('RGB',(no
 for i in range(9):mosaic.paste(note,((i%3)*note.width,(i//3)*note.height))
 images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.png',images/'z.png')
-result=scan('timeout',images,['--timeout-secs','1'])
+# The photograph check loads the face model in each new worker (~0.3 s on a horizontal card): it is
+# left out here so that z.png still fits in the 1 s limit and the test measures only the retry logic.
+result=scan('timeout',images,['--timeout-secs','1','--no-photo-id'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
 assert 1 <= result['timing']['timeout_retries'] <= 2, 'Every timed-out file gets at most one retry'
 assert result['analyzed'] + result['partial'] + result['skipped'] + result['ignored_type'] == 2, 'Retries must not count a file twice'

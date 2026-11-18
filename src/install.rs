@@ -130,19 +130,21 @@ pub fn install() -> Result<(), String> {
         replace_tree(&src, &dst)?;
         cleanup_old();
     }
-    register(&installed_exe())?;
+    register(&installed_exe(), env!("CARGO_PKG_VERSION"))?;
     let cfg = sched::load_config();
     sched::apply_config(&cfg, &installed_exe())?;
     diag::ok(format!("TracciaDoc {} installato in {}", env!("CARGO_PKG_VERSION"), dst.display()));
     Ok(())
 }
-/// Voci di registro e collegamento nel menu Start, puntati all'EXE installato.
-pub fn register(exe: &Path) -> Result<(), String> {
+/// Voci di registro e collegamento nel menu Start, puntati all'EXE installato. `version` e quella
+/// del programma che si sta installando: durante un aggiornamento `register` gira ancora nel
+/// processo vecchio, che non puo usare la propria versione.
+pub fn register(exe: &Path, version: &str) -> Result<(), String> {
     let exe_s = exe.to_string_lossy().to_string();
     let reg = |key: &str, name: &str, kind: &str, value: &str| sched::run_tool("reg.exe", &["add", key, "/v", name, "/t", kind, "/d", value, "/f"]).map(|_| ());
     reg(RUN_KEY, "TracciaDoc", "REG_SZ", &format!("\"{exe_s}\" --tray"))?;
     reg(UNINSTALL_KEY, "DisplayName", "REG_SZ", "TracciaDoc")?;
-    reg(UNINSTALL_KEY, "DisplayVersion", "REG_SZ", env!("CARGO_PKG_VERSION"))?;
+    reg(UNINSTALL_KEY, "DisplayVersion", "REG_SZ", version)?;
     reg(UNINSTALL_KEY, "Publisher", "REG_SZ", "hcok")?;
     reg(UNINSTALL_KEY, "DisplayIcon", "REG_SZ", &exe_s)?;
     reg(UNINSTALL_KEY, "InstallLocation", "REG_SZ", &install_dir().to_string_lossy())?;

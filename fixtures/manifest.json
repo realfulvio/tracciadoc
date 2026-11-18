@@ -273,6 +273,13 @@
     "limited": false
   },
   {
+    "file": "pagina-testo-lungo-carta-girata.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG pagina lunga con documento girato",
+    "limited": false
+  },
+  {
     "file": "fototessera-sintetica.png",
     "positive": true,
     "document_class": "fototessera",

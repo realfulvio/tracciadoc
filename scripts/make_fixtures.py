@@ -133,6 +133,16 @@ record('archivio.zip',False,'problema','ZIP non aperto',True)
 top=image('APPUNTI DI RIUNIONE\nAcquisto materiali\nVerifica preventivi\nProssimo incontro\nOrdine del giorno e varie\nAggiornamento calendario').crop((0,0,1500,560))
 page=Image.new('RGB',(1500,2060),'white');page.paste(top,(0,0));page.paste(image(TEXT['carta']).rotate(90,expand=True),(250,560))
 page.save(DEST/'pagina-testo-carta-girata.png');record('pagina-testo-carta-girata.png',True,'carta','PNG pagina con documento girato')
+# Pagina A4 (200 dpi) con molto testo dritto e, in basso e separata da una fascia vuota, una carta piccola girata di
+# 90 gradi: la lettura dritta e ottima (confidenza alta) e la media non scende, quindi e la prova che il blocco girato
+# si cerca comunque. La 0.5.2 la perde, la 0.5.3 no.
+SENT=['Il presente verbale riassume le attivita svolte dall ufficio nel corso del mese di gennaio.','Si ricorda che le richieste vanno inoltrate entro il quindicesimo giorno del mese successivo.','La riunione di coordinamento e stata aggiornata a data da definire, salvo diversa comunicazione.','Gli acquisti di materiale di consumo sono stati approvati con determinazione del responsabile.','Il calendario delle manutenzioni e consultabile presso la segreteria negli orari di apertura.','Per ogni anomalia riscontrata si prega di aprire una segnalazione e di allegare una breve descrizione.','Il servizio di assistenza risponde dal lunedi al venerdi, con esclusione dei giorni festivi.','La documentazione tecnica aggiornata e stata archiviata nella cartella condivisa del reparto.']
+long_page=Image.new('RGB',(1654,2338),'white');ld=ImageDraw.Draw(long_page);lf=ImageFont.truetype(FONT,30)
+ld.text((120,90),'FACSIMILE SINTETICO - NON VALIDO',fill='black',font=lf)
+for i in range(26):ld.text((120,170+i*42),SENT[(i*3+i//8)%len(SENT)],fill='black',font=lf)
+small_card=image(TEXT['carta'],size=48).resize((900,600),Image.LANCZOS).rotate(90,expand=True)
+long_page.paste(small_card,(200,1380))
+long_page.save(DEST/'pagina-testo-lungo-carta-girata.png');record('pagina-testo-lungo-carta-girata.png',True,'carta','PNG pagina lunga con documento girato')
 # Ritratti disegnati per le fototessere (make_photoid.py): il manifest deve elencare tutto il corpus.
 import subprocess,sys
 subprocess.run([sys.executable,str(ROOT/'scripts'/'make_photoid.py')],check=True)

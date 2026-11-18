@@ -196,7 +196,7 @@ fn install_package(zip: &Path, expected: &str, version: Option<&str>, work: &Pat
     install::replace_tree(&root, &install::install_dir())?;
     // Via subito le copie .old; quelle ancora in uso (icona aperta) restano fino alla prossima pulizia.
     install::cleanup_old();
-    install::register(&install::installed_exe())?;
+    install::register(&install::installed_exe(), &declared)?;
     // Ricrea le attività con l'EXE nuovo (stesso percorso, eventuali nuove opzioni).
     let _ = sched::apply_config(&sched::load_config(), &install::installed_exe());
     let msg = format!("Aggiornato da {} a {declared} (SHA-256 verificato)", env!("CARGO_PKG_VERSION"));

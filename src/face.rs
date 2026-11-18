@@ -190,6 +190,10 @@ pub fn judge(img: &DynamicImage, faces: &[Face]) -> Option<String> {
     }
 }
 
+/// Lato minimo dell'immagine: sotto, e un'icona o una miniatura (le immagini di esempio incluse in
+/// Python e Git, 142x181 px, erano segnalate) e non una scansione leggibile di una fototessera
+/// (35x45 mm a 100 dpi sono gia 138x177 px, a 150 dpi 207x266).
+const MIN_SIDE: u32 = 150;
 /// Altezza minima del volto, in pixel, per giudicare un ritratto dentro un'immagine piu ampia.
 const MIN_FACE_PX: f32 = 80.;
 
@@ -285,7 +289,7 @@ pub fn photo_id(img: &DynamicImage) -> Result<Option<String>, String> {
     let (w, h) = (img.width(), img.height());
     // Icone, miniature e strisce non possono contenere una fototessera leggibile. Un foglio
     // orizzontale (fino a 2,5:1) puo portare piu foto, quindi non si scarta per le proporzioni.
-    if w.min(h) < 100 || !(0.4..=2.5).contains(&(w as f32 / h as f32)) {
+    if w.min(h) < MIN_SIDE || !(0.4..=2.5).contains(&(w as f32 / h as f32)) {
         return Ok(None);
     }
     Ok(judge_all(img, &faces_deep(img)?))
@@ -464,6 +468,41 @@ mod tests {
             nose: (228., 180.),
         };
         assert!(!frontal(&f));
+    }
+
+    /// Diagnostica su una cartella di immagini sintetiche (mai nel repository):
+    /// TRACCIADOC_FACE_DIR=cartella cargo test face_dir -- --nocapture
+    /// Per ogni immagine: dimensioni, esito finale e, per i primi volti (anche a punteggio basso),
+    /// punteggio, altezza relativa, frontalita, centro, fondo uniforme, aspetto fotografico e fondo del ritaglio.
+    #[test]
+    fn face_dir() {
+        let Ok(dir) = std::env::var("TRACCIADOC_FACE_DIR") else { return };
+        let mut paths: Vec<_> = std::fs::read_dir(dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
+        paths.sort();
+        for p in paths {
+            let Ok(img) = image::open(&p) else { continue };
+            let (iw, ih) = (img.width() as f32, img.height() as f32);
+            let t = std::time::Instant::now();
+            let verdict = photo_id(&img).unwrap();
+            let ms = t.elapsed().as_secs_f64() * 1000.;
+            let all = faces_above(&img, 0.3).unwrap_or_default();
+            let found = faces_deep(&img).unwrap_or_default();
+            let cell = |f: &Face| {
+                format!(
+                    "[s{:.2} h{:.2} fr{} cx{:.2} unif{} nat{} cropunif{}]",
+                    f.score, f.h / ih, frontal(f) as u8, (f.x + f.w / 2.) / iw, uniform_background(&img) as u8, natural(&img, f) as u8,
+                    uniform_background(&portrait_crop(&img, f)) as u8
+                )
+            };
+            let faces_txt: Vec<String> = found.iter().take(3).map(cell).collect();
+            let near: Vec<String> = all.iter().filter(|f| f.score < MIN_SCORE).take(2).map(|f| format!("(basso s{:.2} h{:.2})", f.score, f.h / ih)).collect();
+            println!(
+                "FACEDIR {} {}x{} {:.0}ms => {} | volti {} {} {}",
+                p.file_name().unwrap().to_string_lossy(), iw, ih, ms,
+                verdict.as_deref().map_or("-".to_string(), |v| if v.contains("probabile") { "PROBABILE".into() } else { "POSSIBILE".into() }),
+                found.len(), faces_txt.join(" "), near.join(" ")
+            );
+        }
     }
 
     /// Prova su un'immagine reale fornita a mano (mai nel repository):

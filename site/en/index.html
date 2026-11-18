@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TracciaDoc – Find leftover ID document scans on Windows</title>
+<meta name="description" content="Free, open-source Windows app that finds forgotten scans of ID cards, driving licences and passports on a PC, deletes them and writes a PDF report.">
+<link rel="canonical" href="https://realfulvio.github.io/tracciadoc/en/">
+<link rel="alternate" hreflang="it" href="https://realfulvio.github.io/tracciadoc/">
+<link rel="alternate" hreflang="en" href="https://realfulvio.github.io/tracciadoc/en/">
+<link rel="alternate" hreflang="x-default" href="https://realfulvio.github.io/tracciadoc/">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#14161A">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="TracciaDoc">
+<meta property="og:title" content="TracciaDoc – Find leftover ID document scans on Windows">
+<meta property="og:description" content="Find the ID document scans left on a Windows PC, delete them and document it all in a PDF report. Offline, free, open source.">
+<meta property="og:url" content="https://realfulvio.github.io/tracciadoc/en/">
+<meta property="og:locale" content="en_GB">
+<meta property="og:image" content="https://realfulvio.github.io/tracciadoc/img/og-en.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="TracciaDoc – Find leftover ID document scans on Windows">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TracciaDoc – Find leftover ID document scans on Windows">
+<meta name="twitter:description" content="Find the ID document scans left on a Windows PC, delete them and document it all in a PDF report. Offline, free, open source.">
+<meta name="twitter:image" content="https://realfulvio.github.io/tracciadoc/img/og-en.png">
+<link rel="icon" type="image/png" href="../img/app-icon-dark-256.png">
+<link rel="apple-touch-icon" href="../img/app-icon-dark-256.png">
+<link rel="preload" href="../fonts/TitilliumWeb-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="../img/gui-segnalazioni.webp" as="image" type="image/webp" fetchpriority="high">
+<script>try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "TracciaDoc", "description": "Free, open-source Windows app that scans disks for copies of identity documents (ID card, driving licence, passport, health card, ID-style photos), lets you delete them and produces a PDF report. Works offline.", "url": "https://realfulvio.github.io/tracciadoc/en/", "inLanguage": "en", "applicationCategory": "SecurityApplication", "operatingSystem": "Windows 10, Windows 11", "softwareRequirements": "Windows x64", "image": "https://realfulvio.github.io/tracciadoc/img/og-en.png", "downloadUrl": "https://github.com/realfulvio/tracciadoc/releases/latest", "license": "https://opensource.org/license/mit", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "codeRepository": "https://github.com/realfulvio/tracciadoc", "sameAs": ["https://github.com/realfulvio/tracciadoc"]}</script>
+<style>
+@font-face{font-family:"Titillium Web";font-weight:400;src:url(../fonts/TitilliumWeb-Regular.woff2) format("woff2");font-display:swap}
+@font-face{font-family:"Titillium Web";font-weight:600;src:url(../fonts/TitilliumWeb-SemiBold.woff2) format("woff2");font-display:swap}
+:root{--bg:#14161A;--bg2:#1A1D21;--surf:#23272D;--bd:#363C44;--tx:#ECEFF2;--tx2:#9AA4AD;--pri:#12806F;--pri2:#129680;--acc:#3ECFB2;--warn:#F2B84B}
+:root[data-theme=light]{--bg:#F6F8FA;--bg2:#FFFFFF;--surf:#FFFFFF;--bd:#D8DEE4;--tx:#14161A;--tx2:#58626C;--pri:#0E6E5F;--pri2:#12806F;--acc:#0E7A68;--warn:#9A6400}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--tx);font:400 18px/1.6 "Titillium Web",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--acc)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+header{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 85%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--bd)}
+nav{display:flex;align-items:center;gap:20px;height:64px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:22px;color:var(--tx);text-decoration:none}
+.brand img{width:34px;height:34px;border-radius:8px}
+nav .links{margin-left:auto;display:flex;gap:22px;align-items:center}
+nav .links a{color:var(--tx2);text-decoration:none;font-size:16px}
+nav .links a:hover{color:var(--tx)}
+.ctl{display:flex;gap:8px;align-items:center}
+.ctl a,.ctl button{display:inline-flex;align-items:center;justify-content:center;background:var(--surf);color:var(--tx);border:1px solid var(--bd);border-radius:8px;height:34px;min-width:38px;padding:0 10px;font:600 14px inherit;font-family:inherit;cursor:pointer;text-decoration:none}
+.ctl a[aria-current=true]{background:var(--pri);border-color:var(--pri);color:#fff}
+.ctl a:hover,.ctl button:hover{border-color:var(--acc)}
+.hero{position:relative;overflow:hidden;padding:84px 0 64px;background:radial-gradient(900px 420px at 85% 10%,color-mix(in srgb,var(--pri) 38%,transparent),transparent 70%),var(--bg)}
+.hero .grid{display:grid;grid-template-columns:1.05fr 1fr;gap:48px;align-items:center}
+.hero img.icon{width:84px;height:84px;border-radius:20px;box-shadow:0 10px 30px #0006}
+h1{font-size:clamp(34px,5vw,56px);line-height:1.1;margin:18px 0 10px;font-weight:600;letter-spacing:-.5px}
+.tag{font-size:clamp(20px,2.6vw,26px);color:var(--acc);font-weight:600;margin:0 0 16px}
+.lead{color:var(--tx2);max-width:34em;margin:0 0 28px}
+.cta{display:flex;flex-wrap:wrap;gap:12px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:50px;padding:0 24px;border-radius:10px;font-weight:600;font-size:17px;text-decoration:none;border:1px solid var(--bd);color:var(--tx);background:var(--surf)}
+.btn.p{background:var(--pri);border-color:var(--pri);color:#fff}
+.btn.p:hover{background:var(--pri2)}
+.meta{margin-top:14px;font-size:14px;color:var(--tx2)}
+.shot{border:1px solid var(--bd);border-radius:14px;overflow:hidden;box-shadow:0 24px 60px #0006;background:var(--surf)}
+.shot img{display:block;width:100%;height:auto}
+section{padding:72px 0}
+section.alt{background:var(--bg2);border-block:1px solid var(--bd)}
+h2{font-size:clamp(26px,3.6vw,38px);margin:0 0 12px;font-weight:600;line-height:1.2}
+h3{font-weight:600}
+.sub{color:var(--tx2);max-width:42em;margin:0 0 40px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px}
+.card{background:var(--surf);border:1px solid var(--bd);border-radius:12px;padding:22px}
+.card h3{margin:10px 0 6px;font-size:20px}
+.card p{margin:0;color:var(--tx2);font-size:16px;line-height:1.5}
+.ico{width:42px;height:42px;border-radius:10px;display:grid;place-items:center;background:color-mix(in srgb,var(--acc) 16%,transparent);color:var(--acc);font-weight:600;font-size:18px}
+.steps{counter-reset:s;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;list-style:none;margin:0;padding:0}
+.step{background:var(--surf);border:1px solid var(--bd);border-radius:12px;padding:22px}
+.step::before{counter-increment:s;content:counter(s);display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--pri);color:#fff;font-weight:600;margin-bottom:12px}
+.step h3{margin:0 0 6px;font-size:20px}
+.step p{margin:0;color:var(--tx2);font-size:16px;line-height:1.5}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center}
+.two ul,.list{padding-left:20px;margin:0;color:var(--tx2)}
+.two li,.list li{margin:8px 0}
+.list b{color:var(--tx)}
+.note{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent);padding:14px 18px;border-radius:0 10px 10px 0;color:var(--tx);font-size:16px;margin-top:24px}
+.doc{max-width:380px;margin:0 auto}
+.faq{max-width:46em}
+.faq h3{font-size:21px;margin:28px 0 6px}
+.faq p{margin:0;color:var(--tx2)}
+.prose{max-width:46em;color:var(--tx2)}
+.prose p{margin:0 0 14px}
+code{font-family:ui-monospace,Consolas,monospace;font-size:14px;background:var(--surf);border:1px solid var(--bd);padding:1px 6px;border-radius:5px}
+.dl{text-align:center}
+.dl .sub{margin-inline:auto}
+.dl .cta{justify-content:center}
+footer{padding:36px 0;border-top:1px solid var(--bd);color:var(--tx2);font-size:15px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+footer img{height:22px;opacity:.9}
+:root[data-theme=light] footer img{filter:invert(1)}
+.skip{position:absolute;left:-9999px;top:8px;background:var(--pri);color:#fff;padding:8px 14px;border-radius:8px;z-index:20}
+.skip:focus{left:8px}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+@media(max-width:860px){.hero .grid,.two{grid-template-columns:1fr}.hero{padding-top:48px}nav .links a.hide{display:none}}
+</style>
+</head>
+<body>
+<a href="#top" class="skip">Skip to content</a>
+<header><div class="wrap"><nav aria-label="Principale">
+  <a class="brand" href="./"><img src="../img/app-icon-dark-256.png" width="34" height="34" alt="">TracciaDoc</a>
+  <div class="links">
+    <a class="hide" href="#come">How it works</a>
+    <a class="hide" href="#cosa">What it finds</a>
+    <a class="hide" href="#faq">FAQ</a>
+    <a class="hide" href="https://github.com/realfulvio/tracciadoc">GitHub</a>
+    <div class="ctl">
+      <a href="https://realfulvio.github.io/tracciadoc/" hreflang="it" lang="it">IT</a><a href="https://realfulvio.github.io/tracciadoc/en/" hreflang="en" lang="en" aria-current="true">EN</a>
+      <button id="bTh" type="button" aria-label="Toggle light/dark theme">◐</button>
+    </div>
+  </div>
+</nav></div></header>
+
+<main id="top">
+<div class="hero"><div class="wrap grid">
+  <div>
+    <img class="icon" src="../img/app-icon-dark-256.png" width="84" height="84" alt="">
+    <h1>TracciaDoc: find leftover ID document copies on your PC</h1>
+    <p class="tag">Find, review, delete, verify.</p>
+    <p class="lead">TracciaDoc is a free, open-source Windows 10/11 app that scans your disks for forgotten scans and photos of ID cards, driving licences, passports, health cards and ID-style photos. It shows blurred previews, deletes only what you tick and produces a PDF report of the clean-up. Everything runs offline.</p>
+    <div class="cta">
+      <a class="btn p" href="https://github.com/realfulvio/tracciadoc/releases/latest">Download for Windows x64</a>
+      <a class="btn" href="https://github.com/realfulvio/tracciadoc">Source on GitHub</a>
+    </div>
+    <p class="meta">Free · Open source (MIT) · Windows 10/11 · No installation required</p>
+  </div>
+  <div class="shot"><img src="../img/gui-segnalazioni.webp" width="1200" height="510" alt="TracciaDoc screenshot listing the flagged files to review: document type, path, reason and Open, Folder and Delete buttons" fetchpriority="high"></div>
+</div></div>
+
+<section class="alt"><div class="wrap">
+  <h2>Why document scans stay on the PC</h2><p class="sub">When an office issues documents or handles paperwork, scans end up in Downloads, Documents or on the Desktop and stay there for years. TracciaDoc finds them, so you can apply data minimisation (GDPR Art. 5) without searching folder by folder.</p>
+  <div class="cards">
+    <div class="card"><div class="ico" aria-hidden="true">⌂</div><h3>Fully local</h3><p>No cloud, no telemetry: no file ever leaves the computer. Offline OCR (Italian).</p></div>
+    <div class="card"><div class="ico" aria-hidden="true">◉</div><h3>Reads common formats</h3><p>PDFs (scanned too), images, TIFF, Office and OpenDocument files, even with a wrong extension.</p></div>
+    <div class="card"><div class="ico" aria-hidden="true">⚡</div><h3>Light and fast</h3><p>Written in Rust, one executable, multi-core and CPU SIMD instructions.</p></div>
+    <div class="card"><div class="ico" aria-hidden="true">✓</div><h3>You stay in control</h3><p>Scanning is read-only. Only what you reviewed and ticked gets deleted.</p></div>
+  </div>
+</div></section>
+
+<section id="come"><div class="wrap">
+  <h2>How it works: four steps</h2><p class="sub">From disk scan to PDF report, without leaving the app.</p>
+  <ol class="steps">
+    <li class="step"><h3>Scan</h3><p>Pick the disks and folders to check. Searching is read-only.</p></li>
+    <li class="step"><h3>Review</h3><p>Each finding shows type, path, reason and a blurred thumbnail that sharpens on hover.</p></li>
+    <li class="step"><h3>Delete</h3><p>Tick the files to remove and confirm. Deletion is permanent and only touches local files.</p></li>
+    <li class="step"><h3>Verify</h3><p>It scans again and generates a PDF report with the before and after situation.</p></li>
+  </ol>
+  <div class="note">Findings are hints to check by eye, not a certification: the “no document found” outcome only appears with full coverage. Errors, denied access and reached limits are declared and make the check incomplete.</div>
+</div></section>
+
+<section class="alt" id="cosa"><div class="wrap">
+  <h2>Which documents it looks for</h2><p class="sub">TracciaDoc looks for digital copies of the identity documents most common in Italy.</p>
+  <div class="two" style="align-items:start">
+    <ul class="list">
+      <li><b>ID card</b>: paper and electronic (CIE), front and back</li>
+      <li><b>Driving licence</b></li>
+      <li><b>Passport</b>: including the data page with the machine-readable zone (MRZ)</li>
+      <li><b>Health insurance card</b>: and tax-code card</li>
+      <li><b>ID-style photos</b>: passport-size photos with a single front-facing face</li>
+    </ul>
+    <div>
+      <h3>What it does not do</h3>
+      <ul class="list">
+      <li>It does not look for stray names or tax codes inside files: the target is documents, not isolated personal details.</li>
+      <li>It does not catch everything: small faces on a page, side views, group photos and sheets with several ID photos may be missed. Methods and limits are on the Validation page (in Italian).</li>
+      <li>It never sends anything to external servers and never deletes automatically.</li>
+      </ul>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap two">
+  <div class="shot"><img src="../img/gui-aree-030.webp" width="1200" height="472" loading="lazy" alt="TracciaDoc area selection screen: disk cards showing capacity and used space"></div>
+  <div>
+    <h2>A clear interface, dark and light theme</h2>
+    <ul class="list">
+      <li>Disk cards with used space</li>
+      <li>Phase-by-phase progress while scanning</li>
+      <li>Filters and detail panel when reviewing</li>
+      <li>Before/after comparison in the final check</li>
+    </ul>
+  </div>
+</div></section>
+
+<section class="alt"><div class="wrap two">
+  <div>
+    <h2>The PDF report</h2><p class="sub" style="margin-bottom:16px">A documented record of what was checked and what was removed.</p>
+    <ul class="list">
+      <li>Scope, outcomes and limits of the scan</li>
+      <li>Deletions performed and final re-scan</li>
+      <li>Automatic saving to a configurable network folder</li>
+    </ul>
+  </div>
+  <div class="doc shot"><img src="../img/verbale-esempio.webp" width="640" height="905" loading="lazy" alt="First page of a sample PDF report generated by TracciaDoc"></div>
+</div></section>
+
+<section><div class="wrap">
+  <h2>For checking several PCs</h2><p class="sub">Optional: TracciaDoc also works as a plain portable folder.</p>
+  <div class="cards">
+    <div class="card"><h3>Scheduled scans</h3><p>Once, daily, weekly or monthly. Runs without a logged-in user, at low priority. Never deletes anything by itself.</p></div>
+    <div class="card"><h3>Tray icon</h3><p>Very light, turns orange when there are documents to review.</p></div>
+    <div class="card"><h3>Automatic updates</h3><p>From GitHub releases with SHA-256 verification, never during a scan. Can be turned off.</p></div>
+  </div>
+</div></section>
+
+<section class="alt" id="faq"><div class="wrap">
+  <h2>Frequently asked questions</h2>
+  <div class="faq">
+    <h3>What is TracciaDoc?</h3>
+    <p>A Windows 10/11 program that scans a PC's disks for digital copies of identity documents (ID card, driving licence, passport, health card, ID-style photos), lets you delete them and produces a PDF report.</p>
+    <h3>Is TracciaDoc free?</h3>
+    <p>Yes. It is open source under the MIT licence: the code is on GitHub and the program is a free download from the releases page.</p>
+    <h3>Are my files sent online?</h3>
+    <p>No. Analysis, including OCR, runs entirely on the computer. There is no telemetry and no file leaves the PC. The only optional connection is the update check, which can be turned off.</p>
+    <h3>Does it delete files by itself?</h3>
+    <p>No. Scanning is read-only. Only what the operator has reviewed and ticked is deleted; scheduled scans never delete anything.</p>
+    <h3>Which systems does it run on?</h3>
+    <p>64-bit Windows 10 and 11. There are no macOS or Linux versions.</p>
+    <h3>Is detection 100% reliable?</h3>
+    <p>No. Findings are hints to check by eye and some documents can be missed, especially photographs and sheets with several documents. That is why the “no document found” outcome is not a certification: the limits are described on the Validation page (in Italian).</p>
+    <h3>How do I check the download is intact?</h3>
+    <p>Every release includes a SHA256SUMS.txt file: compare the hash of the downloaded zip with the one listed.</p>
+  </div>
+</div></section>
+
+<section class="dl"><div class="wrap">
+  <h2>Get TracciaDoc</h2><p class="sub">A zip with the executable and SHA-256 checksums in the GitHub releases.</p>
+  <div class="cta">
+    <a class="btn p" href="https://github.com/realfulvio/tracciadoc/releases/latest">Download for Windows x64</a>
+    <a class="btn" href="https://github.com/realfulvio/tracciadoc/blob/main/CHANGELOG.md">Changelog</a>
+    <a class="btn" href="https://github.com/realfulvio/tracciadoc/blob/main/docs/ISTRUZIONI.txt">Instructions (IT)</a>
+    <a class="btn" href="https://github.com/realfulvio/tracciadoc/blob/main/docs/VALIDAZIONE.md">Validation &amp; limits (IT)</a>
+  </div>
+  <p class="meta">Always check the hash against SHA256SUMS.txt. Detection methods and limits are described on the Validation page.</p>
+</div></section>
+</main>
+
+<footer><div class="wrap">
+  <span>MIT licence · Provided as is, without warranty.</span>
+  <span><a href="https://realfulvio.github.io/tracciadoc/" hreflang="it" lang="it">Italiano</a> · powered by <img src="../img/realhcok-kit-white-720.png" width="720" height="117" alt="real>hcok_" style="vertical-align:middle;height:22px;width:auto"></span>
+</div></footer>
+
+<script>document.getElementById("bTh").onclick=function(){var r=document.documentElement,t=r.dataset.theme==="light"?"dark":"light";r.dataset.theme=t;try{localStorage.setItem("theme",t)}catch(e){}}</script>
+</body>
+</html>

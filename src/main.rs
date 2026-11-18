@@ -162,13 +162,35 @@ fn main() {
     if args.get(1).is_some_and(|s| s == "--gui-opengl") {
         if let Err(e) = gui_run(eframe::Renderer::Glow) {
             eprintln!("GUI OpenGL: {e}");
+            gui_failed(&format!("OpenGL: {e}"));
         }
-    } else if let Err(e) = gui_run(eframe::Renderer::Wgpu) {
-        eprintln!("GUI DirectX 12: {e}; ripiego OpenGL");
-        if let Ok(exe) = std::env::current_exe() {
-            let _ = std::process::Command::new(exe).arg("--gui-opengl").spawn();
+    } else {
+        // Anche un panic del livello grafico (driver o adattatore anomali) porta al ripiego.
+        let first = std::panic::catch_unwind(|| gui_run(eframe::Renderer::Wgpu))
+            .unwrap_or_else(|_| Err(eframe::Error::AppCreation("il livello grafico DirectX 12 e andato in errore".into())));
+        if let Err(e) = first {
+            eprintln!("GUI DirectX 12: {e}; ripiego OpenGL");
+            let started = std::env::current_exe()
+                .ok()
+                .and_then(|exe| std::process::Command::new(exe).arg("--gui-opengl").spawn().ok());
+            if started.is_none() {
+                gui_failed(&format!("DirectX 12: {e}"));
+            }
         }
     }
+}
+/// Nessun renderer disponibile: senza console l'errore su stderr non lo vede nessuno, quindi
+/// si avvisa con una finestra e si esce con un codice di errore.
+fn gui_failed(reason: &str) -> ! {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(Some(0)).collect() };
+    let text = wide(&format!(
+        "TracciaDoc non riesce ad aprire la finestra ({reason}).\n\nServono DirectX 12 (anche con il renderer software di Windows) oppure OpenGL 2.0. La verifica da riga di comando resta disponibile: TracciaDoc.exe --scan <cartella> <verbale.pdf>"
+    ));
+    let title = wide("TracciaDoc");
+    // SAFETY: due stringhe terminate da zero, valide per la durata della chiamata.
+    unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), MB_OK | MB_ICONERROR) };
+    std::process::exit(1)
 }
 fn gui_run(renderer: eframe::Renderer) -> eframe::Result {
     use eframe::{egui_wgpu, wgpu};

@@ -44,7 +44,9 @@ note=Image.open(PKG/'prove-sintetiche'/'appunti.png');mosaic=Image.new('RGB',(no
 for i in range(9):mosaic.paste(note,((i%3)*note.width,(i//3)*note.height))
 images=OUT/'images';images.mkdir();mosaic.save(images/'a.png')
 shutil.copy2(PKG/'prove-sintetiche'/'carta.png',images/'z.png')
-result=scan('timeout',images,['--timeout-secs','1'])
+# The photograph check loads the face model in each new worker (~0.3 s on a horizontal card): it is
+# left out here so that z.png still fits in the 1 s limit and the test measures only the retry logic.
+result=scan('timeout',images,['--timeout-secs','1','--no-photo-id'])
 assert result['incomplete'] and len(result['findings'])==1,'Timeout must recover and continue'
 assert 1 <= result['timing']['timeout_retries'] <= 2, 'Every timed-out file gets at most one retry'
 assert result['analyzed'] + result['partial'] + result['skipped'] + result['ignored_type'] == 2, 'Retries must not count a file twice'
@@ -62,6 +64,17 @@ links=OUT/'links';links.mkdir()
 subprocess.run(['powershell.exe','-NoProfile','-Command',f"New-Item -ItemType Junction -Path '{links / 'outside'}' -Target '{source}' | Out-Null"],check=True,capture_output=True)
 assert scan('junction',links)['encountered']==0
 assert not (OUT.parent/'outside.txt').exists()
+
+# Junction dentro l'area selezionata e verso un'altra cartella della stessa area: non si attraversa
+# (nessun doppione, nessun ciclo) e non e una lacuna, perche il contenuto e verificato al percorso reale.
+inside=OUT/'inside';(inside/'reale').mkdir(parents=True)
+shutil.copy2(PKG/'prove-sintetiche'/'carta.png',inside/'reale'/'documento.png')
+for name,target in [('verso-reale',inside/'reale'),('verso-radice',inside)]:
+ subprocess.run(['powershell.exe','-NoProfile','-Command',f"New-Item -ItemType Junction -Path '{inside/name}' -Target '{target}' | Out-Null"],check=True,capture_output=True)
+result=scan('junction-coperta',inside)
+assert result['encountered']==1 and len(result['findings'])==1 and not result['incomplete'],'Junction verso area coperta: nessun doppione e nessuna lacuna'
+# Una junction scelta come radice non si segue: resta dichiarata come lacuna.
+assert scan('junction-radice',inside/'verso-reale')['incomplete']
 
 # No recognized content or file paths appear in the audit stream.
 audit=(pathlib.Path.home()/'AppData'/'Local'/'TracciaDoc'/'audit.jsonl').read_text(encoding='utf-8')

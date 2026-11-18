@@ -113,6 +113,12 @@ fn exe_version(exe: &Path) -> Option<String> {
     child.stdout.take()?.read_to_string(&mut out).ok()?;
     Some(out.trim().to_string())
 }
+/// Cartella di lavoro sotto Program Files: modificabile solo dagli amministratori. %ProgramData% no:
+/// per impostazione predefinita gli utenti comuni vi creano file, e uno zip o un EXE sostituito
+/// dopo la verifica verrebbe poi eseguito e copiato come SYSTEM.
+fn work_dir() -> PathBuf {
+    install::install_dir().join(".aggiornamento")
+}
 fn preflight() -> Result<(), String> {
     if !install::is_admin() {
         return Err("Serve l'amministratore".into());
@@ -135,7 +141,7 @@ pub fn apply(auto: bool) -> Result<String, String> {
     if sched::scan_running() {
         return Ok(format!("{} rimandato: scansione in corso", rel.version));
     }
-    let work = sched::data_dir().join("aggiornamenti");
+    let work = work_dir();
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
     let zip = work.join(&rel.zip_name);
@@ -156,10 +162,13 @@ pub fn apply_from(zip: &Path) -> Result<String, String> {
     if sched::scan_running() {
         return Err("Scansione in corso: riprova al termine".into());
     }
-    let work = sched::data_dir().join("aggiornamenti");
+    let work = work_dir();
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-    let result = install_package(zip, &expected, None, &work);
+    // Copia lo zip nella cartella di lavoro prima di verificarlo: l'hash vale per i byte installati,
+    // anche se l'originale è in una cartella scrivibile da altri.
+    let local = work.join(&name);
+    let result = std::fs::copy(zip, &local).map_err(|e| format!("Zip non copiato: {e}")).and_then(|_| install_package(&local, &expected, None, &work));
     let _ = std::fs::remove_dir_all(&work);
     result
 }
@@ -187,7 +196,7 @@ fn install_package(zip: &Path, expected: &str, version: Option<&str>, work: &Pat
     install::replace_tree(&root, &install::install_dir())?;
     // Via subito le copie .old; quelle ancora in uso (icona aperta) restano fino alla prossima pulizia.
     install::cleanup_old();
-    install::register(&install::installed_exe())?;
+    install::register(&install::installed_exe(), &declared)?;
     // Ricrea le attività con l'EXE nuovo (stesso percorso, eventuali nuove opzioni).
     let _ = sched::apply_config(&sched::load_config(), &install::installed_exe());
     let msg = format!("Aggiornato da {} a {declared} (SHA-256 verificato)", env!("CARGO_PKG_VERSION"));

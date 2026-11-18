@@ -210,6 +210,34 @@
     "limited": false
   },
   {
+    "file": "foto-senza-testo-1.jpg",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "JPEG foto senza testo",
+    "limited": true
+  },
+  {
+    "file": "foto-senza-testo-2.jpg",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "JPEG foto senza testo",
+    "limited": true
+  },
+  {
+    "file": "carta-ruotata-90.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG ruotato",
+    "limited": false
+  },
+  {
+    "file": "documento-fotografato.jpg",
+    "positive": true,
+    "document_class": "patente",
+    "format": "JPEG foto con documento",
+    "limited": false
+  },
+  {
     "file": "multipagina-g4.tif",
     "positive": true,
     "document_class": "carta",
@@ -238,6 +266,20 @@
     "limited": true
   },
   {
+    "file": "pagina-testo-carta-girata.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG pagina con documento girato",
+    "limited": false
+  },
+  {
+    "file": "pagina-testo-lungo-carta-girata.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG pagina lunga con documento girato",
+    "limited": false
+  },
+  {
     "file": "fototessera-sintetica.png",
     "positive": true,
     "document_class": "fototessera",
@@ -248,6 +290,20 @@
     "file": "ritratto-sfondo-vario.png",
     "positive": false,
     "document_class": "ritratto",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "fototessera-su-modulo.png",
+    "positive": true,
+    "document_class": "fototessera",
+    "format": "PNG",
+    "limited": false
+  },
+  {
+    "file": "fototessere-foglio.png",
+    "positive": true,
+    "document_class": "fototessera",
     "format": "PNG",
     "limited": false
   }

@@ -279,12 +279,18 @@ fn tile(ui: &mut egui::Ui, width: f32, label: &str, value: String, color: Option
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 2.;
                 ui.label(RichText::new(label).size(12.5).color(c_weak()));
-                ui.label(RichText::new(value).font(semibold(30.)).color(color.unwrap_or(c_text())));
+                // Tessere strette (finestra a 1024 px): cifre piu piccole, per non andare a capo.
+                let size = if width < 150. { 24. } else { 30. };
+                ui.add(egui::Label::new(RichText::new(value).font(semibold(size)).color(color.unwrap_or(c_text()))).truncate());
             });
         });
 }
 fn primary(text: &str, height: f32) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.to_string()).font(semibold(19.)).color(Color32::WHITE)).fill(c_primary()).min_size(egui::vec2(220., height))
+}
+/// Pulsante principale senza larghezza minima né testo grande, per le finestre molto strette.
+fn primary_compact(text: &str, height: f32) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(text.to_string()).font(semibold(16.)).color(Color32::WHITE)).fill(c_primary()).min_size(egui::vec2(0., height))
 }
 /// Dimensione di un file in KB/MB.
 fn size_text(bytes: u64) -> String {
@@ -1108,11 +1114,23 @@ impl eframe::App for App {
             });
 
         // Barra delle azioni: una sola azione principale per fase, in basso a destra.
+        // Revisione in una finestra molto stretta (UI al 200% su 1024 px: la barra laterale fissa da 220
+        // lascia circa 290 punti): margini, spaziature e pulsanti ridotti, testi brevi. Misurato con una
+        // replica della barra in egui fuori dalla VM: senza, i pulsanti uscivano dal pannello.
+        let narrow = active >= 3 && !(self.plan_page && !running) && root.available_width() < 600.;
         egui::Panel::bottom("actions")
-            .frame(egui::Frame::new().fill(c_bar()).inner_margin(egui::Margin::symmetric(28, if short { 8 } else { 14 })))
+            .frame(egui::Frame::new().fill(c_bar()).inner_margin(egui::Margin::symmetric(if narrow { 14 } else { 28 }, if short || narrow { 8 } else { 14 })))
             .show(root, |ui| {
-                let h = if short { 40. } else { 48. };
-                ui.horizontal(|ui| {
+                let h = if narrow { 32. } else if short { 40. } else { 48. };
+                if narrow {
+                    ui.spacing_mut().item_spacing = egui::vec2(8., 6.);
+                    ui.spacing_mut().button_padding = egui::vec2(12., 5.);
+                }
+                // Revisione con finestra stretta o UI ingrandita: casella e conteggio sopra, pulsanti sotto,
+                // invece di sovrapporli ("Genera verbale PDF..." copriva "Seleziona tutti").
+                // La revisione è la fase 3 (active 3); la verifica finale dopo la ri-scansione è la 4.
+                let stacked = active >= 3 && !(self.plan_page && !running) && ui.available_width() < 1180.;
+                let mut actions = |ui: &mut egui::Ui| {
                     ui.set_min_height(h);
                     if self.plan_page && !running {
                         self.plan_actions(ui, h);
@@ -1156,9 +1174,19 @@ impl eframe::App for App {
                             let selected = run.findings.iter().filter(|f| f.selected && !f.deleted()).count();
                             let open = run.findings.iter().filter(|f| !f.deleted()).count();
                             if self.confirm && selected > 0 {
-                                ui.add(egui::Label::new(RichText::new(format!("Eliminare in modo definitivo {selected} file? Non vanno nel cestino e TracciaDoc non puo recuperarli.")).color(c_warn())).truncate());
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                    if ui.add(egui::Button::new(RichText::new("Conferma eliminazione").font(semibold(18.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(220., h))).clicked() {
+                                if narrow {
+                                    ui.add(egui::Label::new(RichText::new(format!("Eliminare in modo definitivo {selected} file? Niente cestino, non recuperabili.")).color(c_warn())).wrap());
+                                } else {
+                                    ui.add(egui::Label::new(RichText::new(format!("Eliminare in modo definitivo {selected} file? Non vanno nel cestino e TracciaDoc non puo recuperarli.")).color(c_warn())).truncate());
+                                }
+                                let cross = if stacked { egui::Align::Min } else { egui::Align::Center };
+                                ui.with_layout(egui::Layout::right_to_left(cross).with_main_wrap(stacked), |ui| {
+                                    let confirm = if narrow {
+                                        egui::Button::new(RichText::new("Conferma").font(semibold(16.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(0., h))
+                                    } else {
+                                        egui::Button::new(RichText::new("Conferma eliminazione").font(semibold(18.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(220., h))
+                                    };
+                                    if ui.add(confirm).clicked() {
                                         for f in run.findings.iter_mut().filter(|f| f.selected && !f.deleted()) {
                                             match crate::delete::remove(f) {Ok(())=>{f.deleted_at=engine::now();f.delete_error.clear();f.selected=false;diag::ok(format!("ELIMINATO {}",diag::shown(&f.path)));},Err(e)=>{diag::err(format!("Eliminazione fallita {} · {e}",diag::shown(&f.path)));f.delete_error=e}}
                                         }
@@ -1170,29 +1198,43 @@ impl eframe::App for App {
                                 });
                             } else {
                                 if open > 0 {
-                                    let mut all = selected == open;
-                                    if ui.add(egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
-                                        for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
-                                    }
-                                    ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
+                                    ui.horizontal(|ui| {
+                                        let mut all = selected == open;
+                                        if ui.add(egui::Checkbox::new(&mut all, "Seleziona tutti")).changed() {
+                                            for f in run.findings.iter_mut().filter(|f| !f.deleted()) { f.selected = all; }
+                                        }
+                                        ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
+                                    });
                                 }
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Impilata (finestra stretta o UI ingrandita) la riga dei pulsanti va a capo
+                                // invece di uscire dal bordo sinistro. Con l'allineamento centrato una riga
+                                // a capo occuperebbe tutta l'altezza disponibile (misurato fuori dalla VM
+                                // con una replica della barra in egui): da impilata si allinea in alto.
+                                let cross = if stacked { egui::Align::Min } else { egui::Align::Center };
+                                ui.with_layout(egui::Layout::right_to_left(cross).with_main_wrap(stacked), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
-                                    if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {
+                                    let rescan_btn = if narrow { primary_compact("Ri-scansiona", h) } else { primary("Ri-scansiona per la verifica finale", h) };
+                                    if run.deleted_count() > 0 && selected == 0 && ui.add(rescan_btn).clicked() {
                                         rescan = Some(run.summary());
                                     }
-                                    if selected > 0 && ui.add(egui::Button::new(RichText::new(format!("Elimina definitivamente ({selected})")).font(semibold(18.)).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(0., h))).clicked() {
+                                    let delete_text = if narrow { format!("Elimina ({selected})") } else { format!("Elimina definitivamente ({selected})") };
+                                    if selected > 0 && ui.add(egui::Button::new(RichText::new(delete_text).font(semibold(if narrow { 16. } else { 18. })).color(Color32::WHITE)).fill(c_danger()).min_size(egui::vec2(0., h))).clicked() {
                                         self.confirm = true;
                                     }
                                     if run.finished {
-                                        let btn = if resolved && run.deleted_count() == 0 || active == 4 { primary("Genera verbale PDF...", h) } else { egui::Button::new("Genera verbale PDF...").min_size(egui::vec2(0., h)) };
+                                        let report_text = if narrow { "Verbale PDF..." } else { "Genera verbale PDF..." };
+                                        let btn = if resolved && run.deleted_count() == 0 || active == 4 {
+                                            if narrow { primary_compact(report_text, h) } else { primary(report_text, h) }
+                                        } else {
+                                            egui::Button::new(report_text).min_size(egui::vec2(0., h))
+                                        };
                                         if ui.add(btn).clicked() {
                                             match crate::shared::genera_e_salva(run,self.include_paths,self.demo,None) {
                                                 Ok((pdf,esito))=>{let m=crate::shared::messaggio(&pdf,&esito);if matches!(esito,crate::shared::Esito::SoloLocale(_)){diag::warn(m.clone())}else{diag::ok(m.clone())};self.notice=m;self.last_pdf=Some(pdf);let _=engine::audit(run,"pdf-export");},
                                                 Err(e)=>{diag::err(format!("Verbale PDF non scritto: {e}"));self.notice=e}
                                             }
                                         }
-                                        if let Some(src)=self.last_pdf.clone() && ui.add(egui::Button::new("Salva una copia con nome...").min_size(egui::vec2(0., h))).clicked()
+                                        if let Some(src)=self.last_pdf.clone() && ui.add(egui::Button::new(if narrow { "Salva copia..." } else { "Salva una copia con nome..." }).min_size(egui::vec2(0., h))).clicked()
                                             && let Some(path)=rfd::FileDialog::new().set_parent(&*frame).add_filter("Verbale PDF",&["pdf"]).set_file_name(src.file_name().map(|n|n.to_string_lossy().into_owned()).unwrap_or_default()).save_file() {
                                                 self.notice=match std::fs::copy(&src,&path) {Ok(_)=>format!("Copia salvata: {}",diag::shown(&path)),Err(e)=>format!("Copia non salvata: {e}")};
                                             }
@@ -1201,7 +1243,12 @@ impl eframe::App for App {
                             }
                         }
                     }
-                });
+                };
+                if stacked {
+                    ui.vertical(|ui| actions(ui));
+                } else {
+                    ui.horizontal(|ui| actions(ui));
+                }
             });
 
         egui::CentralPanel::default().frame(egui::Frame::new().fill(c_bg()).inner_margin(egui::Margin::symmetric(36, 28))).show(root, |ui| {
@@ -1380,7 +1427,7 @@ impl eframe::App for App {
                                 ui.horizontal(|ui| {
                                     tile(ui, w, "ANALIZZATI", it_num(done), None);
                                     tile(ui, w, "SOSPETTI", findings.to_string(), if findings > 0 { Some(c_warn()) } else { None });
-                                    tile(ui, w, "VELOCITA", rate_text.clone(), None);
+                                    tile(ui, w, "FILE/S", rate_text.trim_end_matches(" file/s").to_string(), None);
                                     tile(ui, w, "TRASCORSO", elapsed_text, None);
                                 });
                                 card(ui, |ui| {

@@ -1185,8 +1185,11 @@ impl eframe::App for App {
                                     });
                                 }
                                 // Impilata (finestra stretta o UI ingrandita) la riga dei pulsanti va a capo
-                                // invece di uscire dal bordo sinistro.
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center).with_main_wrap(stacked), |ui| {
+                                // invece di uscire dal bordo sinistro. Con l'allineamento centrato una riga
+                                // a capo occuperebbe tutta l'altezza disponibile (misurato fuori dalla VM
+                                // con una replica della barra in egui): da impilata si allinea in alto.
+                                let cross = if stacked { egui::Align::Min } else { egui::Align::Center };
+                                ui.with_layout(egui::Layout::right_to_left(cross).with_main_wrap(stacked), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
                                     if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {
                                         rescan = Some(run.summary());

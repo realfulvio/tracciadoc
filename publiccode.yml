@@ -1,0 +1,50 @@
+publiccodeYmlVersion: "0.4"
+name: TracciaDoc
+url: "https://github.com/realfulvio/tracciadoc"
+landingURL: "https://realfulvio.github.io/tracciadoc/"
+releaseDate: "2026-11-16"
+platforms:
+  - windows
+categories:
+  - it-security
+  - document-management
+developmentStatus: beta
+softwareType: "standalone/desktop"
+intendedAudience:
+  countries:
+    - IT
+legal:
+  license: MIT
+maintenance:
+  type: community
+  contacts:
+    - name: realhcok
+localisation:
+  localisationReady: false
+  availableLanguages:
+    - it
+description:
+  it:
+    localisedName: TracciaDoc
+    shortDescription: "Cerca sui PC Windows le copie dei documenti d'identità, le elimina e produce un verbale PDF. Offline."
+    longDescription: |
+      TracciaDoc è un programma per Windows 10/11 che cerca sui dischi di un PC
+      le copie digitali di documenti d'identità rimaste per sbaglio (scansioni,
+      foto e PDF di carta d'identità, patente, passaporto, tessera sanitaria e
+      fototessere), le mostra in anteprima sfocata, permette di eliminarle dopo
+      averle riviste e produce un verbale PDF che documenta cosa è stato
+      controllato e cosa è stato rimosso.
+
+      Tutto avviene in locale: niente cloud, niente telemetria, OCR offline
+      in italiano. In scansione lavora in sola lettura e non cancella mai nulla
+      in automatico. Le segnalazioni sono indizi da controllare a occhio e non
+      una certificazione: l'esito «nessun documento rilevato» compare solo a
+      copertura completa. I limiti del riconoscimento sono descritti nella
+      documentazione di validazione.
+    documentation: "https://github.com/realfulvio/tracciadoc/blob/main/docs/ISTRUZIONI.txt"
+    features:
+      - Ricerca di scansioni e foto di documenti d'identità su dischi e cartelle
+      - OCR offline in italiano, anche su PDF scansionati e immagini
+      - Revisione con anteprima sfocata e eliminazione guidata
+      - Verbale PDF con situazione prima e dopo
+      - Scansioni pianificate e salvataggio automatico dei verbali in una cartella di rete

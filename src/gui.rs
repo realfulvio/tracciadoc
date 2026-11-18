@@ -1116,7 +1116,8 @@ impl eframe::App for App {
                 let h = if short { 40. } else { 48. };
                 // Revisione con finestra stretta o UI ingrandita: casella e conteggio sopra, pulsanti sotto,
                 // invece di sovrapporli ("Genera verbale PDF..." copriva "Seleziona tutti").
-                let stacked = active == 4 && !(self.plan_page && !running) && ui.available_width() < 1180.;
+                // La revisione è la fase 3 (active 3); la verifica finale dopo la ri-scansione è la 4.
+                let stacked = active >= 3 && !(self.plan_page && !running) && ui.available_width() < 1180.;
                 let mut actions = |ui: &mut egui::Ui| {
                     ui.set_min_height(h);
                     if self.plan_page && !running {
@@ -1183,7 +1184,9 @@ impl eframe::App for App {
                                         ui.add(egui::Label::new(RichText::new(plural(selected, "selezionato", "selezionati")).weak()).truncate());
                                     });
                                 }
-                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                // Impilata (finestra stretta o UI ingrandita) la riga dei pulsanti va a capo
+                                // invece di uscire dal bordo sinistro.
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center).with_main_wrap(stacked), |ui| {
                                     let resolved = open == 0 || run.deleted_count() > 0 && selected == 0;
                                     if run.deleted_count() > 0 && selected == 0 && ui.add(primary("Ri-scansiona per la verifica finale", h)).clicked() {
                                         rescan = Some(run.summary());

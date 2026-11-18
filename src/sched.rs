@@ -342,17 +342,37 @@ pub fn run_tool(name: &str, args: &[&str]) -> Result<String, String> {
     let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
     if out.status.success() { Ok(text) } else { Err(format!("{name}: {}", text.trim())) }
 }
+/// Nome imprevedibile: `RandomState` è inizializzato con numeri casuali del sistema operativo.
+pub fn random_token() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let mut h = std::collections::hash_map::RandomState::new().build_hasher();
+    h.write_u32(std::process::id());
+    format!("{:016x}", h.finish())
+}
 /// schtasks /XML vuole un file UTF-16 LE con BOM.
 fn register_task(name: &str, xml: &str) -> Result<(), String> {
-    let path = std::env::temp_dir().join(format!("tracciadoc-task-{}.xml", std::process::id()));
+    use std::io::Write;
     let mut bytes = vec![0xFF, 0xFE];
     for u in xml.encode_utf16() {
         bytes.extend_from_slice(&u.to_le_bytes());
     }
-    std::fs::write(&path, bytes).map_err(|e| format!("Definizione attività non scritta: {e}"))?;
-    let result = run_tool("schtasks.exe", &["/Create", "/TN", name, "/XML", &path.to_string_lossy(), "/F"]);
+    // Quando gira come SYSTEM (aggiornamento automatico) la cartella temporanea è C:\Windows\Temp,
+    // scrivibile da tutti: nome imprevedibile e creazione esclusiva, così un utente comune non può
+    // preparare un file o un collegamento con lo stesso nome prima della scrittura.
+    let (path, mut file) = (0..8)
+        .find_map(|_| {
+            let p = std::env::temp_dir().join(format!("tracciadoc-task-{}.xml", random_token()));
+            std::fs::OpenOptions::new().write(true).create_new(true).open(&p).ok().map(|f| (p, f))
+        })
+        .ok_or("Definizione attività non scritta: cartella temporanea non utilizzabile")?;
+    let written = file.write_all(&bytes).and_then(|_| file.sync_all());
+    drop(file);
+    let result = match written {
+        Ok(()) => run_tool("schtasks.exe", &["/Create", "/TN", name, "/XML", &path.to_string_lossy(), "/F"]).map(|_| ()),
+        Err(e) => Err(format!("Definizione attività non scritta: {e}")),
+    };
     let _ = std::fs::remove_file(&path);
-    result.map(|_| ())
+    result
 }
 pub fn delete_task(name: &str) {
     let _ = run_tool("schtasks.exe", &["/Delete", "/TN", name, "/F"]);

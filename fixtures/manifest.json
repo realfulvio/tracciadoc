@@ -210,6 +210,34 @@
     "limited": false
   },
   {
+    "file": "foto-senza-testo-1.jpg",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "JPEG foto senza testo",
+    "limited": true
+  },
+  {
+    "file": "foto-senza-testo-2.jpg",
+    "positive": false,
+    "document_class": "negativo",
+    "format": "JPEG foto senza testo",
+    "limited": true
+  },
+  {
+    "file": "carta-ruotata-90.png",
+    "positive": true,
+    "document_class": "carta",
+    "format": "PNG ruotato",
+    "limited": false
+  },
+  {
+    "file": "documento-fotografato.jpg",
+    "positive": true,
+    "document_class": "patente",
+    "format": "JPEG foto con documento",
+    "limited": false
+  },
+  {
     "file": "multipagina-g4.tif",
     "positive": true,
     "document_class": "carta",

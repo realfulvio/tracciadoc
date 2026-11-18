@@ -191,8 +191,12 @@ pub fn detect(text: &str) -> Vec<String> {
         {
             out.push("MRZ TD3: tre cifre di controllo valide; possibile passaporto".into());
         }
+        // ICAO 9303 TD1: il codice del documento comincia con A, C o I (la CIE italiana non
+        // comincia per forza con "ID"), poi un carattere facoltativo e lo Stato emittente.
         if b.len() == 30
-            && (b.starts_with(b"ID") || b.starts_with(b"I<"))
+            && matches!(b[0], b'A' | b'C' | b'I')
+            && b[1..5].iter().all(|c| c.is_ascii_uppercase() || *c == b'<')
+            && b[5..14].iter().any(u8::is_ascii_digit)
             && mrz_digit(&b[5..14]) == b[14]
         {
             out.push("MRZ TD1: intestazione e controllo numero documento validi".into());
@@ -269,5 +273,24 @@ mod tests {
     #[test]
     fn checked_mrz() {
         assert!(!detect("L898902C36UTO7408122F1204159ZE184226B<<<<<10").is_empty());
+    }
+    #[test]
+    fn td1_document_codes() {
+        // Riga 1 di una carta formato ID-1: codice documento, Stato, numero con cifra di controllo.
+        let line = |code: &str, number: &str| {
+            let digit = mrz_digit(number.as_bytes()) as char;
+            format!("{code}ITA{number}{digit}{}", "<".repeat(15))
+        };
+        for code in ["ID", "I<", "CI", "CA", "AC"] {
+            let l = line(code, "CA0000000");
+            assert_eq!(l.len(), 30);
+            assert!(!detect(&l).is_empty(), "{l}");
+        }
+        // Codice non ICAO, cifra di controllo sbagliata o numero senza cifre: nessun indizio.
+        assert!(detect(&line("XD", "CA0000000")).is_empty());
+        assert!(detect(&line("ID", "ABCDEFGHI")).is_empty());
+        let mut bad = line("CI", "CA0000000");
+        bad.replace_range(14..15, "9");
+        assert!(detect(&bad).is_empty());
     }
 }

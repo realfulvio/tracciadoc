@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.3 - 2026-11-18
+
+Release di correzioni emerse da una revisione del codice e dalle prove su dati sintetici. Nessuna funzione nuova.
+
+- **Eliminazione sicura:** dimensione e data di ogni segnalazione sono ora lette prima dell'analisi. Prima potevano essere lette dopo, e un file modificato durante la scansione sembrava invariato al controllo che precede la cancellazione.
+- **Office:** un componente corrotto (per esempio un piè di pagina) non fa più scartare il testo degli altri componenti del file, che resta valutato. Le immagini vettoriali EMF, WMF e SVG sono dichiarate come non analizzate tra le note informative e non rendono più incompleta la verifica.
+- **Immagini:** applicato l'orientamento EXIF prima di OCR e riconoscimento dei volti. Messaggi più chiari per i TIFF multipagina; un errore su una pagina successiva non è più silenzioso.
+- **MRZ:** la riga TD1 è riconosciuta con qualunque codice documento ICAO che inizia per `A`, `C` o `I` (prima solo `ID` e `I<`). Restano obbligatori Stato e numero in forma valida e la cifra di controllo.
+- **Scansione di un intero disco:** collegamenti e junction che portano dentro un'area già scandita (per esempio `Documents and Settings` o `Application Data`) non vengono attraversati e non contano più come lacuna: il contenuto è verificato al percorso reale. Quelli verso altre aree o altri volumi restano dichiarati.
+- **Avvio della GUI:** se né DirectX 12 né OpenGL sono disponibili compare un messaggio con il motivo e un suggerimento (`--scan` da riga di comando); prima l'uscita era silenziosa con codice 0.
+- **Sicurezza di installazione e aggiornamento:** il file temporaneo della definizione delle attività pianificate ha un nome imprevedibile ed è creato in modo esclusivo (con l'account di sistema la cartella temporanea è scrivibile da tutti). Lo zip dell'aggiornamento è scaricato, verificato ed estratto in `Program Files\TracciaDoc\.aggiornamento`, modificabile solo dagli amministratori, invece che in `%ProgramData%`. `--update-from` copia lo zip lì prima di calcolare lo SHA-256.
+- **Prove:** il manifest del corpus sintetico elenca tutti i 40 file (aggiunti i quattro mancanti, tra cui le due foto senza testo) e `make_fixtures.py` genera anche i ritratti, così rigenerare il corpus non rompe più `validate.py`. Nuovi test per le parti Office corrotte, i codici MRZ TD1, il confronto dei percorsi per i collegamenti e il caso junction in `edge_tests.py`.
+
 ## 0.5.2 - 2026-11-16
 
 Correzioni di copertura e rendicontazione emerse dal collaudo su dati sintetici.

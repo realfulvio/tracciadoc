@@ -301,6 +301,7 @@ pub fn is_quiet(note: &str) -> bool {
         || note == UNSUPPORTED
         || note == INTERRUPTED
         || note == GIF_FIRST
+        || note == VECTOR_IMAGE
         || note.starts_with("RTF: solo testo grezzo")
         || note.starts_with("Codifica testo non UTF-8")
 }
@@ -312,9 +313,25 @@ pub fn is_informational(note: &str) -> bool {
     note == PREFILTERED
         || note == UNSUPPORTED
         || note == GIF_FIRST
+        || note == VECTOR_IMAGE
+        || note == COVERED_LINK
         || note.starts_with("RTF: solo testo grezzo")
         || note.starts_with("Codifica testo non UTF-8")
         || note == "Office: risorse esterne non aperte"
+}
+
+/// Collegamento o junction che porta dentro un'area scandita comunque: non lo si attraversa
+/// (niente doppioni né cicli), il contenuto è verificato al suo percorso reale. Non è una lacuna.
+pub const COVERED_LINK: &str = "Collegamento o junction verso un'area già inclusa: non attraversato, contenuto verificato al percorso reale";
+
+/// Disegni vettoriali dentro un documento Office (loghi e grafici): non sono scansioni raster.
+pub const VECTOR_IMAGE: &str = "Office: immagine vettoriale (EMF/WMF/SVG) non analizzata";
+/// Estensioni vettoriali nelle cartelle delle immagini incorporate.
+fn is_vector_image(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    ["emf", "wmf", "emz", "wmz", "svg", "svgz", "svm"]
+        .iter()
+        .any(|e| lower.rsplit_once('.').is_some_and(|(_, x)| x == *e))
 }
 
 pub const PREFILTERED: &str = "Immagine senza tratti tipo testo: scartata dal prefiltro, OCR non eseguito";
@@ -693,9 +710,23 @@ impl Parser {
         limits.max_alloc = Some(128 * 1024 * 1024);
         limits.max_image_width = Some(MAX_SIDE);
         limits.max_image_height = Some(MAX_SIDE);
-        reader.limits(limits);
+        reader.limits(limits.clone());
         let start = std::time::Instant::now();
-        let decoded = reader.decode();
+        // Come `decode()`, ma con l'orientamento EXIF applicato: una foto da telefono di un
+        // documento in verticale e memorizzata in orizzontale con un'etichetta di rotazione.
+        let decoded = (|| -> image::ImageResult<DynamicImage> {
+            use image::ImageDecoder;
+            let mut decoder = reader.into_decoder()?;
+            let orientation = decoder
+                .orientation()
+                .unwrap_or(image::metadata::Orientation::NoTransforms);
+            let mut limits = limits;
+            limits.reserve(decoder.total_bytes())?;
+            decoder.set_limits(limits)?;
+            let mut img = DynamicImage::from_decoder(decoder)?;
+            img.apply_orientation(orientation);
+            Ok(img)
+        })();
         a.timing.decode_ms += start.elapsed().as_secs_f64() * 1000.;
         match decoded {
             // Scansioni a 600 dpi: ridotte a ~300 dpi, che basta all'OCR e ne dimezza i tempi.
@@ -745,10 +776,15 @@ impl Parser {
                 None if page == 0 => self.image_bytes(bytes, a, req),
                 None => a
                     .issues
-                    .push("TIFF: pagina in formato non supportato, non analizzata".into()),
+                    .push("TIFF: pagina non leggibile o in formato non supportato, non analizzata".into()),
             }
             page += 1;
-            if !decoder.more_images() || decoder.next_image().is_err() {
+            if !decoder.more_images() {
+                break;
+            }
+            if decoder.next_image().is_err() {
+                // Un'intestazione di pagina illeggibile non e una fine regolare del file.
+                a.issues.push("TIFF: pagine successive non leggibili, non analizzate".into());
                 break;
             }
         }
@@ -836,10 +872,18 @@ impl Parser {
         let mut text = String::new();
         let mut office = false;
         let mut stopped = false;
+        // Limite di risorse raggiunto: le parti restanti non si leggono, ma il testo gia raccolto
+        // si valuta comunque prima di dichiarare il limite.
+        let mut failure: Option<&str> = None;
         for i in 0..zip.len() {
-            let mut f = zip
-                .by_index(i)
-                .map_err(|_| "Office: parte cifrata o illeggibile")?;
+            // Una parte cifrata o illeggibile e una lacuna dichiarata: le altre parti si leggono.
+            let mut f = match zip.by_index(i) {
+                Ok(f) => f,
+                Err(_) => {
+                    a.issues.push("Office: parte cifrata o illeggibile".into());
+                    continue;
+                }
+            };
             // zip 9: `name()` puo fallire sulla decodifica; si ripiega sui byte grezzi.
             let name = f
                 .name()
@@ -869,23 +913,36 @@ impl Parser {
             if !xml && !media {
                 continue;
             }
+            if !xml && is_vector_image(&name) {
+                // Loghi e grafici EMF/WMF/SVG: elencati nel verbale, non sono lacune di copertura.
+                a.issues.push(VECTOR_IMAGE.into());
+                continue;
+            }
             used = used.saturating_add(f.size());
             if used > 64 * 1024 * 1024 || f.size() > 16 * 1024 * 1024 {
-                return Err("Office: limite decompressione 64 MiB / parte 16 MiB".into());
+                failure = Some("Office: limite decompressione 64 MiB / parte 16 MiB");
+                break;
             }
             let mut bytes = Vec::new();
-            f.by_ref()
+            if f.by_ref()
                 .take(16 * 1024 * 1024 + 1)
                 .read_to_end(&mut bytes)
-                .map_err(|_| "Office: decompressione fallita")?;
+                .is_err()
+            {
+                a.issues.push("Office: decompressione fallita".into());
+                continue;
+            }
             if bytes.len() > 16 * 1024 * 1024 {
-                return Err("Office: limite parte superato".into());
+                failure = Some("Office: limite parte superato");
+                break;
             }
             if xml {
                 if name.ends_with(".rels") && bytes.windows(8).any(|s| s == b"External") {
                     a.issues.push("Office: risorse esterne non aperte".into());
                 }
                 let mut reader = quick_xml::Reader::from_reader(bytes.as_slice());
+                // Un errore in una parte (anche accessoria, come un pie di pagina) non scarta il
+                // testo delle altre: si dichiara il problema e si passa alla parte successiva.
                 loop {
                     match reader.read_event() {
                         Ok(quick_xml::events::Event::Text(t)) => {
@@ -907,7 +964,13 @@ impl Parser {
                                 }
                                 _ => None,
                             };
-                            text.push(character.ok_or("Office: riferimento XML non supportato")?);
+                            match character {
+                                Some(c) => text.push(c),
+                                None => {
+                                    a.issues.push("Office: riferimento XML non supportato".into());
+                                    break;
+                                }
+                            }
                         }
                         Ok(quick_xml::events::Event::End(e)) => {
                             let local = e.local_name();
@@ -916,17 +979,25 @@ impl Parser {
                             }
                         }
                         Ok(quick_xml::events::Event::DocType(_)) => {
-                            return Err("Office: DTD non ammessa".into());
+                            a.issues.push("Office: DTD non ammessa".into());
+                            break;
                         }
                         Ok(quick_xml::events::Event::Eof) => break,
-                        Err(_) => return Err("Office: XML corrotto".into()),
+                        Err(_) => {
+                            a.issues.push("Office: XML corrotto".into());
+                            break;
+                        }
                         _ => {}
                     }
                     if text.len() > 4_000_000 {
-                        return Err("Office: limite testo superato".into());
+                        failure = Some("Office: limite testo superato");
+                        break;
                     }
                 }
                 text.push('\n');
+                if failure.is_some() {
+                    break;
+                }
             } else if media {
                 images += 1;
                 if !a.reasons.is_empty() {
@@ -942,11 +1013,14 @@ impl Parser {
                 }
             }
         }
-        if !office {
+        if !office && failure.is_none() {
             return Err("Archivio generico non aperto come documento Office".into());
         }
         a.reasons.extend(rules::detect(&text));
-        Ok(())
+        match failure {
+            Some(limit) => Err(limit.into()),
+            None => Ok(()),
+        }
     }
     /// Word 97-2003 (.doc): testo dalla tabella dei pezzi, immagini incorporate all'OCR.
     fn legacy_doc(&mut self, bytes: &[u8], a: &mut Analysis, req: &Request) -> Result<(), String> {
@@ -1173,6 +1247,28 @@ mod tests {
         assert_eq!((second.width(), second.height()), (3, 5));
         assert_eq!(second.to_luma8().get_pixel(2, 4)[0], 200);
         assert!(!d.more_images());
+    }
+    #[test]
+    fn a_bad_part_does_not_discard_the_text_of_the_others() {
+        let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        let options = zip::write::SimpleFileOptions::default();
+        // Il pie di pagina e malformato e precede il documento: il testo del documento va letto.
+        archive.start_file("word/footer1.xml", options).unwrap();
+        archive.write_all(b"<ftr><p>pie</q></ftr>").unwrap();
+        archive.start_file("word/document.xml", options).unwrap();
+        archive.write_all(b"<document><p>CARTA DI IDENTITA</p><p>COGNOME ESEMPIO NOME PROVA NASCITA 01/01/2000 SCADENZA 01/01/2030 AA00000AA</p></document>").unwrap();
+        archive.start_file("word/media/logo.EMF", options).unwrap();
+        archive.write_all(&[1, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+        let bytes = archive.finish().unwrap().into_inner();
+        let req = Request { path: "synthetic.docx".into(), settings: Default::default() };
+        let mut result = Analysis::default();
+        Parser::new().office(&bytes, &mut result, &req).unwrap();
+        assert_eq!(result.reasons.len(), 1, "{:?}", result.issues);
+        // Il problema resta dichiarato (lacuna), il logo vettoriale e solo informativo.
+        assert!(result.issues.iter().any(|i| i == "Office: XML corrotto"));
+        assert!(result.issues.iter().any(|i| i == VECTOR_IMAGE));
+        assert!(!result.issues.iter().any(|i| i.contains("Immagine corrotta")));
+        assert!(is_informational(VECTOR_IMAGE) && !is_informational("Office: XML corrotto"));
     }
     #[test]
     fn office_entities_and_external_parts_are_not_silent() {

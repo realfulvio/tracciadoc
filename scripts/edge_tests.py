@@ -63,6 +63,17 @@ subprocess.run(['powershell.exe','-NoProfile','-Command',f"New-Item -ItemType Ju
 assert scan('junction',links)['encountered']==0
 assert not (OUT.parent/'outside.txt').exists()
 
+# Junction dentro l'area selezionata e verso un'altra cartella della stessa area: non si attraversa
+# (nessun doppione, nessun ciclo) e non e una lacuna, perche il contenuto e verificato al percorso reale.
+inside=OUT/'inside';(inside/'reale').mkdir(parents=True)
+shutil.copy2(PKG/'prove-sintetiche'/'carta.png',inside/'reale'/'documento.png')
+for name,target in [('verso-reale',inside/'reale'),('verso-radice',inside)]:
+ subprocess.run(['powershell.exe','-NoProfile','-Command',f"New-Item -ItemType Junction -Path '{inside/name}' -Target '{target}' | Out-Null"],check=True,capture_output=True)
+result=scan('junction-coperta',inside)
+assert result['encountered']==1 and len(result['findings'])==1 and not result['incomplete'],'Junction verso area coperta: nessun doppione e nessuna lacuna'
+# Una junction scelta come radice non si segue: resta dichiarata come lacuna.
+assert scan('junction-radice',inside/'verso-reale')['incomplete']
+
 # No recognized content or file paths appear in the audit stream.
 audit=(pathlib.Path.home()/'AppData'/'Local'/'TracciaDoc'/'audit.jsonl').read_text(encoding='utf-8')
 assert 'RSSMRA80A01H501U' not in audit and str(source) not in audit

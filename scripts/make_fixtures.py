@@ -128,5 +128,10 @@ stream=io.BytesIO();c=Canvas(stream,pagesize=(595,842));c.drawImage(ImageReader(
 (DEST/'carta-a4-grandezza-reale.pdf').write_bytes(stream.getvalue());record('carta-a4-grandezza-reale.pdf',True,'sanitaria','PDF raster carta piccola')
 with zipfile.ZipFile(DEST/'archivio.zip','w') as z:z.writestr('../../outside.txt','synthetic')
 record('archivio.zip',False,'problema','ZIP non aperto',True)
+# Ritratti disegnati per le fototessere (make_photoid.py): il manifest deve elencare tutto il corpus.
+import subprocess,sys
+subprocess.run([sys.executable,str(ROOT/'scripts'/'make_photoid.py')],check=True)
+record('fototessera-sintetica.png',True,'fototessera','PNG')
+record('ritratto-sfondo-vario.png',False,'ritratto','PNG')
 (ROOT/'fixtures'/'manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 print(f'{len(manifest)} synthetic fixtures generated.')

@@ -248,6 +248,9 @@ struct Outcome {
     roundtrip_ms: f64,
     /// The worker could not be started: stop dispatching.
     fatal: bool,
+    /// Size and modification time read before the file was analyzed: the deletion check compares
+    /// against what was actually examined, not against a later state of the file.
+    seen: Option<(u64, Option<std::time::SystemTime>)>,
 }
 /// Results of files already analyzed in this process, keyed by SHA-256 of the bytes together
 /// with the extension, the settings that change the outcome and the program version. A file
@@ -351,6 +354,7 @@ fn worker_loop(
             peak: 0,
             roundtrip_ms: 0.,
             fatal: false,
+            seen: None,
         };
         if !stop.load(Ordering::Relaxed) {
             // After the first crash every worker moves to the generic scalar product.
@@ -369,9 +373,13 @@ fn worker_loop(
                     }
                 }
             }
+            // Metadata first, then the content: a change in between is caught by the final check.
+            let before = stamp(&request.path);
+            o.seen = std::fs::symlink_metadata(&request.path)
+                .ok()
+                .map(|m| (m.len(), m.modified().ok()));
             let hashing = Instant::now();
             let key = content_key(&request);
-            let before = stamp(&request.path);
             let hash_ms = hashing.elapsed().as_secs_f64() * 1000.;
             let hit = key.and_then(|k| reuse().lock().unwrap().get(&k).map(reused_result));
             if let Some(mut hit) = hit {
@@ -486,10 +494,15 @@ fn collect(state: &mut Run, o: Outcome, stop: &AtomicBool) -> bool {
                 diag::info(format!("SEGNALATO {shown} ({})", result.format));
             }
             if !result.reasons.is_empty() && state.findings.len() < 5000 {
-                let meta = std::fs::metadata(&o.path).ok();
+                // The state read before the analysis; only without it the current one is used.
+                let (size, modified) = o.seen.unwrap_or_else(|| {
+                    std::fs::metadata(&o.path)
+                        .ok()
+                        .map_or((0, None), |m| (m.len(), m.modified().ok()))
+                });
                 state.findings.push(Finding {
-                    size: meta.as_ref().map_or(0, |m| m.len()),
-                    modified: meta.and_then(|m| m.modified().ok()),
+                    size,
+                    modified,
                     path: o.path,
                     format: result.format,
                     reasons: result.reasons,
@@ -630,6 +643,7 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
     let mut retries = Vec::new();
     let mut published = Instant::now();
     let roots = state.roots.clone();
+    let covered = covered_roots(&roots);
     let mut scanned_roots: Vec<PathBuf> = vec![];
     'roots: for root in roots {
         diag::info(format!("Area: {}", diag::shown(&root)));
@@ -686,7 +700,11 @@ pub fn run(shared: Shared, stop: Arc<AtomicBool>) {
                 if entry.file_type().is_dir() {
                     entries.skip_current_dir();
                 }
-                state.issue_at(path, diag::noted_at("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente", path));
+                if link_is_covered(path, &covered) {
+                    state.issue(crate::parser::COVERED_LINK);
+                } else {
+                    state.issue_at(path, diag::noted_at("Collegamento, junction o volume montato non attraversato: selezionare la destinazione separatamente", path));
+                }
                 continue;
             }
             // Streams also belong to directories and files whose ordinary extension is ignored.
@@ -920,6 +938,43 @@ fn is_volume_mount(path: &Path) -> bool {
     unsafe { GetVolumeNameForVolumeMountPointW(w.as_ptr(), name.as_mut_ptr(), 1024) != 0 }
 }
 
+/// Percorso in forma confrontabile: senza prefissi `\\?\` e `\??\`, minuscolo, senza barra finale.
+fn comparable(p: &Path) -> String {
+    let s = p.to_string_lossy().to_lowercase();
+    s.trim_start_matches("\\\\?\\").trim_start_matches("\\??\\").trim_end_matches('\\').to_string()
+}
+fn is_under(path: &str, root: &str) -> bool {
+    path == root || path.strip_prefix(root).is_some_and(|rest| rest.starts_with('\\'))
+}
+/// Radici che la verifica scandisce davvero (stesse esclusioni del ciclo principale), nella forma
+/// assegnata e in quella canonica, per riconoscere i collegamenti che puntano a contenuto già coperto.
+fn covered_roots(roots: &[PathBuf]) -> Vec<String> {
+    let mut out = vec![];
+    for r in roots {
+        let reparse = std::fs::symlink_metadata(r).is_ok_and(|m| m.file_attributes() & 0x400 != 0);
+        if is_network(r) || !r.exists() || (reparse && !is_volume_mount(r)) {
+            continue;
+        }
+        out.push(comparable(r));
+        if let Ok(c) = std::fs::canonicalize(r) {
+            out.push(comparable(&c));
+        }
+    }
+    out
+}
+/// Vero se la destinazione del collegamento sta dentro un'area scandita. Se la destinazione non si
+/// può aprire (come per `Documents and Settings`) si legge il solo testo del collegamento.
+fn link_is_covered(link: &Path, covered: &[String]) -> bool {
+    let target = std::fs::canonicalize(link).ok().or_else(|| {
+        let t = std::fs::read_link(link).ok()?;
+        if t.is_absolute() { Some(t) } else { Some(link.parent()?.join(t)) }
+    });
+    target.is_some_and(|t| {
+        let n = comparable(&t);
+        covered.iter().any(|r| is_under(&n, r))
+    })
+}
+
 pub fn volumes() -> Vec<(PathBuf, String)> {
     use windows_sys::Win32::Storage::FileSystem::*;
     let mut result = vec![];
@@ -1013,7 +1068,18 @@ mod tests {
 
     fn timeout() -> Outcome {
         Outcome { path: PathBuf::from("synthetic.pdf"), result: Err(TIMEOUT.into()),
-            notes: vec![], peak: 0, roundtrip_ms: 120_000., fatal: false }
+            notes: vec![], peak: 0, roundtrip_ms: 120_000., fatal: false, seen: None }
+    }
+
+    #[test]
+    fn link_coverage_compares_whole_components() {
+        let root = comparable(Path::new(r"C:\Users\Mario"));
+        assert!(is_under(&comparable(Path::new(r"\\?\C:\Users\Mario\Documenti")), &root));
+        assert!(is_under(&comparable(Path::new(r"c:\USERS\mario")), &root));
+        assert!(!is_under(&comparable(Path::new(r"C:\Users\MarioRossi")), &root));
+        assert!(!is_under(&comparable(Path::new(r"C:\Users")), &root));
+        assert!(is_under(&comparable(Path::new(r"\??\C:\ProgramData")), &comparable(Path::new(r"C:\"))));
+        assert!(!is_under(&comparable(Path::new(r"D:\Dati")), &comparable(Path::new(r"C:\"))));
     }
 
     #[test]

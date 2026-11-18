@@ -235,6 +235,9 @@ fn osd_side() -> u32 {
 /// Mean Tesseract confidence (0-100) above which an upright read with text needs no rotated reads.
 /// TRACCIADOC_UPRIGHT_CONF overrides it (0 disables the shortcut): benchmarks only.
 const UPRIGHT_CONF: i32 = 70;
+/// Un blocco con almeno 20 caratteri letti dritti ma confidenza media sotto questa soglia
+/// (testo girato letto come rumore) viene provato ruotato anche senza indicazione dell'OSD.
+const BLIND_ROTATION_CONF: i32 = 60;
 fn upright_conf() -> i32 {
     std::env::var("TRACCIADOC_UPRIGHT_CONF")
         .ok()
@@ -629,7 +632,7 @@ impl Parser {
         // Nothing found on the whole sheet: several documents side by side can confuse the
         // layout analysis. Each block separated by blank bands is read on its own, and the
         // blocks together, before any rotation. This runs also after a confident read.
-        let mut weak: Vec<(u32, u32, u32, u32)> = vec![];
+        let mut weak: Vec<(u32, u32, u32, u32, usize, i32)> = vec![];
         if a.reasons.is_empty() && !failed {
             let blocks = split_blocks(&img);
             if !blocks.is_empty() {
@@ -644,7 +647,7 @@ impl Parser {
                         a.reasons.extend(rules::detect(&s));
                         // Un blocco letto dritto con poco testo o bassa confidenza puo essere girato.
                         if chars < 20 || (min_conf > 0 && (0..min_conf).contains(&conf)) {
-                            weak.push((x0, y0, x1, y1));
+                            weak.push((x0, y0, x1, y1, chars, conf));
                         }
                         all.push_str(&s);
                         all.push('\n');
@@ -666,17 +669,30 @@ impl Parser {
             }
             // La lettura dritta della pagina era buona e ha fermato la ricerca, ma un documento
             // girato accanto al testo dritto abbassa poco la media: i blocchi letti male si
-            // provano ruotati, uno alla volta, solo se l'OSD ne indica la rotazione.
+            // provano ruotati, uno alla volta. L'OSD sceglie l'ordine; su un blocco largo con una
+            // carta piccola e poco testo non risponde, ma un blocco che dritto produce molti
+            // caratteri a bassa confidenza e testo girato: in quel caso (al massimo due blocchi)
+            // si provano comunque tutte le rotazioni.
             if a.reasons.is_empty() && settled && !weak.is_empty() {
-                'weak: for &(x0, y0, x1, y1) in weak.iter().take(4) {
+                let mut blind = 0;
+                'weak: for &(x0, y0, x1, y1, chars, conf) in weak.iter().take(4) {
                     let block = img.crop_imm(x0, y0, x1 - x0, y1 - y0);
                     let osd = std::time::Instant::now();
                     let hint = ocr.orientation(&block);
                     a.timing.osd_ms += osd.elapsed().as_secs_f64() * 1000.;
-                    let Some(first) = hint.filter(|d| *d != 0) else { continue };
-                    a.timing.osd_hits += 1;
-                    let mut order = vec![first];
-                    order.extend([90, 180, 270].into_iter().filter(|d| *d != first));
+                    let order = match hint.filter(|d| *d != 0) {
+                        Some(first) => {
+                            a.timing.osd_hits += 1;
+                            let mut order = vec![first];
+                            order.extend([90, 180, 270].into_iter().filter(|d| *d != first));
+                            order
+                        }
+                        None if blind < 2 && chars >= 20 && conf < BLIND_ROTATION_CONF => {
+                            blind += 1;
+                            vec![90, 270, 180]
+                        }
+                        None => continue,
+                    };
                     for deg in order {
                         a.timing.ocr_calls += 1;
                         if let Ok((s, _)) = ocr.recognize(&turned(&block, deg)) {

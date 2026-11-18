@@ -31,7 +31,7 @@
 <link rel="preload" href="../fonts/TitilliumWeb-Regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="../img/gui-segnalazioni.webp" as="image" type="image/webp" fetchpriority="high">
 <script>try{var t=localStorage.getItem("theme");if(!t)t=matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme="dark"}</script>
-<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "TracciaDoc", "description": "Free, open-source Windows app that scans disks for copies of identity documents (ID card, driving licence, passport, health card, ID-style photos), lets you delete them and produces a PDF report. Works offline.", "url": "https://realfulvio.github.io/tracciadoc/en/", "inLanguage": "en", "applicationCategory": "SecurityApplication", "operatingSystem": "Windows 10, Windows 11", "softwareRequirements": "Windows x64", "image": "https://realfulvio.github.io/tracciadoc/img/og-en.png", "downloadUrl": "https://github.com/realfulvio/tracciadoc/releases/latest", "license": "https://opensource.org/license/mit", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "codeRepository": "https://github.com/realfulvio/tracciadoc", "sameAs": ["https://github.com/realfulvio/tracciadoc"]}</script>
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "TracciaDoc", "description": "Free, open-source Windows app that scans disks for copies of identity documents (ID card, driving licence, passport, health card, ID-style photos), lets you delete them and produces a PDF report. Works offline.", "url": "https://realfulvio.github.io/tracciadoc/en/", "inLanguage": "en", "applicationCategory": "SecurityApplication", "operatingSystem": "Windows 10, Windows 11", "softwareRequirements": "Windows x64", "image": "https://realfulvio.github.io/tracciadoc/img/og-en.png", "softwareVersion": "0.5.3", "downloadUrl": "https://github.com/realfulvio/tracciadoc/releases/latest", "license": "https://opensource.org/license/mit", "isAccessibleForFree": true, "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"}, "codeRepository": "https://github.com/realfulvio/tracciadoc", "sameAs": ["https://github.com/realfulvio/tracciadoc"]}</script>
 <style>
 @font-face{font-family:"Titillium Web";font-weight:400;src:url(../fonts/TitilliumWeb-Regular.woff2) format("woff2");font-display:swap}
 @font-face{font-family:"Titillium Web";font-weight:600;src:url(../fonts/TitilliumWeb-SemiBold.woff2) format("woff2");font-display:swap}
@@ -173,7 +173,7 @@ footer img{height:22px;opacity:.9}
       <h3>What it does not do</h3>
       <ul class="list">
       <li>It does not look for stray names or tax codes inside files: the target is documents, not isolated personal details.</li>
-      <li>It does not catch everything: small faces on a page, side views, group photos and sheets with several ID photos may be missed. Methods and limits are on the Validation page (in Italian).</li>
+      <li>It does not catch everything: ID photos on a non-uniform background, side views, faces under 80 px and group photos may be missed. Since version 0.5.3 it also looks for a photo pasted on a form and for sheets with several ID photos, but recall on the synthetic tests is still limited. Methods and limits are on the Validation page (in Italian).</li>
       <li>It never sends anything to external servers and never deletes automatically.</li>
       </ul>
     </div>
@@ -242,7 +242,7 @@ footer img{height:22px;opacity:.9}
     <a class="btn" href="https://github.com/realfulvio/tracciadoc/blob/main/docs/ISTRUZIONI.txt">Instructions (IT)</a>
     <a class="btn" href="https://github.com/realfulvio/tracciadoc/blob/main/docs/VALIDAZIONE.md">Validation &amp; limits (IT)</a>
   </div>
-  <p class="meta">Always check the hash against SHA256SUMS.txt. Detection methods and limits are described on the Validation page.</p>
+  <p class="meta">Latest version: 0.5.3 (18 November 2026). Always check the hash against SHA256SUMS.txt. Detection methods and limits are described on the Validation page.</p>
 </div></section>
 </main>
 

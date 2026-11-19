@@ -4,6 +4,9 @@ fototessera-sintetica.png: volto frontale unico su sfondo uniforme (atteso: segn
 ritratto-sfondo-vario.png: lo stesso volto su sfondo d'ambiente e piu piccolo (atteso: non segnalato).
 fototessera-su-modulo.png: la fototessera ingrandita e incollata su un foglio A4 con testo (atteso: segnalata, possibile).
 fototessere-foglio.png: quattro fototessere identiche su un foglio 2x2 (atteso: segnalata, possibile).
+fototessera-gif-statica.gif: la fototessera come GIF a un solo fotogramma (atteso: segnalata).
+fototessera-gif-animata.gif: la stessa immagine come animazione di tre fotogrammi (atteso: non segnalata:
+un'animazione, come le anteprime di app e sistema, non e una fototessera).
 """
 from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
@@ -58,3 +61,9 @@ sheet = Image.new("RGB", (820, 1020), (245, 245, 245))
 for x, y in [(20, 20), (450, 20), (20, 520), (450, 520)]:
     sheet.paste(portrait(), (x, y))
 sheet.save(OUT / "fototessere-foglio.png")
+
+# GIF: stessa fototessera come immagine fissa e come animazione (tre fotogrammi di luminosita diversa).
+still = Image.open(OUT / "fototessera-sintetica.png").convert("RGB")
+still.save(OUT / "fototessera-gif-statica.gif")
+frames = [still.point(lambda v, k=k: min(255, int(v * (0.9 + 0.05 * k)))) for k in range(3)]
+frames[0].save(OUT / "fototessera-gif-animata.gif", save_all=True, append_images=frames[1:], duration=120, loop=0)

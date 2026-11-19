@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4 - 2026-11-19
+
+Correzione di un falso positivo emerso da un confronto 0.5.2 / 0.5.3 su cartelle di sistema di una macchina di prova (C:\Windows e C:\Program Files).
+
+- **Fototessere:** una GIF con più fotogrammi (un'animazione, come le anteprime di Windows) non è più sottoposta al controllo del volto: nelle cartelle di sistema quattro copie di una stessa animazione con una persona risultavano "possibile fototessera". Una GIF a un solo fotogramma resta controllata e il testo del primo fotogramma si legge comunque. Restano da distinguere le foto di esempio e le illustrazioni incluse nelle app (per esempio le immagini dell'editor foto di OneDrive e di Sicurezza di Windows), che sono vere immagini di persone con un solo volto frontale: la soglia non è stata toccata senza scansioni reali di fototessere.
+- **Prove:** due fixture sintetiche nuove (la stessa fototessera disegnata come GIF fissa, attesa segnalata, e come animazione di tre fotogrammi, attesa non segnalata); le fixture del corpus sono ora 46.
+
 ## 0.5.3 - 2026-11-18
 
 Release di correzioni emerse da una revisione del codice e dalle prove su dati sintetici. Nessuna funzione nuova.

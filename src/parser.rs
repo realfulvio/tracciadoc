@@ -533,10 +533,63 @@ fn turned(img: &DynamicImage, deg: i32) -> DynamicImage {
     }
 }
 
+/// Numero di fotogrammi di una GIF, contati fino a `limit` percorrendo i blocchi senza decodificarli.
+/// 0 se la struttura non e una GIF valida fin dal primo fotogramma.
+fn gif_frames(bytes: &[u8], limit: usize) -> usize {
+    fn skip_sub_blocks(bytes: &[u8], mut pos: usize) -> Option<usize> {
+        loop {
+            let len = *bytes.get(pos)? as usize;
+            pos += 1;
+            if len == 0 {
+                return Some(pos);
+            }
+            pos += len;
+        }
+    }
+    let table = |packed: u8| {
+        if packed & 0x80 != 0 {
+            3usize << ((packed & 7) + 1)
+        } else {
+            0
+        }
+    };
+    if !(bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a")) {
+        return 0;
+    }
+    let Some(&packed) = bytes.get(10) else { return 0 };
+    let mut pos = 13 + table(packed);
+    let mut frames = 0;
+    while let Some(&block) = bytes.get(pos) {
+        match block {
+            // Estensione (controllo grafico, commento, testo, applicazione): etichetta e sotto-blocchi.
+            0x21 => match skip_sub_blocks(bytes, pos + 2) {
+                Some(next) => pos = next,
+                None => break,
+            },
+            // Descrittore di immagine: 9 byte, tavolozza locale facoltativa, dimensione minima LZW, dati.
+            0x2C => {
+                let Some(&packed) = bytes.get(pos + 9) else { break };
+                match skip_sub_blocks(bytes, pos + 10 + table(packed) + 1) {
+                    Some(next) => pos = next,
+                    None => break,
+                }
+                frames += 1;
+                if frames >= limit {
+                    break;
+                }
+            }
+            _ => break,
+        }
+    }
+    frames
+}
+
 pub struct Parser {
     ocr: Option<Ocr>,
     ocr_error: Option<String>,
     pdf: Option<Pdfium>,
+    /// GIF con piu fotogrammi in analisi: un'animazione non e una fototessera.
+    animated: bool,
 }
 impl Parser {
     pub fn new() -> Self {
@@ -544,6 +597,7 @@ impl Parser {
             ocr: None,
             ocr_error: None,
             pdf: None,
+            animated: false,
         }
     }
     fn ocr(&mut self, img: DynamicImage, a: &mut Analysis, req: &Request) {
@@ -563,7 +617,7 @@ impl Parser {
         // Passport-style photographs have no text: they are looked for before the text prefilter,
         // which would discard them. A photograph found settles the image unless it also has text.
         let before = a.reasons.len();
-        if req.settings.photo_id {
+        if req.settings.photo_id && !self.animated {
             let start = std::time::Instant::now();
             a.timing.photo_checks += 1;
             match face::photo_id(&img) {
@@ -1171,7 +1225,11 @@ impl Parser {
                 if image_format == image::ImageFormat::Tiff {
                     self.tiff(&bytes, &mut a, req);
                 } else {
+                    // Il testo del primo fotogramma si legge comunque; solo il controllo del volto
+                    // (illustrazioni e anteprime animate di app e sistema) viene saltato.
+                    self.animated = image_format == image::ImageFormat::Gif && gif_frames(&bytes, 2) > 1;
                     self.image_bytes(&bytes, &mut a, req);
+                    self.animated = false;
                 }
                 if image_format == image::ImageFormat::Gif {
                     a.issues.push(GIF_FIRST.into());
@@ -1342,5 +1400,28 @@ mod tests {
         assert_eq!(result.reasons.len(), 1);
         assert!(result.reasons[0].starts_with("Carta d'identita:"));
         assert!(result.issues.iter().any(|s| s.contains("risorse esterne")));
+    }
+
+    #[test]
+    fn gif_frames_tells_an_animation_from_a_still_image() {
+        use image::{codecs::gif::GifEncoder, Frame, Rgba, RgbaImage};
+        let encode = |n: u8| {
+            let mut out = Vec::new();
+            {
+                let mut encoder = GifEncoder::new(&mut out);
+                for i in 0..n {
+                    let frame = RgbaImage::from_pixel(8, 8, Rgba([i * 40, 10, 200, 255]));
+                    encoder.encode_frame(Frame::new(frame)).unwrap();
+                }
+            }
+            out
+        };
+        assert_eq!(gif_frames(&encode(1), 2), 1);
+        assert_eq!(gif_frames(&encode(2), 2), 2);
+        assert_eq!(gif_frames(&encode(5), 10), 5);
+        assert_eq!(gif_frames(&encode(5), 3), 3);
+        assert_eq!(gif_frames(&encode(2)[..20], 2), 0);
+        assert_eq!(gif_frames(b"GIF89a", 2), 0);
+        assert_eq!(gif_frames(b"not a gif at all", 2), 0);
     }
 }

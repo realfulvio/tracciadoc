@@ -306,5 +306,19 @@
     "document_class": "fototessera",
     "format": "PNG",
     "limited": false
+  },
+  {
+    "file": "fototessera-gif-statica.gif",
+    "positive": true,
+    "document_class": "fototessera",
+    "format": "GIF",
+    "limited": false
+  },
+  {
+    "file": "fototessera-gif-animata.gif",
+    "positive": false,
+    "document_class": "ritratto",
+    "format": "GIF animata",
+    "limited": false
   }
 ]
